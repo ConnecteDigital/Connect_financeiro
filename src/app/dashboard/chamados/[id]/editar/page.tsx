@@ -333,7 +333,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
           <label className="block text-sm font-medium text-slate-700 mb-1.5">Cliente cadastrado <span className="text-slate-400 font-normal">(opcional)</span></label>
           <select value={clientId} onChange={e => setClientId(e.target.value)}
             className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <option value="">- Nao vincular -</option>
+            <option value="">— Não vincular —</option>
             {clients.map(c => <option key={c.id} value={c.id}>{c.name}{c.city ? ` - ${c.city}` : ''}</option>)}
           </select>
         </div>

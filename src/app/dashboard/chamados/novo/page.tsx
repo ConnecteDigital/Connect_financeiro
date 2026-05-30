@@ -201,7 +201,7 @@ export default function NovoChamadoPage() {
           <label className="block text-sm font-medium text-slate-700 mb-2">Status *</label>
           <div className="flex flex-wrap gap-2">
             {[
-              { value: 'agendado', label: 'ðŸ"Agendado' },
+              { value: 'agendado', label: 'Agendado' },
               { value: 'aprovado', label: 'Aprovado' },
               { value: 'nao_quis_visita', label: 'Nao quis visita' },
               { value: 'cancelado', label: 'Cancelado' },
@@ -229,11 +229,11 @@ export default function NovoChamadoPage() {
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1.5">
             Cliente cadastrado
-            <span className="text-slate-400 font-normal ml-1">(opcional â€" vincule se já existe no sistema)</span>
+            <span className="text-slate-400 font-normal ml-1">(opcional — vincule se já existe no sistema)</span>
           </label>
           <select value={clientId} onChange={e => setClientId(e.target.value)}
             className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
-            <option value="">â€"- Nao vincular -"</option>
+            <option value="">— Não vincular —</option>
             {clients.map(c => <option key={c.id} value={c.id}>{c.name}{c.city ? ` - ${c.city}` : ''}</option>)}
           </select>
         </div>
@@ -241,7 +241,7 @@ export default function NovoChamadoPage() {
         {/* Campos de agendamento */}
         {isScheduled && (
           <div className="border border-orange-100 bg-orange-50/50 rounded-lg p-4 space-y-3">
-            <p className="text-sm font-semibold text-orange-600">ðŸ"Detalhes do Agendamento</p>
+            <p className="text-sm font-semibold text-orange-600">Detalhes do Agendamento</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Horário Agendado</label>
@@ -274,7 +274,7 @@ export default function NovoChamadoPage() {
         </div>
       </div>
 
-      {/* OS â€" só quando aprovado */}
+      {/* OS — só quando aprovado */}
       {isApproved && (
         <>
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-4">
@@ -321,7 +321,7 @@ export default function NovoChamadoPage() {
             <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3">Tipo de Execução</h2>
             <div className="flex flex-wrap gap-2">
               {[
-                { value: 'proprio', label: 'âœ… Serviço Próprio' },
+                { value: 'proprio', label: 'Serviço Próprio' },
                 { value: 'terceirizado_saida', label: 'Terceirizado (passamos)' },
                 { value: 'terceirizado_entrada', label: 'Recebido de parceiro' },
               ].map(s => (

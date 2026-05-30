@@ -155,7 +155,7 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
             </div>
             <p className="text-slate-500 text-sm mt-0.5">
               {new Date(call.date).toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-              {''}{originLabel[call.origin]}
+              {' · '}{originLabel[call.origin]}
             </p>
           </div>
         </div>
