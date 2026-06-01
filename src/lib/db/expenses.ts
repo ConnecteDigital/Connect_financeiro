@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/client'
 
 export async function getExpenses(filters?: { type?: string; status?: string; search?: string }) {
   const supabase = createClient()
-  let query = supabase.from('expenses').select('*').order('due_date', { ascending: true })
+  let query = supabase.from('expenses').select('*, supplier:suppliers(id,name), client:clients(id,name)').order('due_date', { ascending: true })
 
   if (filters?.type && filters.type !== 'todos') query = query.eq('type', filters.type)
   if (filters?.status && filters.status !== 'todos') query = query.eq('status', filters.status)

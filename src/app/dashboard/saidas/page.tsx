@@ -107,7 +107,7 @@ export default function SaidasPage() {
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
                 <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-3">Descrição</th>
-                <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-3">Categoria</th>
+                <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-3">Fornecedor / Cliente</th>
                 <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-3">Tipo</th>
                 <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-3">Vencimento</th>
                 <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-3">Valor</th>
@@ -135,7 +135,17 @@ export default function SaidasPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded">{e.category}</span>
+                    <div className="flex flex-col gap-0.5">
+                      {e.supplier?.name && (
+                        <span className="text-xs text-blue-700 bg-blue-50 px-2 py-0.5 rounded w-fit">{e.supplier.name}</span>
+                      )}
+                      {e.client?.name && (
+                        <span className="text-xs text-purple-700 bg-purple-50 px-2 py-0.5 rounded w-fit">{e.client.name}</span>
+                      )}
+                      {!e.supplier?.name && !e.client?.name && (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${e.type === 'fixo' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'}`}>

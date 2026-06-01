@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, PhoneCall, Users, TrendingDown,
-  BarChart3, Settings, LogOut, Menu, X
+  BarChart3, Settings, LogOut, Menu, X, Building2
 } from 'lucide-react'
 import { ConnectDigitalLogo, LíderLogo } from '@/components/logos'
 
@@ -14,6 +14,7 @@ const navItems = [
   { href: '/dashboard/chamados', label: 'Chamados', icon: PhoneCall },
   { href: '/dashboard/clientes', label: 'Clientes', icon: Users },
   { href: '/dashboard/saidas', label: 'Saídas', icon: TrendingDown },
+  { href: '/dashboard/fornecedores', label: 'Fornecedores', icon: Building2 },
   { href: '/dashboard/relatorios', label: 'Relatórios', icon: BarChart3 },
   { href: '/dashboard/configuracoes', label: 'Configurações', icon: Settings },
 ]
