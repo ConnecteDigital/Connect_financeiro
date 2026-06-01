@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { PhoneCall, CheckCircle, DollarSign, TrendingUp, TrendingDown, AlertCircle, Clock } from 'lucide-react'
+import { PhoneCall, CheckCircle, DollarSign, TrendingUp, TrendingDown, AlertCircle, Clock, MapPin } from 'lucide-react'
 import { format, startOfMonth, endOfMonth } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { getDashboardStatsRange, getNotifications } from '@/lib/db/dashboard'
@@ -45,7 +45,7 @@ export default function DashboardPage() {
     { icon: PhoneCall,    label: 'Chamados',    value: String(stats.total_calls),      sub: `${stats.approved_calls} aprovados`,  color: 'text-zinc-800' },
     { icon: CheckCircle,  label: 'Aprovacao',   value: stats.total_calls > 0 ? `${Math.round((stats.approved_calls/stats.total_calls)*100)}%` : '0%', sub: `${stats.total_calls-stats.approved_calls} nao aprov.`, color: 'text-emerald-600' },
     { icon: DollarSign,   label: 'Rec. Bruta',  value: fmt(stats.gross_revenue),       sub: 'receita total',  color: 'text-orange-500' },
-    { icon: TrendingUp,   label: 'Rec. Liquida',value: fmt(stats.net_revenue),         sub: 'apos custos',    color: 'text-emerald-600' },
+    { icon: TrendingUp,   label: 'Rec. Liquida',value: fmt(stats.net_revenue),         sub: 'apos custos',    color: stats.net_revenue >= 0 ? 'text-emerald-600' : 'text-red-500' },
     { icon: AlertCircle,  label: 'A Receber',   value: fmt(stats.pending_receivables), sub: 'em aberto',      color: 'text-amber-600' },
     { icon: TrendingDown, label: 'Saidas',      value: fmt(stats.total_expenses),      sub: 'despesas',       color: 'text-red-500' },
   ] : []
@@ -88,15 +88,32 @@ export default function DashboardPage() {
             items: notifications?.scheduled ?? [],
             render: (n: any) => (
               <a key={n.id} href={`/dashboard/chamados/${n.id}/editar`}
-                className="block px-4 py-3 hover:bg-zinc-800 transition">
+                className="block px-4 py-2.5 hover:bg-zinc-800 transition">
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-white truncate">{n.contact_name || n.client?.name || 'Cliente'}</p>
-                    {n.scheduled_time && <p className="text-xs text-orange-400 font-bold mt-0.5">{String(n.scheduled_time).slice(0,5)}</p>}
-                    {n.call_address && <p className="text-xs text-zinc-500 mt-0.5 truncate">{n.call_address}</p>}
-                    {n.service_category && <p className="text-xs text-zinc-400">{n.service_category}</p>}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-semibold text-white truncate">{n.contact_name || n.client?.name || 'Cliente'}</p>
+                      {n.scheduled_time && (
+                        <span className="flex items-center gap-1 bg-orange-500/20 text-orange-400 text-xs font-bold px-1.5 py-0.5 rounded">
+                          <Clock className="w-2.5 h-2.5" />{String(n.scheduled_time).slice(0,5)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      {n.service_category && (
+                        <span className="text-xs text-zinc-400 bg-zinc-800 px-1.5 py-0.5 rounded truncate max-w-[140px]">{n.service_category}</span>
+                      )}
+                      {n.call_address && (
+                        <span className="flex items-center gap-1 text-xs text-zinc-500 truncate max-w-[160px]">
+                          <MapPin className="w-2.5 h-2.5 flex-shrink-0" />{n.call_address}
+                        </span>
+                      )}
+                      {!n.service_category && !n.call_address && !n.scheduled_time && (
+                        <span className="text-xs text-zinc-600">Sem detalhes adicionais</span>
+                      )}
+                    </div>
                   </div>
-                  <span className="text-xs text-orange-500 font-medium flex-shrink-0">Editar</span>
+                  <span className="text-xs text-orange-500 font-medium flex-shrink-0 mt-0.5">Editar</span>
                 </div>
               </a>
             ),
