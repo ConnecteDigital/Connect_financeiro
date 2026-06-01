@@ -65,7 +65,7 @@ export async function getReportData(
     const origin = (o.call as any)?.origin
     if (origin && originCount[origin]) originCount[origin].revenue += Number(o.total_value || 0)
   })
-  const originLabels: Record<string, string> = { site_lider: 'Site Líder', site_praja: 'Site Pra Já', indicacao: 'Indicação', terceirizado: 'Terceirizado' }
+  const originLabels: Record<string, string> = { site_lider: 'Site Líder', site_poa: 'Site POA', indicacao: 'Indicação', terceirizado: 'Terceirizado' }
   const colors = ['#2563eb', '#7c3aed', '#059669', '#d97706']
   const byOrigin = Object.entries(originCount).map(([key, data], i) => ({
     name: originLabels[key] ?? key, ...data, color: colors[i % colors.length]

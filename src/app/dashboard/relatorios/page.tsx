@@ -162,7 +162,7 @@ export default function RelatoriosPage() {
             {[
               { v: 'todos', l: 'Todos' },
               { v: 'site_lider', l: 'Líder' },
-              { v: 'site_praja', l: 'Pra Ja' },
+              { v: 'site_poa', l: 'POA' },
               { v: 'indicacao', l: 'Indicacao' },
               { v: 'terceirizado', l: 'Terceirizado' },
             ].map(o => (

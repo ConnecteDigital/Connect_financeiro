@@ -189,7 +189,7 @@ export default function NovoChamadoPage() {
             <select value={origin} onChange={e => setOrigin(e.target.value)}
               className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
               <option value="site_lider">Site Líder</option>
-              <option value="site_praja">Site Pra Já</option>
+              <option value="site_poa">Site POA</option>
               <option value="indicacao">Indicação</option>
               <option value="terceirizado">Terceirizado</option>
             </select>

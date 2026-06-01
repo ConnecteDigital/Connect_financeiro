@@ -18,7 +18,7 @@ const statusConfig: Record<string, { label: string; color: string; bg: string; i
 
 const originLabel: Record<string, string> = {
   site_lider: 'Site Líder',
-  site_praja: 'Site Pra Já',
+  site_poa: 'Site POA',
   indicacao: 'Indicação',
   terceirizado: 'Terceirizado',
 }
