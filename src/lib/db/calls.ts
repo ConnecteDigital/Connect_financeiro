@@ -50,3 +50,9 @@ export async function updateCall(id: string, values: Record<string, unknown>) {
   if (error) throw error
   return data
 }
+
+export async function deleteCall(id: string) {
+  const supabase = createClient()
+  const { error } = await supabase.from('calls').delete().eq('id', id)
+  if (error) throw error
+}

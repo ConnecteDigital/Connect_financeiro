@@ -9,6 +9,7 @@ import { getCall, updateCall } from '@/lib/db/calls'
 import { createServiceOrder, updateServiceOrder } from '@/lib/db/service-orders'
 import { getTeams } from '@/lib/db/teams'
 import { getClients } from '@/lib/db/clients'
+import { getServiceTypes } from '@/lib/db/service-types'
 import { createClient } from '@/lib/supabase/client'
 import { useCallOrigins } from '@/lib/use-call-origins'
 
@@ -27,13 +28,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const [clients, setClients] = useState<any[]>([])
   const [teams, setTeams] = useState<any[]>([])
   const { origins: callOrigins } = useCallOrigins()
-
-  const SERVICE_CATEGORIES = [
-    'Desentupimento de ralo, vaso, esgoto, cano, pia, rede',
-    'Limpeza de caixa de gordura',
-    'Limpa fossa',
-    'Outros',
-  ]
+  const [serviceCategories, setServiceCategories] = useState<string[]>([])
 
   // Chamado
   const [callDate, setCallDate] = useState('')
@@ -82,9 +77,10 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const [otherCost, setOtherCost] = useState(0)
 
   useEffect(() => {
-    Promise.all([getCall(id), getClients(), getTeams()]).then(([call, cls, tms]) => {
+    Promise.all([getCall(id), getClients(), getTeams(), getServiceTypes()]).then(([call, cls, tms, sts]) => {
       setClients(cls)
       setTeams(tms)
+      setServiceCategories(sts.map((st: any) => st.name))
       // Preencher dados do chamado
       setCallDate(call.date)
       setOrigin(call.origin)
@@ -326,7 +322,10 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
           <select value={serviceCategory} onChange={e => setServiceCategory(e.target.value)}
             className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="">Selecionar tipo —</option>
-            {SERVICE_CATEGORIES.map(c => <option key={c}>{c}</option>)}
+            {serviceCategory && !serviceCategories.includes(serviceCategory) && (
+              <option value={serviceCategory}>{serviceCategory}</option>
+            )}
+            {serviceCategories.map(c => <option key={c}>{c}</option>)}
           </select>
         </div>
 
