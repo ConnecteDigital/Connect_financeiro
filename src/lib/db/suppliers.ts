@@ -1,3 +1,4 @@
+import { getMyTenantId } from "./tenant"
 import { createClient } from '@/lib/supabase/client'
 
 export async function getSuppliers(search?: string) {
@@ -18,7 +19,7 @@ export async function getSupplier(id: string) {
 
 export async function createSupplier(values: Record<string, unknown>) {
   const supabase = createClient()
-  const { data, error } = await supabase.from('suppliers').insert(values).select().single()
+  const { data, error } = await supabase.from('suppliers').insert({ ...values, tenant_id: await getMyTenantId() }).select().single()
   if (error) throw error
   return data
 }

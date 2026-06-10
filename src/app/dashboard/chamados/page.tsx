@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Plus, Search, CheckCircle, XCircle, Clock, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
 import { getCalls } from '@/lib/db/calls'
+import { getOriginLabel } from '@/lib/use-call-origins'
 
 type Status = 'todos' | 'agendado' | 'aprovado' | 'nao_quis_visita' | 'cancelado'
 
@@ -20,12 +21,6 @@ const paymentConfig: Record<string, { label: string; color: string }> = {
   pendente:    { label: 'Pendente',color: 'text-red-500' },
 }
 
-const originLabel: Record<string, string> = {
-  site_lider: 'Site Líder',
-  site_poa: 'Site POA',
-  indicacao: 'Indicacao',
-  terceirizado: 'Terceirizado',
-}
 
 const filters: { value: Status; label: string }[] = [
   { value: 'todos', label: 'Todos' },
@@ -139,7 +134,7 @@ export default function ChamadosPage() {
                   <div className="flex items-center gap-2 mt-2 flex-wrap">
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${cfg?.color}`}>{cfg?.label}</span>
                     <span className="text-xs text-zinc-400">{new Date(c.date + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
-                    <span className="text-xs text-zinc-400">{originLabel[c.origin]}</span>
+                    <span className="text-xs text-zinc-400">{getOriginLabel(c.origin)}</span>
                   </div>
                   {so && (
                     <div className="flex items-center justify-between mt-2 pt-2 border-t border-zinc-50">

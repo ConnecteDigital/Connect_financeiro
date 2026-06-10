@@ -9,6 +9,7 @@ import { createServiceOrder } from '@/lib/db/service-orders'
 import { getClients, createClient_ } from '@/lib/db/clients'
 import { getTeams } from '@/lib/db/teams'
 import { getServiceTypes } from '@/lib/db/service-types'
+import { useCallOrigins } from '@/lib/use-call-origins'
 
 type ServiceType = 'proprio' | 'terceirizado_saida' | 'terceirizado_entrada'
 type PaymentStatus = 'pago' | 'pago_parcial' | 'pendente'
@@ -22,10 +23,11 @@ export default function NovoChamadoPage() {
   const [clients, setClients] = useState<any[]>([])
   const [teams, setTeams] = useState<any[]>([])
   const [serviceTypes, setServiceTypes] = useState<any[]>([])
+  const { origins: callOrigins } = useCallOrigins()
 
   // Chamado básico
   const [callDate, setCallDate] = useState(new Date().toISOString().split('T')[0])
-  const [origin, setOrigin] = useState('site_lider')
+  const [origin, setOrigin] = useState('')
   const [callStatus, setCallStatus] = useState('agendado')
   const [callNotes, setCallNotes] = useState('')
   const [clientId, setClientId] = useState('')
@@ -188,10 +190,10 @@ export default function NovoChamadoPage() {
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Origem *</label>
             <select value={origin} onChange={e => setOrigin(e.target.value)}
               className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
-              <option value="site_lider">Site Líder</option>
-              <option value="site_poa">Site POA</option>
-              <option value="indicacao">Indicação</option>
-              <option value="terceirizado">Terceirizado</option>
+              <option value="">Selecione...</option>
+              {callOrigins.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
             </select>
           </div>
         </div>

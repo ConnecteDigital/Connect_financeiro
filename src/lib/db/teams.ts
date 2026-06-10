@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client'
+import { getMyTenantId } from './tenant'
 
 export async function getTeams() {
   const supabase = createClient()
@@ -9,7 +10,8 @@ export async function getTeams() {
 
 export async function createTeam(name: string) {
   const supabase = createClient()
-  const { data, error } = await supabase.from('teams').insert({ name }).select().single()
+  const tenant_id = await getMyTenantId()
+  const { data, error } = await supabase.from('teams').insert({ name, tenant_id }).select().single()
   if (error) throw error
   return data
 }

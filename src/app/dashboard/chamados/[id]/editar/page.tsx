@@ -10,6 +10,7 @@ import { createServiceOrder, updateServiceOrder } from '@/lib/db/service-orders'
 import { getTeams } from '@/lib/db/teams'
 import { getClients } from '@/lib/db/clients'
 import { createClient } from '@/lib/supabase/client'
+import { useCallOrigins } from '@/lib/use-call-origins'
 
 type ServiceType = 'proprio' | 'terceirizado_saida' | 'terceirizado_entrada'
 type PaymentStatus = 'pago' | 'pago_parcial' | 'pendente'
@@ -25,6 +26,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const [error, setError] = useState('')
   const [clients, setClients] = useState<any[]>([])
   const [teams, setTeams] = useState<any[]>([])
+  const { origins: callOrigins } = useCallOrigins()
 
   const SERVICE_CATEGORIES = [
     'Desentupimento de ralo, vaso, esgoto, cano, pia, rede',
@@ -35,7 +37,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
 
   // Chamado
   const [callDate, setCallDate] = useState('')
-  const [origin, setOrigin] = useState('site_lider')
+  const [origin, setOrigin] = useState('')
   const [callStatus, setCallStatus] = useState('agendado')
   const [callNotes, setCallNotes] = useState('')
   const [clientId, setClientId] = useState('')
@@ -285,10 +287,9 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Origem *</label>
             <select value={origin} onChange={e => setOrigin(e.target.value)}
               className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="site_lider">Site Líder</option>
-              <option value="site_poa">Site POA</option>
-              <option value="indicacao">Indicação</option>
-              <option value="terceirizado">Terceirizado</option>
+              {callOrigins.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
             </select>
           </div>
         </div>

@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client'
+import { getMyTenantId } from './tenant'
 
 export async function getCalls(filters?: { status?: string; origin?: string; search?: string }) {
   const supabase = createClient()
@@ -37,7 +38,8 @@ export async function getCall(id: string) {
 
 export async function createCall(values: Record<string, unknown>) {
   const supabase = createClient()
-  const { data, error } = await supabase.from('calls').insert(values).select().single()
+  const tenant_id = await getMyTenantId()
+  const { data, error } = await supabase.from('calls').insert({ ...values, tenant_id }).select().single()
   if (error) throw error
   return data
 }

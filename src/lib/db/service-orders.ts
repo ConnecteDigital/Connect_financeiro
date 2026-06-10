@@ -1,14 +1,16 @@
 import { createClient } from '@/lib/supabase/client'
+import { getMyTenantId } from './tenant'
 
 export async function createServiceOrder(
   orderData: Record<string, unknown>,
   items: Array<{ quantity: number; description: string; unit_price: number }>
 ) {
   const supabase = createClient()
+  const tenant_id = await getMyTenantId()
 
   const { data: order, error: orderError } = await supabase
     .from('service_orders')
-    .insert(orderData)
+    .insert({ ...orderData, tenant_id })
     .select()
     .single()
 

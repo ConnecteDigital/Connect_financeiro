@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Eye, EyeOff, Lock, Mail } from 'lucide-react'
-import { ConnectDigitalLogo, LíderLogo } from '@/components/logos'
+import { ConnectDigitalLogo } from '@/components/logos'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -40,7 +40,6 @@ export default function LoginPage() {
           <div className="absolute -bottom-40 -right-40 w-96 h-96 rounded-full bg-orange-500/5 blur-3xl" />
         </div>
 
-        {/* Connect Digital header */}
         <div className="relative flex items-center gap-3">
           <ConnectDigitalLogo size={38} />
           <div>
@@ -49,16 +48,14 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Center content */}
         <div className="relative space-y-8">
-          {/* Partnership card */}
           <div className="bg-zinc-800/70 backdrop-blur rounded-2xl p-6 border border-zinc-700/40">
             <div className="flex items-center gap-4 mb-5">
-              <LíderLogo size={60} />
+              <ConnectDigitalLogo size={60} />
               <div>
-                <p className="text-white font-extrabold text-xl leading-tight">LÍDER</p>
-                <p className="text-orange-400 text-sm font-semibold mt-0.5">Desentupidora</p>
-                <p className="text-zinc-500 text-xs mt-1">Sistema Financeiro</p>
+                <p className="text-white font-extrabold text-xl leading-tight">Connecte</p>
+                <p className="text-orange-400 text-sm font-semibold mt-0.5">Financeiro</p>
+                <p className="text-zinc-500 text-xs mt-1">Sistema de Gestão</p>
               </div>
             </div>
             <p className="text-zinc-400 text-sm leading-relaxed">
@@ -68,10 +65,10 @@ export default function LoginPage() {
 
           <div className="space-y-3">
             {[
-              'Gestao completa de chamados e OS',
+              'Gestão completa de chamados e OS',
               'Dashboard financeiro em tempo real',
-              'Relatorios e exportacao em PDF',
-              'Controle de clientes e historico',
+              'Relatórios e exportação em PDF',
+              'Controle de clientes e histórico',
             ].map(item => (
               <div key={item} className="flex items-center gap-3">
                 <div className="w-5 h-5 rounded-full bg-orange-500/20 flex items-center justify-center flex-shrink-0">
@@ -90,25 +87,16 @@ export default function LoginPage() {
 
       {/* Right panel - login */}
       <div className="flex-1 flex flex-col items-center justify-center p-6 lg:p-12">
-        {/* Mobile: show both logos */}
         <div className="lg:hidden flex flex-col items-center gap-4 mb-10">
-          <ConnectDigitalLogo size={48} />
+          <ConnectDigitalLogo size={56} />
           <p className="text-white font-bold text-lg">Connect Digital</p>
-          <div className="flex items-center gap-3">
-            <div className="h-px w-12 bg-zinc-700" />
-            <span className="text-zinc-600 text-xs">para</span>
-            <div className="h-px w-12 bg-zinc-700" />
-          </div>
-          <div className="flex items-center gap-3">
-            <LíderLogo size={44} />
-            <p className="text-white font-bold text-lg">LÍDER</p>
-          </div>
+          <p className="text-zinc-500 text-sm">Sistema Financeiro</p>
         </div>
 
         <div className="w-full max-w-sm">
           <div className="mb-8">
             <h1 className="text-2xl font-bold text-white mb-1">Bem-vindo de volta</h1>
-            <p className="text-zinc-400 text-sm">Acesse o sistema Líder Financeiro</p>
+            <p className="text-zinc-400 text-sm">Acesse o sistema financeiro</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">

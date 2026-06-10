@@ -161,8 +161,8 @@ export default function RelatoriosPage() {
           <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
             {[
               { v: 'todos', l: 'Todos' },
-              { v: 'site_lider', l: 'Líder' },
-              { v: 'site_poa', l: 'POA' },
+              
+              
               { v: 'indicacao', l: 'Indicacao' },
               { v: 'terceirizado', l: 'Terceirizado' },
             ].map(o => (
