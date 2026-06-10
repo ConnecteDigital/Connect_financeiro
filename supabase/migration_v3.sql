@@ -1,15 +1,21 @@
 -- Migration v3: status "Não aprovou" nos chamados, campos extras e tipos de serviço padrão
 -- Execute no SQL Editor do Supabase
+-- (já inclui tudo da migration_v2 — pode rodar mesmo sem ter rodado a v2;
+--  é seguro executar mais de uma vez, nada dá erro nem duplica)
 
 -- 1. Novo status "nao_aprovou" nos chamados
 alter table calls drop constraint if exists calls_status_check;
 alter table calls add constraint calls_status_check
   check (status in ('agendado','aprovado','nao_aprovou','nao_quis_visita','cancelado'));
 
--- 2. Campos do chamado (caso o banco tenha sido criado antes deles existirem no schema)
+-- 2. Campos do chamado (inclui os da migration_v2, caso não tenha sido rodada)
 alter table calls
+  add column if not exists contact_name text,
   add column if not exists contact_phone text,
-  add column if not exists scheduled_date date;
+  add column if not exists service_category text,
+  add column if not exists scheduled_date date,
+  add column if not exists scheduled_time time,
+  add column if not exists call_address text;
 
 -- 3. Campos da OS (caso o banco tenha sido criado antes deles existirem no schema)
 alter table service_orders
