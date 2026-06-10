@@ -19,7 +19,8 @@ export async function getCalls(filters?: { status?: string; origin?: string; sea
     const s = filters.search.toLowerCase()
     return data.filter(c =>
       c.client?.name?.toLowerCase().includes(s) ||
-      c.contact_name?.toLowerCase().includes(s)
+      c.contact_name?.toLowerCase().includes(s) ||
+      c.service_orders?.some((so: { os_number?: string }) => so.os_number?.toLowerCase().includes(s))
     )
   }
   return data

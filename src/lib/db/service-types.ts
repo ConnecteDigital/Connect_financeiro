@@ -1,7 +1,37 @@
 import { createClient } from '@/lib/supabase/client'
 import { getMyTenantId } from './tenant'
 
+export const DEFAULT_SERVICE_TYPES = [
+  'Desentupidora de Ralo',
+  'Desentupidora de Pia',
+  'Desentupidora de Cano',
+  'Desentupidora de Vaso',
+  'Desentupidora de Coluna',
+  'Desentupidora de Esgoto',
+  'Limpa Fossa',
+  'Hidrojateamento',
+]
+
+// Garante que o tenant tenha os tipos padrão na primeira utilização
+export async function ensureDefaultServiceTypes() {
+  const supabase = createClient()
+  const { count, error } = await supabase
+    .from('service_types')
+    .select('id', { count: 'exact', head: true })
+  if (error) throw error
+  if ((count ?? 0) > 0) return
+  const tenant_id = await getMyTenantId()
+  const { error: insertError } = await supabase
+    .from('service_types')
+    .upsert(
+      DEFAULT_SERVICE_TYPES.map(name => ({ name, tenant_id })),
+      { onConflict: 'tenant_id,name', ignoreDuplicates: true }
+    )
+  if (insertError) throw insertError
+}
+
 export async function getServiceTypes() {
+  await ensureDefaultServiceTypes()
   const supabase = createClient()
   const { data, error } = await supabase
     .from('service_types')
@@ -14,6 +44,7 @@ export async function getServiceTypes() {
 }
 
 export async function getAllServiceTypes() {
+  await ensureDefaultServiceTypes()
   const supabase = createClient()
   const { data, error } = await supabase
     .from('service_types')

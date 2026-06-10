@@ -3,15 +3,17 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Plus, Search, CheckCircle, XCircle, Clock, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
-import { getCalls } from '@/lib/db/calls'
+import { useRouter } from 'next/navigation'
+import { getCalls, updateCall } from '@/lib/db/calls'
 import { getOriginLabel } from '@/lib/use-call-origins'
 
-type Status = 'todos' | 'agendado' | 'aprovado' | 'nao_quis_visita' | 'cancelado'
+type Status = 'todos' | 'agendado' | 'aprovado' | 'nao_quis_visita' | 'nao_aprovou' | 'cancelado'
 
 const statusConfig: Record<string, { label: string; color: string; icon: React.ElementType }> = {
   agendado:        { label: 'Agendado',    color: 'bg-blue-50 text-blue-700 border-blue-200',        icon: Clock },
   aprovado:        { label: 'Aprovado',    color: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: CheckCircle },
-  nao_quis_visita: { label: 'Nao quis',   color: 'bg-zinc-100 text-zinc-600 border-zinc-200',        icon: XCircle },
+  nao_quis_visita: { label: 'Não quis',   color: 'bg-zinc-100 text-zinc-600 border-zinc-200',        icon: XCircle },
+  nao_aprovou:     { label: 'Não aprovou', color: 'bg-amber-50 text-amber-700 border-amber-200',      icon: XCircle },
   cancelado:       { label: 'Cancelado',  color: 'bg-red-50 text-red-600 border-red-200',            icon: XCircle },
 }
 
@@ -26,16 +28,19 @@ const filters: { value: Status; label: string }[] = [
   { value: 'todos', label: 'Todos' },
   { value: 'agendado', label: 'Agendado' },
   { value: 'aprovado', label: 'Aprovado' },
-  { value: 'nao_quis_visita', label: 'Nao quis' },
+  { value: 'nao_quis_visita', label: 'Não quis' },
+  { value: 'nao_aprovou', label: 'Não aprovou' },
   { value: 'cancelado', label: 'Cancelado' },
 ]
 
 export default function ChamadosPage() {
+  const router = useRouter()
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<Status>('todos')
   const [calls, setCalls] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [updatingId, setUpdatingId] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const handleSearchChange = (value: string) => {
@@ -54,6 +59,29 @@ export default function ChamadosPage() {
   }, [statusFilter, debouncedSearch])
 
   useEffect(() => { load() }, [load])
+
+  async function handleQuickApprove(callId: string) {
+    setUpdatingId(callId)
+    try {
+      await updateCall(callId, { status: 'aprovado' })
+      router.push(`/dashboard/chamados/${callId}/editar`)
+    } catch (e) {
+      console.error(e)
+      setUpdatingId(null)
+    }
+  }
+
+  async function handleQuickRefuse(callId: string) {
+    setUpdatingId(callId)
+    try {
+      await updateCall(callId, { status: 'nao_aprovou' })
+      await load()
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setUpdatingId(null)
+    }
+  }
 
   return (
     <div className="space-y-4 max-w-7xl mx-auto">
@@ -74,7 +102,7 @@ export default function ChamadosPage() {
       {/* Search */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-        <input type="text" placeholder="Buscar cliente ou contato..."
+        <input type="text" placeholder="Buscar cliente, contato ou código OS..."
           value={search} onChange={e => handleSearchChange(e.target.value)}
           className="w-full pl-9 pr-4 py-2.5 bg-white border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 shadow-sm" />
       </div>
@@ -118,34 +146,48 @@ export default function ChamadosPage() {
             const iconColor = c.status === 'aprovado' ? 'text-emerald-500' : c.status === 'agendado' ? 'text-blue-500' : c.status === 'cancelado' ? 'text-red-500' : 'text-zinc-400'
 
             return (
-              <Link key={c.id} href={`/dashboard/chamados/${c.id}`}
-                className="flex items-start gap-3 bg-white rounded-2xl border border-zinc-100 p-4 hover:border-orange-200 hover:shadow-sm transition active:scale-[0.99]">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${iconBg}`}>
-                  <StatusIcon className={`w-5 h-5 ${iconColor}`} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="font-semibold text-zinc-900 text-sm truncate">
-                      {c.client?.name ?? c.contact_name ?? 'Sem identificacao'}
-                    </p>
-                    <ChevronRight className="w-4 h-4 text-zinc-300 flex-shrink-0" />
+              <div key={c.id} className="bg-white rounded-2xl border border-zinc-100 hover:border-orange-200 hover:shadow-sm transition">
+                <Link href={`/dashboard/chamados/${c.id}`}
+                  className="flex items-start gap-3 p-4 active:scale-[0.99] transition">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${iconBg}`}>
+                    <StatusIcon className={`w-5 h-5 ${iconColor}`} />
                   </div>
-                  {c.service_category && <p className="text-xs text-zinc-500 mt-0.5">{c.service_category}</p>}
-                  <div className="flex items-center gap-2 mt-2 flex-wrap">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${cfg?.color}`}>{cfg?.label}</span>
-                    <span className="text-xs text-zinc-400">{new Date(c.date + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
-                    <span className="text-xs text-zinc-400">{getOriginLabel(c.origin)}</span>
-                  </div>
-                  {so && (
-                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-zinc-50">
-                      <span className={`text-xs font-semibold ${pay?.color}`}>{pay?.label}</span>
-                      <span className="text-sm font-bold text-zinc-800">
-                        R$ {Number(so.total_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-semibold text-zinc-900 text-sm truncate">
+                        {c.client?.name ?? c.contact_name ?? 'Sem identificacao'}
+                      </p>
+                      <ChevronRight className="w-4 h-4 text-zinc-300 flex-shrink-0" />
                     </div>
-                  )}
-                </div>
-              </Link>
+                    {c.service_category && <p className="text-xs text-zinc-500 mt-0.5">{c.service_category}</p>}
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${cfg?.color}`}>{cfg?.label}</span>
+                      <span className="text-xs text-zinc-400">{new Date(c.date + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                      <span className="text-xs text-zinc-400">{getOriginLabel(c.origin)}</span>
+                    </div>
+                    {so && (
+                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-zinc-50">
+                        <span className={`text-xs font-semibold ${pay?.color}`}>{pay?.label}</span>
+                        <span className="text-sm font-bold text-zinc-800">
+                          R$ {Number(so.total_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </Link>
+                {c.status === 'agendado' && (
+                  <div className="grid grid-cols-2 gap-2 px-4 pb-4">
+                    <button onClick={() => handleQuickApprove(c.id)} disabled={updatingId === c.id}
+                      className="py-2 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 disabled:opacity-50 transition">
+                      ✓ Aprovado?
+                    </button>
+                    <button onClick={() => handleQuickRefuse(c.id)} disabled={updatingId === c.id}
+                      className="py-2 rounded-lg text-xs font-semibold bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 disabled:opacity-50 transition">
+                      ✗ Recusado?
+                    </button>
+                  </div>
+                )}
+              </div>
             )
           })}
         </div>

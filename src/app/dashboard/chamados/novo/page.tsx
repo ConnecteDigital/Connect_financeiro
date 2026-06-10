@@ -1,7 +1,7 @@
-﻿'use client'
+'use client'
 
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Plus, Trash2, Save, Loader2 } from 'lucide-react'
+import { ArrowLeft, Save, Loader2, CalendarDays, CheckSquare } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createCall } from '@/lib/db/calls'
@@ -14,7 +14,16 @@ import { useCallOrigins } from '@/lib/use-call-origins'
 type ServiceType = 'proprio' | 'terceirizado_saida' | 'terceirizado_entrada'
 type PaymentStatus = 'pago' | 'pago_parcial' | 'pendente'
 type BillingSystem = 'metro_linear' | 'metro_cubico' | 'litros' | 'carga' | 'valor_fechado' | 'metro_quadrado'
-interface Item { id: string; quantity: number; description: string; unit_price: number }
+
+interface ServiceSel { name: string; selected: boolean; value: number }
+
+const CALL_STATUSES = [
+  { value: 'agendado', label: 'Agendado' },
+  { value: 'aprovado', label: 'Aprovado' },
+  { value: 'nao_aprovou', label: 'Não aprovou' },
+  { value: 'nao_quis_visita', label: 'Não quis visita' },
+  { value: 'cancelado', label: 'Cancelado' },
+]
 
 export default function NovoChamadoPage() {
   const router = useRouter()
@@ -22,7 +31,6 @@ export default function NovoChamadoPage() {
   const [error, setError] = useState('')
   const [clients, setClients] = useState<any[]>([])
   const [teams, setTeams] = useState<any[]>([])
-  const [serviceTypes, setServiceTypes] = useState<any[]>([])
   const { origins: callOrigins } = useCallOrigins()
 
   // Chamado básico
@@ -32,8 +40,10 @@ export default function NovoChamadoPage() {
   const [callNotes, setCallNotes] = useState('')
   const [clientId, setClientId] = useState('')
   const [contactName, setContactName] = useState('')
-  const [serviceCategory, setServiceCategory] = useState('')
+  const [contactPhone, setContactPhone] = useState('')
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   // Campos de agendamento
+  const [scheduledDate, setScheduledDate] = useState(new Date().toISOString().split('T')[0])
   const [scheduledTime, setScheduledTime] = useState('')
   const [callAddress, setCallAddress] = useState('')
 
@@ -44,7 +54,7 @@ export default function NovoChamadoPage() {
   const [serviceType, setServiceType] = useState<ServiceType>('proprio')
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('pendente')
   const [billingSystem, setBillingSystem] = useState<BillingSystem | ''>('')
-  const [items, setItems] = useState<Item[]>([{ id: '1', quantity: 1, description: '', unit_price: 0 }])
+  const [services, setServices] = useState<ServiceSel[]>([])
   const [discount, setDiscount] = useState(0)
   const [taxes, setTaxes] = useState(0)
   const [equipmentRentalPct, setEquipmentRentalPct] = useState(0)
@@ -55,6 +65,8 @@ export default function NovoChamadoPage() {
   const [hasHydraulicPlan, setHasHydraulicPlan] = useState(false)
   const [hasNoHydraulicPlan, setHasNoHydraulicPlan] = useState(false)
   const [hasGuarantee, setHasGuarantee] = useState(false)
+  const [hasGuarantee60, setHasGuarantee60] = useState(false)
+  const [hasGuarantee90, setHasGuarantee90] = useState(false)
   const [hasNoGuarantee, setHasNoGuarantee] = useState(false)
   const [teamId, setTeamId] = useState('')
   const [driver, setDriver] = useState('')
@@ -67,6 +79,12 @@ export default function NovoChamadoPage() {
   const [remainingDueDate, setRemainingDueDate] = useState('')
   const [conditions, setConditions] = useState('')
   const [observations, setObservations] = useState('')
+  // Custos serviço próprio
+  const [materialCost, setMaterialCost] = useState(0)
+  const [ownFuelCost, setOwnFuelCost] = useState(0)
+  const [ownOtherCost, setOwnOtherCost] = useState(0)
+  const [otherServiceValue, setOtherServiceValue] = useState(0)
+  // Custos terceirizado
   const [fuelCost, setFuelCost] = useState(0)
   const [mealCost, setMealCost] = useState(0)
   const [truckCost, setTruckCost] = useState(0)
@@ -74,22 +92,34 @@ export default function NovoChamadoPage() {
 
   useEffect(() => {
     Promise.all([getClients(), getTeams(), getServiceTypes()])
-      .then(([c, t, st]) => { setClients(c); setTeams(t); setServiceTypes(st) })
+      .then(([c, t, st]) => {
+        setClients(c)
+        setTeams(t)
+        setServices(st.map((s: any) => ({ name: s.name, selected: false, value: 0 })))
+      })
       .catch(console.error)
   }, [])
 
-  const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price, 0)
+  const subtotal = services.filter(s => s.selected).reduce((sum, s) => sum + s.value, 0)
   const total = subtotal + equipmentRentalValue - discount + taxes
 
-  const addItem = () => setItems(prev => [...prev, { id: Date.now().toString(), quantity: 1, description: '', unit_price: 0 }])
-  const removeItem = (id: string) => setItems(prev => prev.filter(i => i.id !== id))
-  const updateItem = (id: string, field: keyof Item, value: string | number) =>
-    setItems(prev => prev.map(i => i.id === id ? { ...i, [field]: value } : i))
+  const toggleCategory = (name: string) =>
+    setSelectedCategories(prev => prev.includes(name) ? prev.filter(c => c !== name) : [...prev, name])
+
+  const toggleService = (name: string) =>
+    setServices(prev => prev.map(s => s.name === name ? { ...s, selected: !s.selected } : s))
+
+  const setServiceValue = (name: string, value: number) =>
+    setServices(prev => prev.map(s => s.name === name ? { ...s, value } : s))
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!contactName.trim() && !clientId) {
       setError('Informe o nome do contato ou selecione um cliente cadastrado.')
+      return
+    }
+    if (!origin) {
+      setError('Selecione a origem do chamado.')
       return
     }
     setSaving(true)
@@ -98,7 +128,7 @@ export default function NovoChamadoPage() {
       // Auto-criar cliente se não existe cadastrado
       let finalClientId = clientId
       if (!clientId && contactName.trim()) {
-        const newClient = await createClient_({ name: contactName.trim() })
+        const newClient = await createClient_({ name: contactName.trim(), phone: contactPhone || null })
         finalClientId = newClient.id
       }
 
@@ -106,11 +136,13 @@ export default function NovoChamadoPage() {
         date: callDate,
         client_id: finalClientId || null,
         contact_name: contactName || null,
+        contact_phone: contactPhone || null,
         origin,
         status: callStatus,
         notes: callNotes || null,
-        service_category: serviceCategory || null,
-        scheduled_time: scheduledTime || null,
+        service_category: selectedCategories.join(', ') || null,
+        scheduled_date: isScheduled ? scheduledDate || null : null,
+        scheduled_time: isScheduled ? scheduledTime || null : null,
         call_address: callAddress || null,
       })
 
@@ -132,6 +164,8 @@ export default function NovoChamadoPage() {
           has_hydraulic_plan: hasHydraulicPlan,
           has_no_hydraulic_plan: hasNoHydraulicPlan,
           has_guarantee: hasGuarantee,
+          has_guarantee_60: hasGuarantee60,
+          has_guarantee_90: hasGuarantee90,
           has_no_guarantee: hasNoGuarantee,
           equipment_rental_pct: equipmentRentalPct,
           equipment_rental_value: equipmentRentalValue,
@@ -139,6 +173,10 @@ export default function NovoChamadoPage() {
           discount,
           taxes,
           total_value: total,
+          own_material_cost: materialCost,
+          own_fuel_cost: ownFuelCost,
+          own_other_cost: ownOtherCost,
+          other_service_value: otherServiceValue,
           outsource_fuel_cost: fuelCost,
           outsource_meal_cost: mealCost,
           outsource_truck_cost: truckCost,
@@ -151,7 +189,7 @@ export default function NovoChamadoPage() {
           conditions: conditions || null,
           observations: observations || null,
         }
-        const validItems = items.filter(i => i.description.trim()).map(i => ({ quantity: i.quantity, description: i.description, unit_price: i.unit_price }))
+        const validItems = services.filter(s => s.selected).map(s => ({ quantity: 1, description: s.name, unit_price: s.value }))
         await createServiceOrder(orderData, validItems)
       }
 
@@ -180,21 +218,16 @@ export default function NovoChamadoPage() {
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-4">
         <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3">Informações do Chamado</h2>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Data *</label>
-            <input type="date" required value={callDate} onChange={e => setCallDate(e.target.value)}
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Origem *</label>
-            <select value={origin} onChange={e => setOrigin(e.target.value)}
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
-              <option value="">Selecione...</option>
-              {callOrigins.map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
+        {/* Origem */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">Origem *</label>
+          <div className="flex flex-wrap gap-2">
+            {callOrigins.map(o => (
+              <button key={o.value} type="button" onClick={() => setOrigin(o.value)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${origin === o.value ? 'bg-orange-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                {o.label}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -202,12 +235,7 @@ export default function NovoChamadoPage() {
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">Status *</label>
           <div className="flex flex-wrap gap-2">
-            {[
-              { value: 'agendado', label: 'Agendado' },
-              { value: 'aprovado', label: 'Aprovado' },
-              { value: 'nao_quis_visita', label: 'Nao quis visita' },
-              { value: 'cancelado', label: 'Cancelado' },
-            ].map(s => (
+            {CALL_STATUSES.map(s => (
               <button key={s.value} type="button" onClick={() => setCallStatus(s.value)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition ${callStatus === s.value ? 'bg-orange-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
                 {s.label}
@@ -216,22 +244,37 @@ export default function NovoChamadoPage() {
           </div>
         </div>
 
-        {/* Nome do contato */}
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5">
-            Nome do Contato *
-            <span className="text-slate-400 font-normal ml-1">(quem ligou)</span>
-          </label>
-          <input type="text" value={contactName} onChange={e => setContactName(e.target.value)}
-            placeholder="Ex: João Silva"
+        {/* Data do chamado */}
+        <div className="sm:max-w-xs">
+          <label className="block text-sm font-medium text-slate-700 mb-1.5">Data do Chamado *</label>
+          <input type="date" required value={callDate} onChange={e => setCallDate(e.target.value)}
             className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+        </div>
+
+        {/* Contato + telefone */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              Nome do Contato *
+              <span className="text-slate-400 font-normal ml-1">(quem ligou)</span>
+            </label>
+            <input type="text" value={contactName} onChange={e => setContactName(e.target.value)}
+              placeholder="Ex: João Silva"
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Telefone</label>
+            <input type="tel" value={contactPhone} onChange={e => setContactPhone(e.target.value)}
+              placeholder="(51) 99999-9999"
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+          </div>
         </div>
 
         {/* Cliente cadastrado */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1.5">
             Cliente cadastrado
-            <span className="text-slate-400 font-normal ml-1">(opcional — vincule se já existe no sistema)</span>
+            <span className="text-slate-400 font-normal ml-1">(opcional)</span>
           </label>
           <select value={clientId} onChange={e => setClientId(e.target.value)}
             className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
@@ -243,20 +286,20 @@ export default function NovoChamadoPage() {
         {/* Campos de agendamento */}
         {isScheduled && (
           <div className="border border-orange-100 bg-orange-50/50 rounded-lg p-4 space-y-3">
-            <p className="text-sm font-semibold text-orange-600">Detalhes do Agendamento</p>
+            <p className="text-sm font-semibold text-orange-600 flex items-center gap-1.5">
+              <CalendarDays className="w-4 h-4" />
+              Detalhes do Agendamento
+            </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Horário Agendado</label>
-                <input type="time" value={scheduledTime} onChange={e => setScheduledTime(e.target.value)}
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Data do Serviço</label>
+                <input type="date" value={scheduledDate} onChange={e => setScheduledDate(e.target.value)}
                   className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Tipo de Serviço</label>
-                <select value={serviceCategory} onChange={e => setServiceCategory(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white">
-                  <option value="">Selecionar tipo de servico</option>
-                  {serviceTypes.map(st => <option key={st.id} value={st.name}>{st.name}</option>)}
-                </select>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Horário</label>
+                <input type="time" value={scheduledTime} onChange={e => setScheduledTime(e.target.value)}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
               </div>
               <div className="sm:col-span-2">
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Endereço do Serviço</label>
@@ -267,6 +310,19 @@ export default function NovoChamadoPage() {
             </div>
           </div>
         )}
+
+        {/* Tipo(s) de serviço */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">Tipo(s) de Serviço</label>
+          <div className="flex flex-wrap gap-2">
+            {services.map(s => (
+              <button key={s.name} type="button" onClick={() => toggleCategory(s.name)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${selectedCategories.includes(s.name) ? 'bg-orange-500 border-orange-500 text-white' : 'border-slate-200 text-slate-600 hover:border-orange-300'}`}>
+                {s.name}
+              </button>
+            ))}
+          </div>
+        </div>
 
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1.5">Observações</label>
@@ -296,7 +352,7 @@ export default function NovoChamadoPage() {
                   className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">NÂº da NF</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Nº da NF</label>
                 <input type="text" value={nfNumber} onChange={e => setNfNumber(e.target.value)}
                   className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
               </div>
@@ -318,7 +374,7 @@ export default function NovoChamadoPage() {
             </div>
           </div>
 
-          {/* Tipo execução */}
+          {/* Tipo execução + custos */}
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-4">
             <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3">Tipo de Execução</h2>
             <div className="flex flex-wrap gap-2">
@@ -333,7 +389,34 @@ export default function NovoChamadoPage() {
                 </button>
               ))}
             </div>
-            {serviceType !== 'proprio' && (
+            {serviceType === 'proprio' ? (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {[
+                    { label: 'Material (R$)', val: materialCost, set: setMaterialCost },
+                    { label: 'Combustível (R$)', val: ownFuelCost, set: setOwnFuelCost },
+                    { label: 'Outros Custos (R$)', val: ownOtherCost, set: setOwnOtherCost },
+                  ].map(f => (
+                    <div key={f.label}>
+                      <label className="block text-sm font-medium text-slate-700 mb-1.5">{f.label}</label>
+                      <input type="number" min="0" step="0.01" value={f.val} onChange={e => f.set(Number(e.target.value))}
+                        className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Contratou algum outro serviço?
+                    <span className="text-slate-400 font-normal ml-1">(valor pago a terceiro)</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-slate-500">R$</span>
+                    <input type="number" min="0" step="0.01" value={otherServiceValue} onChange={e => setOtherServiceValue(Number(e.target.value))}
+                      className="w-36 px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                  </div>
+                </div>
+              </>
+            ) : (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 {[
                   { label: 'Gasolina (R$)', val: fuelCost, set: setFuelCost },
@@ -351,37 +434,30 @@ export default function NovoChamadoPage() {
             )}
           </div>
 
-          {/* Itens */}
+          {/* Tipos de serviço realizado */}
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-4">
-            <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3">Itens do Serviço</h2>
+            <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3 flex items-center gap-2">
+              <CheckSquare className="w-4 h-4 text-orange-500" />
+              Tipo(s) de Serviço Realizado
+            </h2>
             <div className="space-y-2">
-              <div className="grid grid-cols-12 gap-2 text-xs font-semibold text-slate-500 uppercase px-1">
-                <div className="col-span-2">Qtd.</div><div className="col-span-6">Descrição</div>
-                <div className="col-span-2">Vlr. Unit.</div><div className="col-span-1">Total</div><div className="col-span-1"></div>
-              </div>
-              {items.map(item => (
-                <div key={item.id} className="grid grid-cols-12 gap-2 items-center">
-                  <div className="col-span-2">
-                    <input type="number" min="1" value={item.quantity} onChange={e => updateItem(item.id, 'quantity', Number(e.target.value))}
-                      className="w-full px-2 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
-                  </div>
-                  <div className="col-span-6">
-                    <input type="text" value={item.description} placeholder="Descrição" onChange={e => updateItem(item.id, 'description', e.target.value)}
-                      className="w-full px-2 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
-                  </div>
-                  <div className="col-span-2">
-                    <input type="number" min="0" step="0.01" value={item.unit_price} onChange={e => updateItem(item.id, 'unit_price', Number(e.target.value))}
-                      className="w-full px-2 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
-                  </div>
-                  <div className="col-span-1 text-sm text-slate-700 font-medium text-center">{(item.quantity * item.unit_price).toFixed(2)}</div>
-                  <div className="col-span-1 flex justify-center">
-                    <button type="button" onClick={() => removeItem(item.id)} className="text-red-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
-                  </div>
+              {services.map(s => (
+                <div key={s.name} className="flex items-center justify-between gap-3">
+                  <label className="flex items-center gap-2.5 cursor-pointer py-1.5">
+                    <input type="checkbox" checked={s.selected} onChange={() => toggleService(s.name)}
+                      className="w-4 h-4 rounded text-orange-500" />
+                    <span className="text-sm text-slate-700">{s.name}</span>
+                  </label>
+                  {s.selected && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-slate-400">R$</span>
+                      <input type="number" min="0" step="0.01" value={s.value}
+                        onChange={e => setServiceValue(s.name, Number(e.target.value))}
+                        className="w-28 px-2 py-1.5 border border-slate-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                    </div>
+                  )}
                 </div>
               ))}
-              <button type="button" onClick={addItem} className="flex items-center gap-1.5 text-orange-500 text-sm font-medium mt-2">
-                <Plus className="w-4 h-4" /> Adicionar item
-              </button>
             </div>
 
             <div className="border-t border-slate-100 pt-4 grid grid-cols-2 gap-4">
@@ -398,7 +474,6 @@ export default function NovoChamadoPage() {
             </div>
 
             <div className="border-t border-slate-100 pt-4 space-y-2">
-              <div className="flex justify-between text-sm"><span className="text-slate-600">Subtotal</span><span>R$ {subtotal.toFixed(2)}</span></div>
               <div className="flex justify-between text-sm items-center">
                 <span className="text-slate-600">Descontos (R$)</span>
                 <input type="number" min="0" step="0.01" value={discount} onChange={e => setDiscount(Number(e.target.value))}
@@ -442,7 +517,9 @@ export default function NovoChamadoPage() {
                   { label: 'Sem planta hidráulica', val: hasNoHydraulicPlan, set: setHasNoHydraulicPlan },
                 ]},
                 { title: 'Garantia', options: [
-                  { label: 'Com garantia de 30 dias', val: hasGuarantee, set: setHasGuarantee },
+                  { label: 'Garantia 30 dias', val: hasGuarantee, set: setHasGuarantee },
+                  { label: 'Garantia 60 dias', val: hasGuarantee60, set: setHasGuarantee60 },
+                  { label: 'Garantia 90 dias', val: hasGuarantee90, set: setHasGuarantee90 },
                   { label: 'Sem garantia', val: hasNoGuarantee, set: setHasNoGuarantee },
                 ]},
               ].map(group => (
@@ -525,4 +602,3 @@ export default function NovoChamadoPage() {
     </form>
   )
 }
-

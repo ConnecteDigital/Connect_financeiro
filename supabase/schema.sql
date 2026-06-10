@@ -113,7 +113,7 @@ create table calls (
   contact_name text,
   contact_phone text,
   origin text not null,
-  status text not null default 'agendado' check (status in ('agendado','aprovado','nao_quis_visita','cancelado')),
+  status text not null default 'agendado' check (status in ('agendado','aprovado','nao_aprovou','nao_quis_visita','cancelado')),
   notes text,
   service_category text,
   scheduled_time time,

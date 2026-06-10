@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ArrowLeft, Plus, Trash2, Save, Loader2 } from 'lucide-react'
+import { ArrowLeft, Save, Loader2, CalendarDays, CheckSquare } from 'lucide-react'
 import Link from 'next/link'
 import { use } from 'react'
 import { useRouter } from 'next/navigation'
@@ -17,7 +17,15 @@ type ServiceType = 'proprio' | 'terceirizado_saida' | 'terceirizado_entrada'
 type PaymentStatus = 'pago' | 'pago_parcial' | 'pendente'
 type BillingSystem = 'metro_linear' | 'metro_linear_sem_hidraulica' | 'metro_cubico' | 'litros' | 'carga' | 'valor_fechado' | 'metro_quadrado'
 
-interface Item { id: string; quantity: number; description: string; unit_price: number }
+interface ServiceSel { name: string; selected: boolean; value: number }
+
+const CALL_STATUSES = [
+  { value: 'agendado', label: 'Agendado' },
+  { value: 'aprovado', label: 'Aprovado' },
+  { value: 'nao_aprovou', label: 'Não aprovou' },
+  { value: 'nao_quis_visita', label: 'Não quis visita' },
+  { value: 'cancelado', label: 'Cancelado' },
+]
 
 export default function EditarChamadoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -28,7 +36,6 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const [clients, setClients] = useState<any[]>([])
   const [teams, setTeams] = useState<any[]>([])
   const { origins: callOrigins } = useCallOrigins()
-  const [serviceCategories, setServiceCategories] = useState<string[]>([])
 
   // Chamado
   const [callDate, setCallDate] = useState('')
@@ -37,7 +44,10 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const [callNotes, setCallNotes] = useState('')
   const [clientId, setClientId] = useState('')
   const [contactName, setContactName] = useState('')
-  const [serviceCategory, setServiceCategory] = useState('')
+  const [contactPhone, setContactPhone] = useState('')
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
+  const [categoryOptions, setCategoryOptions] = useState<string[]>([])
+  const [scheduledDate, setScheduledDate] = useState('')
   const [scheduledTime, setScheduledTime] = useState('')
   const [callAddress, setCallAddress] = useState('')
   const [isApproved, setIsApproved] = useState(false)
@@ -48,7 +58,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const [serviceType, setServiceType] = useState<ServiceType>('proprio')
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('pendente')
   const [billingSystem, setBillingSystem] = useState<BillingSystem | ''>('')
-  const [items, setItems] = useState<Item[]>([{ id: '1', quantity: 1, description: '', unit_price: 0 }])
+  const [services, setServices] = useState<ServiceSel[]>([])
   const [discount, setDiscount] = useState(0)
   const [taxes, setTaxes] = useState(0)
   const [equipmentRentalPct, setEquipmentRentalPct] = useState(0)
@@ -59,6 +69,8 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const [hasHydraulicPlan, setHasHydraulicPlan] = useState(false)
   const [hasNoHydraulicPlan, setHasNoHydraulicPlan] = useState(false)
   const [hasGuarantee, setHasGuarantee] = useState(false)
+  const [hasGuarantee60, setHasGuarantee60] = useState(false)
+  const [hasGuarantee90, setHasGuarantee90] = useState(false)
   const [hasNoGuarantee, setHasNoGuarantee] = useState(false)
   const [teamId, setTeamId] = useState('')
   const [driver, setDriver] = useState('')
@@ -71,6 +83,12 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const [remainingDueDate, setRemainingDueDate] = useState('')
   const [conditions, setConditions] = useState('')
   const [observations, setObservations] = useState('')
+  // Custos serviço próprio
+  const [materialCost, setMaterialCost] = useState(0)
+  const [ownFuelCost, setOwnFuelCost] = useState(0)
+  const [ownOtherCost, setOwnOtherCost] = useState(0)
+  const [otherServiceValue, setOtherServiceValue] = useState(0)
+  // Custos terceirizado
   const [fuelCost, setFuelCost] = useState(0)
   const [mealCost, setMealCost] = useState(0)
   const [truckCost, setTruckCost] = useState(0)
@@ -80,7 +98,8 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
     Promise.all([getCall(id), getClients(), getTeams(), getServiceTypes()]).then(([call, cls, tms, sts]) => {
       setClients(cls)
       setTeams(tms)
-      setServiceCategories(sts.map((st: any) => st.name))
+      const typeNames: string[] = sts.map((st: any) => st.name)
+
       // Preencher dados do chamado
       setCallDate(call.date)
       setOrigin(call.origin)
@@ -88,11 +107,31 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
       setCallNotes(call.notes ?? '')
       setClientId(call.client_id ?? '')
       setContactName(call.contact_name ?? '')
-      setServiceCategory(call.service_category ?? '')
+      setContactPhone(call.contact_phone ?? '')
+      setScheduledDate(call.scheduled_date ?? '')
       setScheduledTime(call.scheduled_time ? String(call.scheduled_time).slice(0,5) : '')
       setCallAddress(call.call_address ?? '')
       setIsApproved(call.status === 'aprovado')
       setIsScheduled(call.status === 'agendado')
+
+      // Tipo(s) de serviço do chamado: valores antigos podem conter vírgula no
+      // próprio nome, então só separamos se todas as partes forem tipos conhecidos
+      const options = [...typeNames]
+      const selected: string[] = []
+      if (call.service_category) {
+        const parts = call.service_category.split(', ')
+        if (parts.every((p: string) => typeNames.includes(p))) {
+          selected.push(...parts)
+        } else {
+          selected.push(call.service_category)
+          if (!options.includes(call.service_category)) options.push(call.service_category)
+        }
+      }
+      setCategoryOptions(options)
+      setSelectedCategories(selected)
+
+      // Tipos de serviço realizado (itens da OS)
+      const svcList: ServiceSel[] = typeNames.map(name => ({ name, selected: false, value: 0 }))
 
       // Preencher OS se existir
       const so = call.service_orders?.[0]
@@ -111,6 +150,8 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         setHasHydraulicPlan(so.has_hydraulic_plan ?? false)
         setHasNoHydraulicPlan(so.has_no_hydraulic_plan ?? false)
         setHasGuarantee(so.has_guarantee ?? false)
+        setHasGuarantee60(so.has_guarantee_60 ?? false)
+        setHasGuarantee90(so.has_guarantee_90 ?? false)
         setHasNoGuarantee(so.has_no_guarantee ?? false)
         setTeamId(so.team_id ?? '')
         setDriver(so.driver ?? '')
@@ -123,30 +164,43 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         setRemainingDueDate(so.remaining_due_date ?? '')
         setConditions(so.conditions ?? '')
         setObservations(so.observations ?? '')
+        setMaterialCost(Number(so.own_material_cost ?? 0))
+        setOwnFuelCost(Number(so.own_fuel_cost ?? 0))
+        setOwnOtherCost(Number(so.own_other_cost ?? 0))
+        setOtherServiceValue(Number(so.other_service_value ?? 0))
         setFuelCost(Number(so.outsource_fuel_cost ?? 0))
         setMealCost(Number(so.outsource_meal_cost ?? 0))
         setTruckCost(Number(so.outsource_truck_cost ?? 0))
         setOtherCost(Number(so.outsource_other_cost ?? 0))
 
-        if (so.items?.length) {
-          setItems(so.items.map((item: any) => ({
-            id: item.id,
-            quantity: Number(item.quantity),
-            description: item.description,
-            unit_price: Number(item.unit_price),
-          })))
+        // Itens existentes: marca o tipo correspondente; itens avulsos antigos
+        // entram como linha extra para não perder nada ao salvar
+        for (const item of so.items ?? []) {
+          const itemValue = Number(item.quantity) * Number(item.unit_price)
+          const match = svcList.find(s => s.name === item.description)
+          if (match) {
+            match.selected = true
+            match.value += itemValue
+          } else {
+            svcList.push({ name: item.description, selected: true, value: itemValue })
+          }
         }
       }
+      setServices(svcList)
     }).catch(console.error).finally(() => setLoading(false))
   }, [id])
 
-  const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price, 0)
+  const subtotal = services.filter(s => s.selected).reduce((sum, s) => sum + s.value, 0)
   const total = subtotal + equipmentRentalValue - discount + taxes
 
-  const addItem = () => setItems(prev => [...prev, { id: Date.now().toString(), quantity: 1, description: '', unit_price: 0 }])
-  const removeItem = (id: string) => setItems(prev => prev.filter(i => i.id !== id))
-  const updateItem = (id: string, field: keyof Item, value: string | number) =>
-    setItems(prev => prev.map(i => i.id === id ? { ...i, [field]: value } : i))
+  const toggleCategory = (name: string) =>
+    setSelectedCategories(prev => prev.includes(name) ? prev.filter(c => c !== name) : [...prev, name])
+
+  const toggleService = (name: string) =>
+    setServices(prev => prev.map(s => s.name === name ? { ...s, selected: !s.selected } : s))
+
+  const setServiceValue = (name: string, value: number) =>
+    setServices(prev => prev.map(s => s.name === name ? { ...s, value } : s))
 
   function handleStatusChange(status: string) {
     setCallStatus(status)
@@ -165,10 +219,12 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         date: callDate,
         client_id: clientId || null,
         contact_name: contactName || null,
+        contact_phone: contactPhone || null,
         origin,
         status: callStatus,
         notes: callNotes || null,
-        service_category: serviceCategory || null,
+        service_category: selectedCategories.join(', ') || null,
+        scheduled_date: scheduledDate || null,
         scheduled_time: scheduledTime || null,
         call_address: callAddress || null,
       })
@@ -192,6 +248,8 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
           has_hydraulic_plan: hasHydraulicPlan,
           has_no_hydraulic_plan: hasNoHydraulicPlan,
           has_guarantee: hasGuarantee,
+          has_guarantee_60: hasGuarantee60,
+          has_guarantee_90: hasGuarantee90,
           has_no_guarantee: hasNoGuarantee,
           equipment_rental_pct: equipmentRentalPct,
           equipment_rental_value: equipmentRentalValue,
@@ -199,6 +257,10 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
           discount,
           taxes,
           total_value: total,
+          own_material_cost: materialCost,
+          own_fuel_cost: ownFuelCost,
+          own_other_cost: ownOtherCost,
+          other_service_value: otherServiceValue,
           outsource_fuel_cost: fuelCost,
           outsource_meal_cost: mealCost,
           outsource_truck_cost: truckCost,
@@ -212,30 +274,25 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
           observations: observations || null,
         }
 
+        const validItems = services.filter(s => s.selected).map(s => ({
+          quantity: 1,
+          description: s.name,
+          unit_price: s.value,
+        }))
+
         if (existingSoId) {
           // Atualizar OS existente
           await updateServiceOrder(existingSoId, orderData)
           // Atualizar itens
           const supabase = createClient()
           await supabase.from('service_order_items').delete().eq('service_order_id', existingSoId)
-          const validItems = items.filter(i => i.description.trim())
           if (validItems.length) {
             await supabase.from('service_order_items').insert(
-              validItems.map(i => ({
-                service_order_id: existingSoId,
-                quantity: i.quantity,
-                description: i.description,
-                unit_price: i.unit_price,
-              }))
+              validItems.map(i => ({ ...i, service_order_id: existingSoId }))
             )
           }
         } else {
           // Criar nova OS
-          const validItems = items.filter(i => i.description.trim()).map(i => ({
-            quantity: i.quantity,
-            description: i.description,
-            unit_price: i.unit_price,
-          }))
           await createServiceOrder(orderData, validItems)
         }
       }
@@ -252,7 +309,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   if (loading) {
     return (
       <div className="max-w-4xl mx-auto flex items-center justify-center py-20">
-        <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+        <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
       </div>
     )
   }
@@ -273,34 +330,26 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-4">
         <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3">Informações do Chamado</h2>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Data *</label>
-            <input type="date" required value={callDate} onChange={e => setCallDate(e.target.value)}
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Origem *</label>
-            <select value={origin} onChange={e => setOrigin(e.target.value)}
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-              {callOrigins.map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
+        {/* Origem */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">Origem *</label>
+          <div className="flex flex-wrap gap-2">
+            {callOrigins.map(o => (
+              <button key={o.value} type="button" onClick={() => setOrigin(o.value)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${origin === o.value ? 'bg-orange-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                {o.label}
+              </button>
+            ))}
           </div>
         </div>
 
+        {/* Status */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">Status *</label>
           <div className="flex flex-wrap gap-2">
-            {[
-              { value: 'agendado', label: 'Agendado' },
-              { value: 'aprovado', label: 'Aprovado' },
-              { value: 'nao_quis_visita', label: 'Nao quis visita' },
-              { value: 'cancelado', label: 'Cancelado' },
-            ].map(s => (
+            {CALL_STATUSES.map(s => (
               <button key={s.value} type="button" onClick={() => handleStatusChange(s.value)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${callStatus === s.value ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${callStatus === s.value ? 'bg-orange-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
                 {s.label}
               </button>
             ))}
@@ -310,57 +359,87 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
           )}
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5">Nome do Contato</label>
-          <input type="text" value={contactName} onChange={e => setContactName(e.target.value)}
-            placeholder="Quem ligou"
-            className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        {/* Data do chamado */}
+        <div className="sm:max-w-xs">
+          <label className="block text-sm font-medium text-slate-700 mb-1.5">Data do Chamado *</label>
+          <input type="date" required value={callDate} onChange={e => setCallDate(e.target.value)}
+            className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5">Tipo de Serviço</label>
-          <select value={serviceCategory} onChange={e => setServiceCategory(e.target.value)}
-            className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <option value="">Selecionar tipo —</option>
-            {serviceCategory && !serviceCategories.includes(serviceCategory) && (
-              <option value={serviceCategory}>{serviceCategory}</option>
-            )}
-            {serviceCategories.map(c => <option key={c}>{c}</option>)}
-          </select>
+        {/* Contato + telefone */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              Nome do Contato
+              <span className="text-slate-400 font-normal ml-1">(quem ligou)</span>
+            </label>
+            <input type="text" value={contactName} onChange={e => setContactName(e.target.value)}
+              placeholder="Ex: João Silva"
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Telefone</label>
+            <input type="tel" value={contactPhone} onChange={e => setContactPhone(e.target.value)}
+              placeholder="(51) 99999-9999"
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+          </div>
         </div>
 
+        {/* Cliente cadastrado */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1.5">Cliente cadastrado <span className="text-slate-400 font-normal">(opcional)</span></label>
           <select value={clientId} onChange={e => setClientId(e.target.value)}
-            className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
             <option value="">— Não vincular —</option>
             {clients.map(c => <option key={c.id} value={c.id}>{c.name}{c.city ? ` - ${c.city}` : ''}</option>)}
           </select>
         </div>
 
+        {/* Campos de agendamento */}
         {isScheduled && (
-          <div className="border border-blue-100 bg-blue-50/50 rounded-lg p-4 space-y-3">
-            <p className="text-sm font-semibold text-blue-700">Detalhes do Agendamento</p>
+          <div className="border border-orange-100 bg-orange-50/50 rounded-lg p-4 space-y-3">
+            <p className="text-sm font-semibold text-orange-600 flex items-center gap-1.5">
+              <CalendarDays className="w-4 h-4" />
+              Detalhes do Agendamento
+            </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Horário Agendado</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Data do Serviço</label>
+                <input type="date" value={scheduledDate} onChange={e => setScheduledDate(e.target.value)}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Horário</label>
                 <input type="time" value={scheduledTime} onChange={e => setScheduledTime(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
               </div>
               <div className="sm:col-span-2">
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Endereço do Serviço</label>
                 <input type="text" value={callAddress} onChange={e => setCallAddress(e.target.value)}
                   placeholder="Rua, número, bairro, cidade"
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
               </div>
             </div>
           </div>
         )}
 
+        {/* Tipo(s) de serviço */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">Tipo(s) de Serviço</label>
+          <div className="flex flex-wrap gap-2">
+            {categoryOptions.map(name => (
+              <button key={name} type="button" onClick={() => toggleCategory(name)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${selectedCategories.includes(name) ? 'bg-orange-500 border-orange-500 text-white' : 'border-slate-200 text-slate-600 hover:border-orange-300'}`}>
+                {name}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1.5">Observações</label>
           <textarea rows={2} value={callNotes} onChange={e => setCallNotes(e.target.value)}
-            className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+            className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none" />
         </div>
       </div>
 
@@ -369,14 +448,14 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         <>
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-4">
             <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3">
-              Ordem de Serviço {existingSoId && <span className="text-blue-600 font-mono text-sm ml-1">(editando OS existente)</span>}
+              Ordem de Serviço {existingSoId && <span className="text-orange-500 font-mono text-sm ml-1">(editando OS existente)</span>}
             </h2>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Equipe</label>
                 <select value={teamId} onChange={e => setTeamId(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
                   <option value="">Selecione...</option>
                   {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                 </select>
@@ -384,47 +463,74 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Motorista</label>
                 <input type="text" value={driver} onChange={e => setDriver(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Nº da NF</label>
                 <input type="text" value={nfNumber} onChange={e => setNfNumber(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Veículo</label>
                 <input type="text" value={vehicle} onChange={e => setVehicle(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Vencimento</label>
                 <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Forma de Pagamento</label>
                 <input type="text" placeholder="Dinheiro, PIX, Cartão..." value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
               </div>
             </div>
           </div>
 
-          {/* Tipo de execução */}
+          {/* Tipo de execução + custos */}
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-4">
             <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3">Tipo de Execução</h2>
             <div className="flex flex-wrap gap-2">
               {[
-                { value: 'proprio', label: '✅ Serviço Próprio' },
-                { value: 'terceirizado_saida', label: 'Terceirizado (passamos para parceiro)' },
+                { value: 'proprio', label: 'Serviço Próprio' },
+                { value: 'terceirizado_saida', label: 'Terceirizado (passamos)' },
                 { value: 'terceirizado_entrada', label: 'Recebido de parceiro' },
               ].map(s => (
                 <button key={s.value} type="button" onClick={() => setServiceType(s.value as ServiceType)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition ${serviceType === s.value ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition ${serviceType === s.value ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
                   {s.label}
                 </button>
               ))}
             </div>
-            {serviceType !== 'proprio' && (
+            {serviceType === 'proprio' ? (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {[
+                    { label: 'Material (R$)', val: materialCost, set: setMaterialCost },
+                    { label: 'Combustível (R$)', val: ownFuelCost, set: setOwnFuelCost },
+                    { label: 'Outros Custos (R$)', val: ownOtherCost, set: setOwnOtherCost },
+                  ].map(f => (
+                    <div key={f.label}>
+                      <label className="block text-sm font-medium text-slate-700 mb-1.5">{f.label}</label>
+                      <input type="number" min="0" step="0.01" value={f.val} onChange={e => f.set(Number(e.target.value))}
+                        className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Contratou algum outro serviço?
+                    <span className="text-slate-400 font-normal ml-1">(valor pago a terceiro)</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-slate-500">R$</span>
+                    <input type="number" min="0" step="0.01" value={otherServiceValue} onChange={e => setOtherServiceValue(Number(e.target.value))}
+                      className="w-36 px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                  </div>
+                </div>
+              </>
+            ) : (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 {[
                   { label: 'Gasolina (R$)', val: fuelCost, set: setFuelCost },
@@ -435,84 +541,66 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                   <div key={f.label}>
                     <label className="block text-sm font-medium text-slate-700 mb-1.5">{f.label}</label>
                     <input type="number" min="0" step="0.01" value={f.val} onChange={e => f.set(Number(e.target.value))}
-                      className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          {/* Itens */}
+          {/* Tipos de serviço realizado */}
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-4">
-            <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3">Itens do Serviço</h2>
+            <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3 flex items-center gap-2">
+              <CheckSquare className="w-4 h-4 text-orange-500" />
+              Tipo(s) de Serviço Realizado
+            </h2>
             <div className="space-y-2">
-              <div className="grid grid-cols-12 gap-2 text-xs font-semibold text-slate-500 uppercase px-1">
-                <div className="col-span-2">Qtd.</div>
-                <div className="col-span-6">Descrição</div>
-                <div className="col-span-2">Vlr. Unit.</div>
-                <div className="col-span-1">Total</div>
-                <div className="col-span-1"></div>
-              </div>
-              {items.map(item => (
-                <div key={item.id} className="grid grid-cols-12 gap-2 items-center">
-                  <div className="col-span-2">
-                    <input type="number" min="1" value={item.quantity}
-                      onChange={e => updateItem(item.id, 'quantity', Number(e.target.value))}
-                      className="w-full px-2 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                  </div>
-                  <div className="col-span-6">
-                    <input type="text" value={item.description} placeholder="Descrição"
-                      onChange={e => updateItem(item.id, 'description', e.target.value)}
-                      className="w-full px-2 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                  </div>
-                  <div className="col-span-2">
-                    <input type="number" min="0" step="0.01" value={item.unit_price}
-                      onChange={e => updateItem(item.id, 'unit_price', Number(e.target.value))}
-                      className="w-full px-2 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                  </div>
-                  <div className="col-span-1 text-sm text-slate-700 font-medium text-center">
-                    {(item.quantity * item.unit_price).toFixed(2)}
-                  </div>
-                  <div className="col-span-1 flex justify-center">
-                    <button type="button" onClick={() => removeItem(item.id)} className="text-red-400 hover:text-red-600 transition">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+              {services.map(s => (
+                <div key={s.name} className="flex items-center justify-between gap-3">
+                  <label className="flex items-center gap-2.5 cursor-pointer py-1.5">
+                    <input type="checkbox" checked={s.selected} onChange={() => toggleService(s.name)}
+                      className="w-4 h-4 rounded text-orange-500" />
+                    <span className="text-sm text-slate-700">{s.name}</span>
+                  </label>
+                  {s.selected && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-slate-400">R$</span>
+                      <input type="number" min="0" step="0.01" value={s.value}
+                        onChange={e => setServiceValue(s.name, Number(e.target.value))}
+                        className="w-28 px-2 py-1.5 border border-slate-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                    </div>
+                  )}
                 </div>
               ))}
-              <button type="button" onClick={addItem} className="flex items-center gap-1.5 text-blue-600 hover:text-blue-700 text-sm font-medium mt-2">
-                <Plus className="w-4 h-4" /> Adicionar item
-              </button>
             </div>
 
             <div className="border-t border-slate-100 pt-4 grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Locação Equip. e M.O. (%)</label>
                 <input type="number" min="0" value={equipmentRentalPct} onChange={e => setEquipmentRentalPct(Number(e.target.value))}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor (R$)</label>
                 <input type="number" min="0" step="0.01" value={equipmentRentalValue} onChange={e => setEquipmentRentalValue(Number(e.target.value))}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
               </div>
             </div>
 
             <div className="border-t border-slate-100 pt-4 space-y-2">
-              <div className="flex justify-between text-sm"><span className="text-slate-600">Subtotal</span><span>R$ {subtotal.toFixed(2)}</span></div>
               <div className="flex justify-between text-sm items-center">
                 <span className="text-slate-600">Descontos (R$)</span>
                 <input type="number" min="0" step="0.01" value={discount} onChange={e => setDiscount(Number(e.target.value))}
-                  className="w-24 px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="w-24 px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-orange-400" />
               </div>
               <div className="flex justify-between text-sm items-center">
                 <span className="text-slate-600">Impostos (R$)</span>
                 <input type="number" min="0" step="0.01" value={taxes} onChange={e => setTaxes(Number(e.target.value))}
-                  className="w-24 px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="w-24 px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-orange-400" />
               </div>
               <div className="flex justify-between text-base font-bold border-t border-slate-100 pt-2">
                 <span className="text-slate-800">Valor Total</span>
-                <span className="text-blue-600">R$ {total.toFixed(2)}</span>
+                <span className="text-orange-500">R$ {total.toFixed(2)}</span>
               </div>
             </div>
           </div>
@@ -520,19 +608,16 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
           {/* Levantamento */}
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-4">
             <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3">Levantamento e Cobrança</h2>
-            <div>
-              <p className="text-sm font-medium text-slate-700 mb-2">Sistema de Cobrança</p>
-              <div className="flex flex-wrap gap-2">
-                {(['metro_linear','metro_cubico','litros','carga','valor_fechado','metro_quadrado'] as BillingSystem[]).map(b => {
-                  const labels: Record<string,string> = { metro_linear:'Metro Linear', metro_cubico:'Metro Cúbico', litros:'Litros', carga:'Carga', valor_fechado:'Valor Fechado', metro_quadrado:'Metro Quadrado' }
-                  return (
-                    <button key={b} type="button" onClick={() => setBillingSystem(billingSystem === b ? '' : b)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${billingSystem === b ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-200 text-slate-600 hover:border-blue-300'}`}>
-                      {labels[b]}
-                    </button>
-                  )
-                })}
-              </div>
+            <div className="flex flex-wrap gap-2">
+              {(['metro_linear','metro_cubico','litros','carga','valor_fechado','metro_quadrado'] as BillingSystem[]).map(b => {
+                const labels: Record<string,string> = { metro_linear:'Metro Linear', metro_cubico:'Metro Cúbico', litros:'Litros', carga:'Carga', valor_fechado:'Valor Fechado', metro_quadrado:'Metro Quadrado' }
+                return (
+                  <button key={b} type="button" onClick={() => setBillingSystem(billingSystem === b ? '' : b)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${billingSystem === b ? 'bg-orange-500 border-orange-500 text-white' : 'border-slate-200 text-slate-600 hover:border-orange-300'}`}>
+                    {labels[b]}
+                  </button>
+                )
+              })}
             </div>
             <div className="space-y-3">
               {[
@@ -546,7 +631,9 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                   { label: 'Sem planta hidráulica', val: hasNoHydraulicPlan, set: setHasNoHydraulicPlan },
                 ]},
                 { title: 'Garantia', options: [
-                  { label: 'Com garantia de 30 dias', val: hasGuarantee, set: setHasGuarantee },
+                  { label: 'Garantia 30 dias', val: hasGuarantee, set: setHasGuarantee },
+                  { label: 'Garantia 60 dias', val: hasGuarantee60, set: setHasGuarantee60 },
+                  { label: 'Garantia 90 dias', val: hasGuarantee90, set: setHasGuarantee90 },
                   { label: 'Sem garantia', val: hasNoGuarantee, set: setHasNoGuarantee },
                 ]},
               ].map(group => (
@@ -566,12 +653,12 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Condições de Pagamento</label>
               <input type="text" value={conditions} onChange={e => setConditions(e.target.value)}
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Observações</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Observações da OS</label>
               <textarea rows={2} value={observations} onChange={e => setObservations(e.target.value)}
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none" />
             </div>
           </div>
 
@@ -585,7 +672,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                 { value: 'pendente', label: 'Pendente' },
               ].map(s => (
                 <button key={s.value} type="button" onClick={() => setPaymentStatus(s.value as PaymentStatus)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition ${paymentStatus === s.value ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition ${paymentStatus === s.value ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
                   {s.label}
                 </button>
               ))}
@@ -595,17 +682,17 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor Pago (R$)</label>
                   <input type="number" min="0" step="0.01" value={amountPaid} onChange={e => setAmountPaid(Number(e.target.value))}
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor Restante (R$)</label>
                   <input type="number" min="0" step="0.01" value={remainingAmount} onChange={e => setRemainingAmount(Number(e.target.value))}
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Data do Restante</label>
                   <input type="date" value={remainingDueDate} onChange={e => setRemainingDueDate(e.target.value)}
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
                 </div>
               </div>
             )}
@@ -621,7 +708,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
           Cancelar
         </Link>
         <button type="submit" disabled={saving}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-semibold px-6 py-2.5 rounded-lg transition">
+          className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white text-sm font-semibold px-6 py-2.5 rounded-lg transition">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           {saving ? 'Salvando...' : 'Salvar Alterações'}
         </button>

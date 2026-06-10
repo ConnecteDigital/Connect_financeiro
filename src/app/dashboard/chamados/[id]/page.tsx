@@ -14,6 +14,7 @@ import { getOriginLabel } from '@/lib/use-call-origins'
 const statusConfig: Record<string, { label: string; color: string; bg: string; icon: React.ElementType }> = {
   agendado: { label: 'Agendado', color: 'text-blue-700', bg: 'bg-blue-100', icon: Clock },
   aprovado: { label: 'Aprovado', color: 'text-emerald-700', bg: 'bg-emerald-100', icon: CheckCircle },
+  nao_aprovou: { label: 'Não aprovou', color: 'text-amber-700', bg: 'bg-amber-100', icon: XCircle },
   nao_quis_visita: { label: 'Não quis visita', color: 'text-slate-600', bg: 'bg-slate-100', icon: XCircle },
   cancelado: { label: 'Cancelado', color: 'text-red-600', bg: 'bg-red-100', icon: XCircle },
 }
@@ -211,6 +212,18 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
             <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Status</p>
             <p className="text-slate-700 font-medium mt-0.5">{cfg?.label}</p>
           </div>
+          {call.contact_phone && (
+            <div>
+              <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Telefone</p>
+              <p className="text-slate-700 font-medium mt-0.5">{call.contact_phone}</p>
+            </div>
+          )}
+          {call.scheduled_date && (
+            <div>
+              <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Data do Serviço</p>
+              <p className="text-slate-700 font-medium mt-0.5">{new Date(call.scheduled_date + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
+            </div>
+          )}
           {call.service_category && (
             <div>
               <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Tipo de Serviço</p>
@@ -347,6 +360,26 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
                 <span className="text-blue-600">{fmt(so.total_value)}</span>
               </div>
             </div>
+
+            {/* Custos serviço próprio */}
+            {so.service_type === 'proprio' && (Number(so.own_material_cost) > 0 || Number(so.own_fuel_cost) > 0 || Number(so.own_other_cost) > 0 || Number(so.other_service_value) > 0) && (
+              <div className="border-t border-slate-100 pt-4 mt-4">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Custos do Serviço</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                  {[
+                    { label: 'Material', val: so.own_material_cost },
+                    { label: 'Combustível', val: so.own_fuel_cost },
+                    { label: 'Outros Custos', val: so.own_other_cost },
+                    { label: 'Outro serviço contratado', val: so.other_service_value },
+                  ].filter(x => Number(x.val) > 0).map(x => (
+                    <div key={x.label}>
+                      <p className="text-slate-400 text-xs">{x.label}</p>
+                      <p className="text-slate-700 font-medium">{fmt(x.val)}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Custos terceirizado */}
             {so.service_type !== 'proprio' && (
