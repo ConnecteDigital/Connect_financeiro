@@ -2,23 +2,16 @@
 
 import { useEffect, useState } from 'react'
 import { use } from 'react'
+import Image from 'next/image'
 import { getCall } from '@/lib/db/calls'
+import { useTenant } from '@/lib/tenant-context'
 import { Printer } from 'lucide-react'
 
 const fmt = (v: number | string) =>
   `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
 
-const billingLabel: Record<string, string> = {
-  metro_linear: 'Metro Linear',
-  metro_cubico: 'Metro Cúbico',
-  litros: 'Litros',
-  carga: 'Carga',
-  valor_fechado: 'Valor Fechado',
-  metro_quadrado: 'Metro Quadrado',
-}
-
-export default function ImprimirOSPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params)
+function ImprimirContent({ id }: { id: string }) {
+  const { tenant } = useTenant()
   const [call, setCall] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
@@ -31,6 +24,12 @@ export default function ImprimirOSPage({ params }: { params: Promise<{ id: strin
 
   const so = call.service_orders?.[0]
   if (!so) return <div className="flex items-center justify-center h-screen text-slate-500">Este chamado não possui ordem de serviço.</div>
+
+  const companyName = tenant?.name ?? 'Empresa'
+  const primaryColor = tenant?.primary_color ?? '#f97316'
+  const logoUrl = tenant?.logo_url
+
+  const originLabel = call.origin ?? null
 
   const client = call.client
   const items = so.items ?? []
@@ -47,11 +46,11 @@ export default function ImprimirOSPage({ params }: { params: Promise<{ id: strin
 
   return (
     <>
-      {/* Botão de impressão — some na impressão */}
       <div className="print:hidden fixed top-4 right-4 z-50">
         <button
           onClick={() => window.print()}
-          className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-semibold px-5 py-2.5 rounded-xl shadow-lg transition">
+          className="flex items-center gap-2 text-white font-semibold px-5 py-2.5 rounded-xl shadow-lg transition"
+          style={{ backgroundColor: primaryColor }}>
           <Printer className="w-4 h-4" />
           Imprimir / Salvar PDF
         </button>
@@ -62,16 +61,30 @@ export default function ImprimirOSPage({ params }: { params: Promise<{ id: strin
         <div className="border-2 border-black mb-0">
           <div className="flex">
             {/* Logo / empresa */}
-            <div className="border-r-2 border-black p-3 flex items-center justify-center w-40 min-h-[80px]">
-              <div className="text-center">
-                <p className="font-black text-lg leading-tight">LÍDER</p>
-                <p className="text-[10px] leading-tight">Desentupidora</p>
-              </div>
+            <div className="border-r-2 border-black flex items-center justify-center w-40 min-h-[80px]"
+              style={{ backgroundColor: primaryColor }}>
+              {logoUrl ? (
+                <Image src={logoUrl} alt={companyName} width={80} height={64}
+                  className="object-contain p-2"
+                  style={{ width: 80, height: 64 }} />
+              ) : (
+                <div className="text-center text-white p-3">
+                  <p className="font-black text-xl leading-tight">{companyName.split(' ')[0]}</p>
+                  <p className="text-[10px] leading-tight opacity-80">
+                    {companyName.split(' ').slice(1).join(' ') || 'Serviços'}
+                  </p>
+                </div>
+              )}
             </div>
             {/* Dados empresa */}
             <div className="flex-1 p-3 text-[11px] leading-snug">
-              <p className="font-bold">DESENTUPIDORA LÍDER</p>
+              <p className="font-bold text-[13px]">{companyName}</p>
               <p>Atendimento 24h · Domingos e Feriados</p>
+              {originLabel && (
+                <p className="mt-1 font-semibold" style={{ color: primaryColor }}>
+                  {originLabel}
+                </p>
+              )}
             </div>
             {/* OS número */}
             <div className="border-l-2 border-black p-3 flex flex-col items-center justify-center w-36">
@@ -83,7 +96,8 @@ export default function ImprimirOSPage({ params }: { params: Promise<{ id: strin
 
         {/* Dados do cliente */}
         <div className="border-x-2 border-b-2 border-black">
-          <div className="bg-gray-200 px-3 py-1 font-bold text-center text-[11px] uppercase border-b border-black">
+          <div className="px-3 py-1 font-bold text-center text-[11px] uppercase border-b border-black text-white"
+            style={{ backgroundColor: primaryColor }}>
             Dados do Cliente
           </div>
           <div className="grid grid-cols-3 divide-x divide-black">
@@ -99,11 +113,11 @@ export default function ImprimirOSPage({ params }: { params: Promise<{ id: strin
           <div className="grid grid-cols-4 divide-x divide-black border-t border-black">
             <div className="p-2 col-span-2">
               <p className="text-[10px] font-bold uppercase text-gray-500">Endereço</p>
-              <p>{client?.address ?? so.call_address ?? call.call_address ?? '—'}</p>
+              <p>{call.call_address || client?.address || '—'}</p>
             </div>
             <div className="p-2">
               <p className="text-[10px] font-bold uppercase text-gray-500">Bairro</p>
-              <p>{client?.neighborhood ?? '—'}</p>
+              <p>{call.call_neighborhood || client?.neighborhood || '—'}</p>
             </div>
             <div className="p-2">
               <p className="text-[10px] font-bold uppercase text-gray-500">CEP</p>
@@ -113,11 +127,11 @@ export default function ImprimirOSPage({ params }: { params: Promise<{ id: strin
           <div className="grid grid-cols-4 divide-x divide-black border-t border-black">
             <div className="p-2 col-span-2">
               <p className="text-[10px] font-bold uppercase text-gray-500">Município</p>
-              <p>{client?.city ?? '—'}</p>
+              <p>{call.call_city || client?.city || '—'}</p>
             </div>
             <div className="p-2">
               <p className="text-[10px] font-bold uppercase text-gray-500">Fone</p>
-              <p>{client?.phone ?? '—'}</p>
+              <p>{call.contact_phone || client?.phone || '—'}</p>
             </div>
             <div className="p-2">
               <p className="text-[10px] font-bold uppercase text-gray-500">UF</p>
@@ -128,7 +142,8 @@ export default function ImprimirOSPage({ params }: { params: Promise<{ id: strin
 
         {/* Tipo de serviço */}
         <div className="border-x-2 border-b-2 border-black">
-          <div className="bg-gray-200 px-3 py-1 font-bold text-center text-[11px] uppercase border-b border-black">
+          <div className="px-3 py-1 font-bold text-center text-[11px] uppercase border-b border-black text-white"
+            style={{ backgroundColor: primaryColor }}>
             Dados do Serviço
           </div>
           <div className="grid grid-cols-2 divide-x divide-black">
@@ -141,12 +156,6 @@ export default function ImprimirOSPage({ params }: { params: Promise<{ id: strin
               <p>{so.date ? new Date(so.date + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</p>
             </div>
           </div>
-          {call.call_address && (
-            <div className="p-2 border-t border-black">
-              <p className="text-[10px] font-bold uppercase text-gray-500">Endereço do Serviço</p>
-              <p>{call.call_address}</p>
-            </div>
-          )}
           {call.notes && (
             <div className="p-2 border-t border-black">
               <p className="text-[10px] font-bold uppercase text-gray-500">Observações do chamado</p>
@@ -158,7 +167,8 @@ export default function ImprimirOSPage({ params }: { params: Promise<{ id: strin
         {/* Levantamento */}
         {levantamento.length > 0 && (
           <div className="border-x-2 border-b-2 border-black">
-            <div className="bg-gray-200 px-3 py-1 font-bold text-center text-[11px] uppercase border-b border-black">
+            <div className="px-3 py-1 font-bold text-center text-[11px] uppercase border-b border-black text-white"
+              style={{ backgroundColor: primaryColor }}>
               Levantamento
             </div>
             <div className="p-2 flex flex-wrap gap-x-6 gap-y-1">
@@ -168,19 +178,14 @@ export default function ImprimirOSPage({ params }: { params: Promise<{ id: strin
                   <span>{item as string}</span>
                 </span>
               ))}
-              {so.billing_system && (
-                <span className="flex items-center gap-1.5">
-                  <span className="inline-block w-3 h-3 border border-black flex items-center justify-center text-[10px]">✓</span>
-                  <span>{billingLabel[so.billing_system] ?? so.billing_system}</span>
-                </span>
-              )}
             </div>
           </div>
         )}
 
         {/* Itens do serviço */}
         <div className="border-x-2 border-b-2 border-black">
-          <div className="bg-gray-200 px-3 py-1 font-bold text-center text-[11px] uppercase border-b border-black">
+          <div className="px-3 py-1 font-bold text-center text-[11px] uppercase border-b border-black text-white"
+            style={{ backgroundColor: primaryColor }}>
             Serviços / Peças
           </div>
           <table className="w-full text-[12px]">
@@ -203,7 +208,6 @@ export default function ImprimirOSPage({ params }: { params: Promise<{ id: strin
               )) : (
                 <tr><td colSpan={4} className="p-2 text-center text-gray-400">Nenhum item</td></tr>
               )}
-              {/* Linhas em branco para preenchimento */}
               {Array.from({ length: Math.max(0, 3 - items.length) }).map((_, i) => (
                 <tr key={`empty-${i}`} className="border-b border-gray-200">
                   <td className="p-2 border-r border-black">&nbsp;</td>
@@ -252,7 +256,8 @@ export default function ImprimirOSPage({ params }: { params: Promise<{ id: strin
                   <span>{fmt(so.taxes)}</span>
                 </div>
               )}
-              <div className="flex justify-between px-3 py-2 bg-gray-100">
+              <div className="flex justify-between px-3 py-2 text-white"
+                style={{ backgroundColor: primaryColor }}>
                 <span className="font-bold text-[14px]">TOTAL</span>
                 <span className="font-bold text-[14px]">{fmt(so.total_value)}</span>
               </div>
@@ -260,7 +265,7 @@ export default function ImprimirOSPage({ params }: { params: Promise<{ id: strin
           </div>
         </div>
 
-        {/* Parcelamento / NF */}
+        {/* Pagamento / NF / Equipe */}
         <div className="border-x-2 border-b-2 border-black">
           <div className="grid grid-cols-3 divide-x divide-black">
             {so.nf_number && (
@@ -312,7 +317,7 @@ export default function ImprimirOSPage({ params }: { params: Promise<{ id: strin
 
         {/* Rodapé */}
         <div className="text-center text-[10px] text-gray-400 mt-2">
-          Desentupidora Líder · Atendimento 24 horas, inclusive domingos e feriados
+          {companyName} · Atendimento 24 horas, inclusive domingos e feriados
         </div>
       </div>
 
@@ -325,4 +330,9 @@ export default function ImprimirOSPage({ params }: { params: Promise<{ id: strin
       `}</style>
     </>
   )
+}
+
+export default function ImprimirOSPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params)
+  return <ImprimirContent id={id} />
 }

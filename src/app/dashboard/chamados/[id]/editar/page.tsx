@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ArrowLeft, Save, Loader2, CalendarDays, CheckSquare } from 'lucide-react'
+import { ArrowLeft, Save, Loader2, CalendarDays } from 'lucide-react'
 import Link from 'next/link'
 import { use } from 'react'
 import { useRouter } from 'next/navigation'
@@ -10,18 +10,17 @@ import { createServiceOrder, updateServiceOrder } from '@/lib/db/service-orders'
 import { getTeams } from '@/lib/db/teams'
 import { getClients } from '@/lib/db/clients'
 import { getServiceTypes } from '@/lib/db/service-types'
+import { getAuxiliaries } from '@/lib/db/auxiliaries'
 import { createClient } from '@/lib/supabase/client'
 import { useCallOrigins } from '@/lib/use-call-origins'
 import { SERVICE_CONFIG } from '@/lib/service-config'
 
 type ServiceType = 'proprio' | 'terceirizado_saida' | 'terceirizado_entrada'
 type PaymentStatus = 'pago' | 'pago_parcial' | 'pendente'
-type BillingSystem = 'metro_linear' | 'metro_linear_sem_hidraulica' | 'metro_cubico' | 'litros' | 'carga' | 'valor_fechado' | 'metro_quadrado'
 
-interface OsService {
+interface ServiceLine {
   category: string
-  selected: boolean
-  subs: string[]
+  sub: string | null
   quantity: number
   unitPrice: number
   notes: string
@@ -35,6 +34,8 @@ const CALL_STATUSES = [
   { value: 'cancelado', label: 'Cancelado' },
 ]
 
+const PAYMENT_METHODS = ['Dinheiro', 'Cartão', 'PIX', 'Boleto']
+
 export default function EditarChamadoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
@@ -43,6 +44,8 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const [error, setError] = useState('')
   const [clients, setClients] = useState<any[]>([])
   const [teams, setTeams] = useState<any[]>([])
+  const [auxiliaries, setAuxiliaries] = useState<any[]>([])
+  const [categoryNames, setCategoryNames] = useState<string[]>([])
   const { origins: callOrigins } = useCallOrigins()
 
   // Chamado
@@ -53,8 +56,6 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const [clientId, setClientId] = useState('')
   const [contactName, setContactName] = useState('')
   const [contactPhone, setContactPhone] = useState('')
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
-  const [categoryOptions, setCategoryOptions] = useState<string[]>([])
   const [scheduledDate, setScheduledDate] = useState('')
   const [scheduledTime, setScheduledTime] = useState('')
   const [callAddress, setCallAddress] = useState('')
@@ -64,14 +65,17 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const [isScheduled, setIsScheduled] = useState(false)
   const [existingSoId, setExistingSoId] = useState<string | null>(null)
 
+  // Serviços — seção única
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
+  const [serviceLines, setServiceLines] = useState<ServiceLine[]>([])
+
   // OS
   const [serviceType, setServiceType] = useState<ServiceType>('proprio')
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('pendente')
-  const [billingSystem, setBillingSystem] = useState<BillingSystem | ''>('')
-  const [services, setServices] = useState<OsService[]>([])
+  const [partnerPct, setPartnerPct] = useState(50)
+  const [auxiliaryId, setAuxiliaryId] = useState('')
   const [discount, setDiscount] = useState(0)
   const [taxes, setTaxes] = useState(0)
-  const [equipmentRentalPct, setEquipmentRentalPct] = useState(0)
   const [equipmentRentalValue, setEquipmentRentalValue] = useState(0)
   const [hasFloorPlan, setHasFloorPlan] = useState(false)
   const [hasNoFloorPlan, setHasNoFloorPlan] = useState(false)
@@ -98,17 +102,14 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const [ownFuelCost, setOwnFuelCost] = useState(0)
   const [ownOtherCost, setOwnOtherCost] = useState(0)
   const [otherServiceValue, setOtherServiceValue] = useState(0)
-  // Custos terceirizado
-  const [fuelCost, setFuelCost] = useState(0)
-  const [mealCost, setMealCost] = useState(0)
-  const [truckCost, setTruckCost] = useState(0)
-  const [otherCost, setOtherCost] = useState(0)
 
   useEffect(() => {
-    Promise.all([getCall(id), getClients(), getTeams(), getServiceTypes()]).then(([call, cls, tms, sts]) => {
+    Promise.all([getCall(id), getClients(), getTeams(), getServiceTypes(), getAuxiliaries()]).then(([call, cls, tms, sts, auxs]) => {
       setClients(cls)
       setTeams(tms)
+      setAuxiliaries(auxs)
       const typeNames: string[] = sts.map((st: any) => st.name)
+      setCategoryNames(typeNames)
 
       // Preencher dados do chamado
       setCallDate(call.date)
@@ -126,35 +127,19 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
       setIsApproved(call.status === 'aprovado')
       setIsScheduled(call.status === 'agendado')
 
-      // Tipo(s) de serviço do chamado: valores antigos podem conter vírgula no
-      // próprio nome, então só separamos se todas as partes forem tipos conhecidos
-      const options = [...typeNames]
       const selected: string[] = []
-      if (call.service_category) {
-        const parts = call.service_category.split(', ')
-        if (parts.every((p: string) => typeNames.includes(p))) {
-          selected.push(...parts)
-        } else {
-          selected.push(call.service_category)
-          if (!options.includes(call.service_category)) options.push(call.service_category)
-        }
-      }
-      setCategoryOptions(options)
-      setSelectedCategories(selected)
-
-      // Tipos de serviço realizado (itens da OS)
-      const svcList: OsService[] = typeNames.map(name => ({ category: name, selected: false, subs: [], quantity: 0, unitPrice: 0, notes: '' }))
+      const lines: ServiceLine[] = []
+      const so = call.service_orders?.[0]
 
       // Preencher OS se existir
-      const so = call.service_orders?.[0]
       if (so) {
         setExistingSoId(so.id)
         setServiceType(so.service_type)
         setPaymentStatus(so.payment_status)
-        setBillingSystem(so.billing_system ?? '')
+        setPartnerPct(Number(so.outsource_profit_pct ?? 50))
+        setAuxiliaryId(so.auxiliary_id ?? '')
         setDiscount(Number(so.discount ?? 0))
         setTaxes(Number(so.taxes ?? 0))
-        setEquipmentRentalPct(Number(so.equipment_rental_pct ?? 0))
         setEquipmentRentalValue(Number(so.equipment_rental_value ?? 0))
         setHasFloorPlan(so.has_floor_plan ?? false)
         setHasNoFloorPlan(so.has_no_floor_plan ?? false)
@@ -180,55 +165,91 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         setOwnFuelCost(Number(so.own_fuel_cost ?? 0))
         setOwnOtherCost(Number(so.own_other_cost ?? 0))
         setOtherServiceValue(Number(so.other_service_value ?? 0))
-        setFuelCost(Number(so.outsource_fuel_cost ?? 0))
-        setMealCost(Number(so.outsource_meal_cost ?? 0))
-        setTruckCost(Number(so.outsource_truck_cost ?? 0))
-        setOtherCost(Number(so.outsource_other_cost ?? 0))
 
-        // Itens existentes: itens novos têm a categoria gravada; itens antigos
-        // (avulsos) entram como linha extra para não perder nada ao salvar
+        // Itens viram linhas de serviço (itens antigos sem categoria entram como categoria própria)
         for (const item of so.items ?? []) {
           const category = item.category ?? item.description
-          const match = svcList.find(s => s.category === category)
-          if (match) {
-            match.selected = true
-            match.quantity = Number(item.quantity)
-            match.unitPrice = Number(item.unit_price)
-            match.subs = item.sub_options ? String(item.sub_options).split(', ') : []
-            match.notes = item.notes ?? ''
-          } else {
-            svcList.push({
-              category,
-              selected: true,
-              subs: item.sub_options ? String(item.sub_options).split(', ') : [],
-              quantity: Number(item.quantity),
-              unitPrice: Number(item.unit_price),
-              notes: item.notes ?? '',
-            })
-          }
+          const sub = item.sub_options || null
+          if (!selected.includes(category)) selected.push(category)
+          lines.push({
+            category,
+            sub,
+            quantity: Number(item.quantity),
+            unitPrice: Number(item.unit_price),
+            notes: item.notes ?? '',
+          })
         }
       }
-      setServices(svcList)
+
+      // Categorias do chamado sem item correspondente (ex: chamado não aprovado)
+      if (call.service_category) {
+        for (const cat of typeNames) {
+          if (selected.includes(cat)) continue
+          const idx = call.service_category.indexOf(cat)
+          if (idx === -1) continue
+          selected.push(cat)
+          // sub-opções entre parênteses logo após o nome, ex: "Desobstrução (Vaso, Esgoto)"
+          const after = call.service_category.slice(idx + cat.length)
+          const m = after.match(/^\s*\(([^)]*)\)/)
+          if (m) {
+            for (const sub of m[1].split(', ')) {
+              lines.push({ category: cat, sub, quantity: 0, unitPrice: 0, notes: '' })
+            }
+          } else if (!SERVICE_CONFIG[cat]?.subOptions) {
+            lines.push({ category: cat, sub: null, quantity: 0, unitPrice: 0, notes: '' })
+          }
+        }
+        // Nada reconhecido: mantém o texto antigo como categoria avulsa
+        if (selected.length === 0) {
+          selected.push(call.service_category)
+          lines.push({ category: call.service_category, sub: null, quantity: 0, unitPrice: 0, notes: '' })
+        }
+      }
+
+      setSelectedCategories(selected)
+      setServiceLines(lines)
     }).catch(console.error).finally(() => setLoading(false))
   }, [id])
 
-  const serviceTotal = (s: OsService) => s.quantity * s.unitPrice
-  const subtotal = services.filter(s => s.selected).reduce((sum, s) => sum + serviceTotal(s), 0)
-  const total = subtotal + equipmentRentalValue - discount + taxes
+  // ── Serviços ──
+  const lineTotal = (l: ServiceLine) => l.quantity * l.unitPrice
+  const subtotal = serviceLines.reduce((sum, l) => sum + lineTotal(l), 0)
+  const bruto = subtotal + equipmentRentalValue - discount + taxes
+  const isOutsourced = serviceType !== 'proprio'
+  const liquidoParceria = isOutsourced ? bruto * partnerPct / 100 : bruto
+  const selectedAux = auxiliaries.find(a => a.id === auxiliaryId)
+  const auxValue = selectedAux ? bruto * Number(selectedAux.percentage) / 100 : 0
+  const liquidoFinal = liquidoParceria - auxValue
 
-  const toggleCategory = (name: string) =>
-    setSelectedCategories(prev => prev.includes(name) ? prev.filter(c => c !== name) : [...prev, name])
+  function toggleCategory(name: string) {
+    const cfg = SERVICE_CONFIG[name]
+    if (selectedCategories.includes(name)) {
+      setSelectedCategories(prev => prev.filter(c => c !== name))
+      setServiceLines(prev => prev.filter(l => l.category !== name))
+    } else {
+      setSelectedCategories(prev => [...prev, name])
+      if (!cfg?.subOptions) {
+        setServiceLines(prev => [...prev, { category: name, sub: null, quantity: 0, unitPrice: 0, notes: '' }])
+      }
+    }
+  }
 
-  const toggleService = (category: string) =>
-    setServices(prev => prev.map(s => s.category === category ? { ...s, selected: !s.selected } : s))
+  function toggleSub(category: string, sub: string) {
+    setServiceLines(prev => {
+      const exists = prev.some(l => l.category === category && l.sub === sub)
+      return exists
+        ? prev.filter(l => !(l.category === category && l.sub === sub))
+        : [...prev, { category, sub, quantity: 0, unitPrice: 0, notes: '' }]
+    })
+  }
 
-  const updateService = (category: string, patch: Partial<OsService>) =>
-    setServices(prev => prev.map(s => s.category === category ? { ...s, ...patch } : s))
+  const updateLine = (category: string, sub: string | null, patch: Partial<ServiceLine>) =>
+    setServiceLines(prev => prev.map(l => l.category === category && l.sub === sub ? { ...l, ...patch } : l))
 
-  const toggleServiceSub = (category: string, sub: string) =>
-    setServices(prev => prev.map(s => s.category === category
-      ? { ...s, subs: s.subs.includes(sub) ? s.subs.filter(x => x !== sub) : [...s.subs, sub] }
-      : s))
+  const serviceCategoryText = selectedCategories.map(cat => {
+    const subs = serviceLines.filter(l => l.category === cat && l.sub).map(l => l.sub)
+    return subs.length ? `${cat} (${subs.join(', ')})` : cat
+  }).join(', ')
 
   function handleStatusChange(status: string) {
     setCallStatus(status)
@@ -251,7 +272,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         origin,
         status: callStatus,
         notes: callNotes || null,
-        service_category: selectedCategories.join(', ') || null,
+        service_category: serviceCategoryText || null,
         scheduled_date: scheduledDate || null,
         scheduled_time: scheduledTime || null,
         call_address: callAddress || null,
@@ -266,12 +287,13 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
           date: callDate,
           client_id: clientId || null,
           team_id: teamId || null,
+          auxiliary_id: auxiliaryId || null,
+          auxiliary_value: auxValue,
           driver: driver || null,
           nf_number: nfNumber || null,
           vehicle: vehicle || null,
           due_date: dueDate || null,
           service_type: serviceType,
-          billing_system: billingSystem || null,
           has_floor_plan: hasFloorPlan,
           has_no_floor_plan: hasNoFloorPlan,
           has_no_knowledge: hasNoKnowledge,
@@ -281,20 +303,16 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
           has_guarantee_60: hasGuarantee60,
           has_guarantee_90: hasGuarantee90,
           has_no_guarantee: hasNoGuarantee,
-          equipment_rental_pct: equipmentRentalPct,
           equipment_rental_value: equipmentRentalValue,
           subtotal,
           discount,
           taxes,
-          total_value: total,
+          total_value: bruto,
+          outsource_profit_pct: partnerPct,
           own_material_cost: materialCost,
           own_fuel_cost: ownFuelCost,
           own_other_cost: ownOtherCost,
           other_service_value: otherServiceValue,
-          outsource_fuel_cost: fuelCost,
-          outsource_meal_cost: mealCost,
-          outsource_truck_cost: truckCost,
-          outsource_other_cost: otherCost,
           payment_method: paymentMethod || null,
           payment_status: paymentStatus,
           amount_paid: amountPaid,
@@ -304,13 +322,13 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
           observations: observations || null,
         }
 
-        const validItems = services.filter(s => s.selected).map(s => ({
-          quantity: s.quantity || 1,
-          description: s.category + (s.subs.length ? ` — ${s.subs.join(', ')}` : ''),
-          unit_price: s.unitPrice,
-          category: s.category,
-          sub_options: s.subs.join(', ') || null,
-          notes: s.notes || null,
+        const validItems = serviceLines.map(l => ({
+          quantity: l.quantity || 1,
+          description: l.category + (l.sub ? ` — ${l.sub}` : ''),
+          unit_price: l.unitPrice,
+          category: l.category,
+          sub_options: l.sub,
+          notes: l.notes || null,
         }))
 
         if (existingSoId) {
@@ -472,17 +490,71 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
           </div>
         )}
 
-        {/* Tipo(s) de serviço */}
+        {/* Tipo(s) de serviço — seção única */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">Tipo(s) de Serviço</label>
-          <div className="flex flex-wrap gap-2">
-            {categoryOptions.map(name => (
+          <div className="flex flex-wrap gap-2 mb-2">
+            {[...categoryNames, ...selectedCategories.filter(c => !categoryNames.includes(c))].map(name => (
               <button key={name} type="button" onClick={() => toggleCategory(name)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${selectedCategories.includes(name) ? 'bg-orange-500 border-orange-500 text-white' : 'border-slate-200 text-slate-600 hover:border-orange-300'}`}>
                 {name}
               </button>
             ))}
           </div>
+
+          {selectedCategories.map(cat => {
+            const cfg = SERVICE_CONFIG[cat]
+            const catLines = serviceLines.filter(l => l.category === cat)
+            return (
+              <div key={cat} className="border border-orange-100 bg-orange-50/40 rounded-lg p-3 mt-2 space-y-3">
+                <p className="text-sm font-semibold text-slate-700 uppercase tracking-wide">{cat}</p>
+                {cfg?.subOptions && (
+                  <div className="flex flex-wrap gap-2">
+                    {cfg.subOptions.map(sub => {
+                      const active = catLines.some(l => l.sub === sub)
+                      return (
+                        <button key={sub} type="button" onClick={() => toggleSub(cat, sub)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${active ? 'bg-orange-500 border-orange-500 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-orange-300'}`}>
+                          {sub}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {/* Valores por serviço — só no chamado aprovado */}
+                {isApproved && catLines.map(l => (
+                  <div key={l.sub ?? cat} className="bg-white border border-slate-100 rounded-lg p-3 space-y-2">
+                    {l.sub && <p className="text-xs font-bold text-orange-600 uppercase">{l.sub}</p>}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">{cfg?.qtyLabel ?? 'Quantidade'}</label>
+                        <input type="number" min="0" step="0.01" value={l.quantity || ''}
+                          onChange={e => updateLine(l.category, l.sub, { quantity: Number(e.target.value) })}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">{cfg?.priceLabel ?? 'Valor (R$)'}</label>
+                        <input type="number" min="0" step="0.01" value={l.unitPrice || ''}
+                          onChange={e => updateLine(l.category, l.sub, { unitPrice: Number(e.target.value) })}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                      </div>
+                      <div className="col-span-2 sm:col-span-1">
+                        <label className="block text-xs font-medium text-slate-600 mb-1">Valor total</label>
+                        <p className="px-3 py-2 text-sm font-bold text-orange-600 bg-slate-50 border border-slate-100 rounded-lg">
+                          R$ {lineTotal(l).toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
+                    <input type="text" value={l.notes}
+                      onChange={e => updateLine(l.category, l.sub, { notes: e.target.value })}
+                      placeholder="Descrição deste serviço..."
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                  </div>
+                ))}
+              </div>
+            )
+          })}
         </div>
 
         <div>
@@ -510,6 +582,14 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                 </select>
               </div>
               <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Auxiliar</label>
+                <select value={auxiliaryId} onChange={e => setAuxiliaryId(e.target.value)}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
+                  <option value="">Sem auxiliar</option>
+                  {auxiliaries.map(a => <option key={a.id} value={a.id}>{a.name} ({Number(a.percentage)}%)</option>)}
+                </select>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Motorista</label>
                 <input type="text" value={driver} onChange={e => setDriver(e.target.value)}
                   className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
@@ -529,10 +609,20 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                 <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
                   className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Forma de Pagamento</label>
-                <input type="text" placeholder="Dinheiro, PIX, Cartão..." value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Forma de Pagamento</label>
+              <div className="flex flex-wrap gap-2">
+                {PAYMENT_METHODS.map(m => (
+                  <button key={m} type="button" onClick={() => setPaymentMethod(paymentMethod === m ? '' : m)}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition ${paymentMethod === m ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                    {m}
+                  </button>
+                ))}
+                {paymentMethod && !PAYMENT_METHODS.includes(paymentMethod) && (
+                  <span className="px-4 py-2 rounded-lg text-sm font-medium bg-orange-500 text-white">{paymentMethod}</span>
+                )}
               </div>
             </div>
           </div>
@@ -562,7 +652,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                   ].map(f => (
                     <div key={f.label}>
                       <label className="block text-sm font-medium text-slate-700 mb-1.5">{f.label}</label>
-                      <input type="number" min="0" step="0.01" value={f.val} onChange={e => f.set(Number(e.target.value))}
+                      <input type="number" min="0" step="0.01" value={f.val || ''} onChange={e => f.set(Number(e.target.value))}
                         className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
                     </div>
                   ))}
@@ -574,136 +664,75 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                   </label>
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-slate-500">R$</span>
-                    <input type="number" min="0" step="0.01" value={otherServiceValue} onChange={e => setOtherServiceValue(Number(e.target.value))}
+                    <input type="number" min="0" step="0.01" value={otherServiceValue || ''} onChange={e => setOtherServiceValue(Number(e.target.value))}
                       className="w-36 px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
                   </div>
                 </div>
               </>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                {[
-                  { label: 'Gasolina (R$)', val: fuelCost, set: setFuelCost },
-                  { label: 'Almoço (R$)', val: mealCost, set: setMealCost },
-                  { label: 'Aluguel Caminhão (R$)', val: truckCost, set: setTruckCost },
-                  { label: 'Outros (R$)', val: otherCost, set: setOtherCost },
-                ].map(f => (
-                  <div key={f.label}>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">{f.label}</label>
-                    <input type="number" min="0" step="0.01" value={f.val} onChange={e => f.set(Number(e.target.value))}
-                      className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
-                  </div>
-                ))}
+              <div className="border border-orange-100 bg-orange-50/50 rounded-lg p-4">
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Porcentagem do serviço (%)
+                  <span className="text-slate-400 font-normal ml-1">(normalmente 50%)</span>
+                </label>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <input type="number" min="0" max="100" step="0.5" value={partnerPct || ''} onChange={e => setPartnerPct(Number(e.target.value))}
+                    className="w-28 px-3 py-2.5 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                  <p className="text-sm text-slate-600">
+                    Valor bruto <span className="font-semibold">R$ {bruto.toFixed(2)}</span>
+                    {' → '}líquido ({partnerPct}%): <span className="font-bold text-emerald-600">R$ {liquidoParceria.toFixed(2)}</span>
+                  </p>
+                </div>
               </div>
             )}
           </div>
 
-          {/* Tipos de serviço realizado */}
-          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-4">
-            <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3 flex items-center gap-2">
-              <CheckSquare className="w-4 h-4 text-orange-500" />
-              Tipo(s) de Serviço Realizado
-            </h2>
-            <div className="space-y-2">
-              {services.map(s => {
-                const cfg = SERVICE_CONFIG[s.category]
-                return (
-                  <div key={s.category} className={`rounded-lg transition ${s.selected ? 'border border-orange-200 bg-orange-50/40 p-3' : ''}`}>
-                    <label className="flex items-center gap-2.5 cursor-pointer py-1">
-                      <input type="checkbox" checked={s.selected} onChange={() => toggleService(s.category)}
-                        className="w-4 h-4 rounded text-orange-500" />
-                      <span className="text-sm font-semibold text-slate-700 uppercase tracking-wide">{s.category}</span>
-                    </label>
-                    {s.selected && (
-                      <div className="mt-2 space-y-3 pl-6">
-                        {cfg?.subOptions && (
-                          <div className="flex flex-wrap gap-2">
-                            {cfg.subOptions.map(sub => (
-                              <button key={sub} type="button" onClick={() => toggleServiceSub(s.category, sub)}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${s.subs.includes(sub) ? 'bg-orange-500 border-orange-500 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-orange-300'}`}>
-                                {sub}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                          <div>
-                            <label className="block text-xs font-medium text-slate-600 mb-1">{cfg?.qtyLabel ?? 'Quantidade'}</label>
-                            <input type="number" min="0" step="0.01" value={s.quantity}
-                              onChange={e => updateService(s.category, { quantity: Number(e.target.value) })}
-                              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400" />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-slate-600 mb-1">{cfg?.priceLabel ?? 'Valor (R$)'}</label>
-                            <input type="number" min="0" step="0.01" value={s.unitPrice}
-                              onChange={e => updateService(s.category, { unitPrice: Number(e.target.value) })}
-                              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400" />
-                          </div>
-                          <div className="col-span-2 sm:col-span-1">
-                            <label className="block text-xs font-medium text-slate-600 mb-1">Valor total</label>
-                            <p className="px-3 py-2 text-sm font-bold text-orange-600 bg-white border border-slate-100 rounded-lg">
-                              R$ {serviceTotal(s).toFixed(2)}
-                            </p>
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-slate-600 mb-1">Descrição</label>
-                          <input type="text" value={s.notes}
-                            onChange={e => updateService(s.category, { notes: e.target.value })}
-                            placeholder="Detalhes deste serviço..."
-                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400" />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+          {/* Resumo de valores */}
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-2">
+            <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3 mb-2">Resumo de Valores</h2>
+            <div className="flex justify-between text-sm"><span className="text-slate-600">Subtotal (serviços)</span><span className="font-medium">R$ {subtotal.toFixed(2)}</span></div>
+            <div className="flex justify-between text-sm items-center">
+              <span className="text-slate-600">Locação Equip. e M.O. (R$)</span>
+              <input type="number" min="0" step="0.01" value={equipmentRentalValue || ''} onChange={e => setEquipmentRentalValue(Number(e.target.value))}
+                className="w-24 px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-orange-400" />
             </div>
-
-            <div className="border-t border-slate-100 pt-4 grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Locação Equip. e M.O. (%)</label>
-                <input type="number" min="0" value={equipmentRentalPct} onChange={e => setEquipmentRentalPct(Number(e.target.value))}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor (R$)</label>
-                <input type="number" min="0" step="0.01" value={equipmentRentalValue} onChange={e => setEquipmentRentalValue(Number(e.target.value))}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
-              </div>
+            <div className="flex justify-between text-sm items-center">
+              <span className="text-slate-600">Descontos (R$)</span>
+              <input type="number" min="0" step="0.01" value={discount || ''} onChange={e => setDiscount(Number(e.target.value))}
+                className="w-24 px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-orange-400" />
             </div>
-
-            <div className="border-t border-slate-100 pt-4 space-y-2">
-              <div className="flex justify-between text-sm items-center">
-                <span className="text-slate-600">Descontos (R$)</span>
-                <input type="number" min="0" step="0.01" value={discount} onChange={e => setDiscount(Number(e.target.value))}
-                  className="w-24 px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-orange-400" />
+            <div className="flex justify-between text-sm items-center">
+              <span className="text-slate-600">Impostos (R$)</span>
+              <input type="number" min="0" step="0.01" value={taxes || ''} onChange={e => setTaxes(Number(e.target.value))}
+                className="w-24 px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-orange-400" />
+            </div>
+            <div className="flex justify-between text-base font-bold border-t border-slate-100 pt-2">
+              <span className="text-slate-800">Valor Total (bruto)</span>
+              <span className="text-orange-500">R$ {bruto.toFixed(2)}</span>
+            </div>
+            {isOutsourced && (
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-600">Líquido da parceria ({partnerPct}%)</span>
+                <span className="font-semibold text-emerald-600">R$ {liquidoParceria.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-sm items-center">
-                <span className="text-slate-600">Impostos (R$)</span>
-                <input type="number" min="0" step="0.01" value={taxes} onChange={e => setTaxes(Number(e.target.value))}
-                  className="w-24 px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-orange-400" />
+            )}
+            {selectedAux && (
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-600">Auxiliar {selectedAux.name} ({Number(selectedAux.percentage)}%)</span>
+                <span className="font-semibold text-red-500">− R$ {auxValue.toFixed(2)}</span>
               </div>
+            )}
+            {(isOutsourced || selectedAux) && (
               <div className="flex justify-between text-base font-bold border-t border-slate-100 pt-2">
-                <span className="text-slate-800">Valor Total</span>
-                <span className="text-orange-500">R$ {total.toFixed(2)}</span>
+                <span className="text-slate-800">Valor Líquido</span>
+                <span className="text-emerald-600">R$ {liquidoFinal.toFixed(2)}</span>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Levantamento */}
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-4">
-            <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3">Levantamento e Cobrança</h2>
-            <div className="flex flex-wrap gap-2">
-              {(['metro_linear','metro_cubico','litros','carga','valor_fechado','metro_quadrado'] as BillingSystem[]).map(b => {
-                const labels: Record<string,string> = { metro_linear:'Metro Linear', metro_cubico:'Metro Cúbico', litros:'Litros', carga:'Carga', valor_fechado:'Valor Fechado', metro_quadrado:'Metro Quadrado' }
-                return (
-                  <button key={b} type="button" onClick={() => setBillingSystem(billingSystem === b ? '' : b)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${billingSystem === b ? 'bg-orange-500 border-orange-500 text-white' : 'border-slate-200 text-slate-600 hover:border-orange-300'}`}>
-                    {labels[b]}
-                  </button>
-                )
-              })}
-            </div>
+            <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3">Levantamento</h2>
             <div className="space-y-3">
               {[
                 { title: 'Planta baixa', options: [
@@ -766,12 +795,12 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor Pago (R$)</label>
-                  <input type="number" min="0" step="0.01" value={amountPaid} onChange={e => setAmountPaid(Number(e.target.value))}
+                  <input type="number" min="0" step="0.01" value={amountPaid || ''} onChange={e => setAmountPaid(Number(e.target.value))}
                     className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor Restante (R$)</label>
-                  <input type="number" min="0" step="0.01" value={remainingAmount} onChange={e => setRemainingAmount(Number(e.target.value))}
+                  <input type="number" min="0" step="0.01" value={remainingAmount || ''} onChange={e => setRemainingAmount(Number(e.target.value))}
                     className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
                 </div>
                 <div>

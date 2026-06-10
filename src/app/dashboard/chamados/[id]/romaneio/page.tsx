@@ -3,11 +3,13 @@
 import { useEffect, useState } from 'react'
 import { use } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { getCall } from '@/lib/db/calls'
+import { useTenant } from '@/lib/tenant-context'
 import { ArrowLeft, Printer, MessageCircle } from 'lucide-react'
 
-export default function RomaneioPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params)
+function RomaneioContent({ id }: { id: string }) {
+  const { tenant } = useTenant()
   const [call, setCall] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
@@ -17,6 +19,13 @@ export default function RomaneioPage({ params }: { params: Promise<{ id: string 
 
   if (loading) return <div className="flex items-center justify-center h-screen text-slate-500">Carregando...</div>
   if (!call) return <div className="flex items-center justify-center h-screen text-slate-500">Chamado não encontrado.</div>
+
+  const companyName = tenant?.name ?? 'Desentupidora'
+  const primaryColor = tenant?.primary_color ?? '#f97316'
+  const logoUrl = tenant?.logo_url
+
+  // Origin site
+  const originLabel = call.origin ?? null
 
   const client = call.client
   const clientName = client?.name ?? call.contact_name ?? '—'
@@ -34,6 +43,7 @@ export default function RomaneioPage({ params }: { params: Promise<{ id: string 
 
   const whatsappText = [
     `🧾 *ROMANEIO ${number}*`,
+    `${companyName}${originLabel ? ` · ${originLabel}` : ''}`,
     `Chamado do dia ${dateLabel}`,
     '',
     `*Cliente:* ${clientName}`,
@@ -50,12 +60,11 @@ export default function RomaneioPage({ params }: { params: Promise<{ id: string 
     { label: 'CPF', value: cpf },
     { label: 'Telefone', value: phone },
     { label: 'Tipo de Serviço', value: call.service_category || '—' },
-    { label: 'Horário do Agendamento', value: time },
+    { label: 'Horário', value: time },
   ]
 
   return (
     <>
-      {/* Ações — somem na impressão */}
       <div className="print:hidden flex items-center justify-between max-w-md mx-auto pt-2 pb-4 px-2">
         <Link href={`/dashboard/chamados/${id}`}
           className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition">
@@ -68,29 +77,43 @@ export default function RomaneioPage({ params }: { params: Promise<{ id: string 
             WhatsApp
           </a>
           <button onClick={() => window.print()}
-            className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition shadow-sm">
+            className="flex items-center gap-2 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition shadow-sm"
+            style={{ backgroundColor: primaryColor }}>
             <Printer className="w-4 h-4" />
             Baixar PDF
           </button>
         </div>
       </div>
 
-      {/* Documento — meia folha */}
-      <div className="bg-white border border-slate-200 rounded-xl print:border-2 print:border-black print:rounded-none shadow-sm print:shadow-none max-w-md mx-auto p-5 font-sans text-black">
-        <div className="flex items-center justify-between border-b-2 border-black pb-2 mb-3">
-          <div>
-            <p className="text-base font-extrabold uppercase tracking-wide">Romaneio de Serviço</p>
-            <p className="text-[11px] text-slate-500">Desentupidora Líder · Atendimento 24h</p>
+      <div className="bg-white border border-slate-200 rounded-xl print:border-2 print:border-black print:rounded-none shadow-sm print:shadow-none max-w-md mx-auto font-sans text-black overflow-hidden">
+        {/* Cabeçalho colorido */}
+        <div className="flex items-center justify-between px-5 py-4 text-white"
+          style={{ backgroundColor: primaryColor }}>
+          <div className="flex items-center gap-3">
+            {logoUrl ? (
+              <Image src={logoUrl} alt={companyName} width={44} height={44}
+                className="object-contain rounded-lg bg-white/20 p-0.5"
+                style={{ width: 44, height: 44 }} />
+            ) : (
+              <div className="w-11 h-11 rounded-lg bg-white/20 flex items-center justify-center">
+                <span className="font-black text-lg">{companyName.charAt(0)}</span>
+              </div>
+            )}
+            <div>
+              <p className="font-extrabold text-sm leading-tight">{companyName}</p>
+              {originLabel && <p className="text-xs opacity-80 mt-0.5">{originLabel}</p>}
+            </div>
           </div>
           <div className="text-right">
-            <p className="text-sm font-extrabold">{number}</p>
-            <p className="text-[11px] text-slate-500">Chamado do dia {dateLabel}</p>
+            <p className="text-xs opacity-80 uppercase tracking-wide">Romaneio</p>
+            <p className="font-extrabold text-lg leading-tight">{number}</p>
+            <p className="text-xs opacity-80">{dateLabel} · {time}</p>
           </div>
         </div>
 
-        <div className="space-y-2">
+        <div className="px-5 py-4 space-y-2">
           {rows.map(r => (
-            <div key={r.label} className="flex border-b border-slate-100 pb-1.5">
+            <div key={r.label} className="flex border-b border-slate-100 pb-2">
               <p className="w-32 flex-shrink-0 text-[11px] font-bold uppercase tracking-wide text-slate-500 pt-0.5">{r.label}</p>
               <p className="text-[13px] font-medium">{r.value}</p>
             </div>
@@ -103,7 +126,7 @@ export default function RomaneioPage({ params }: { params: Promise<{ id: string 
           )}
         </div>
 
-        <p className="text-center text-[10px] text-slate-400 mt-4 pt-2 border-t border-slate-100">
+        <p className="text-center text-[10px] text-slate-400 py-3 px-5 border-t border-slate-100">
           Via do técnico — apresentar ao cliente no atendimento
         </p>
       </div>
@@ -119,4 +142,9 @@ export default function RomaneioPage({ params }: { params: Promise<{ id: string 
       `}</style>
     </>
   )
+}
+
+export default function RomaneioPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params)
+  return <RomaneioContent id={id} />
 }

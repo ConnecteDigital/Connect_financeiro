@@ -6,7 +6,7 @@ import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, PhoneCall, Users, TrendingDown,
-  BarChart3, Settings, LogOut, Menu, X, Building2
+  BarChart3, Settings, LogOut, Menu, X, Building2, UserCog
 } from 'lucide-react'
 import { ConnectDigitalLogo } from '@/components/logos'
 import { useTenant } from '@/lib/tenant-context'
@@ -18,6 +18,7 @@ const navItems = [
   { href: '/dashboard/clientes', label: 'Clientes', icon: Users },
   { href: '/dashboard/saidas', label: 'Saídas', icon: TrendingDown },
   { href: '/dashboard/fornecedores', label: 'Fornecedores', icon: Building2 },
+  { href: '/dashboard/auxiliares', label: 'Auxiliares', icon: UserCog },
   { href: '/dashboard/relatorios', label: 'Relatórios', icon: BarChart3 },
   { href: '/dashboard/configuracoes', label: 'Configurações', icon: Settings },
 ]
