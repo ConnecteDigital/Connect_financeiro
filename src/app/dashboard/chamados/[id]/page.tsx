@@ -165,12 +165,20 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
               </span>
             </div>
             <p className="text-slate-500 text-sm mt-0.5">
+              {call.call_number && <span className="font-mono font-semibold text-orange-500">{call.call_number}{' · '}</span>}
               {new Date(call.date).toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
               {' · '}{getOriginLabel(call.origin)}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {call.status === 'agendado' && (
+            <Link href={`/dashboard/chamados/${id}/romaneio`}
+              className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition">
+              <FileText className="w-4 h-4" />
+              Enviar Romaneio
+            </Link>
+          )}
           {so && (
             <Link href={`/dashboard/chamados/${id}/imprimir`} target="_blank"
               className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold px-4 py-2.5 rounded-lg transition">
@@ -234,6 +242,12 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
             <div>
               <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Horário Agendado</p>
               <p className="text-blue-600 font-semibold mt-0.5">🕐 {String(call.scheduled_time).slice(0,5)}</p>
+            </div>
+          )}
+          {(call.call_city || call.call_neighborhood) && (
+            <div>
+              <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Cidade / Bairro</p>
+              <p className="text-slate-700 font-medium mt-0.5">{[call.call_city, call.call_neighborhood].filter(Boolean).join(' / ')}</p>
             </div>
           )}
           {call.call_address && (

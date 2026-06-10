@@ -10,12 +10,22 @@ import { getClients, createClient_ } from '@/lib/db/clients'
 import { getTeams } from '@/lib/db/teams'
 import { getServiceTypes } from '@/lib/db/service-types'
 import { useCallOrigins } from '@/lib/use-call-origins'
+import { SERVICE_CONFIG } from '@/lib/service-config'
 
 type ServiceType = 'proprio' | 'terceirizado_saida' | 'terceirizado_entrada'
 type PaymentStatus = 'pago' | 'pago_parcial' | 'pendente'
 type BillingSystem = 'metro_linear' | 'metro_cubico' | 'litros' | 'carga' | 'valor_fechado' | 'metro_quadrado'
 
-interface ServiceSel { name: string; selected: boolean; value: number }
+interface OsService {
+  category: string
+  selected: boolean
+  subs: string[]
+  quantity: number
+  unitPrice: number
+  notes: string
+}
+
+const emptyNewClient = { cpf_cnpj: '', address: '', neighborhood: '', city: '', state: '', cep: '', email: '' }
 
 const CALL_STATUSES = [
   { value: 'agendado', label: 'Agendado' },
@@ -42,6 +52,10 @@ export default function NovoChamadoPage() {
   const [contactName, setContactName] = useState('')
   const [contactPhone, setContactPhone] = useState('')
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
+  const [callCity, setCallCity] = useState('')
+  const [callNeighborhood, setCallNeighborhood] = useState('')
+  // Cadastro de cliente inline (chamado aprovado)
+  const [newClient, setNewClient] = useState(emptyNewClient)
   // Campos de agendamento
   const [scheduledDate, setScheduledDate] = useState(new Date().toISOString().split('T')[0])
   const [scheduledTime, setScheduledTime] = useState('')
@@ -54,7 +68,7 @@ export default function NovoChamadoPage() {
   const [serviceType, setServiceType] = useState<ServiceType>('proprio')
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('pendente')
   const [billingSystem, setBillingSystem] = useState<BillingSystem | ''>('')
-  const [services, setServices] = useState<ServiceSel[]>([])
+  const [services, setServices] = useState<OsService[]>([])
   const [discount, setDiscount] = useState(0)
   const [taxes, setTaxes] = useState(0)
   const [equipmentRentalPct, setEquipmentRentalPct] = useState(0)
@@ -95,22 +109,34 @@ export default function NovoChamadoPage() {
       .then(([c, t, st]) => {
         setClients(c)
         setTeams(t)
-        setServices(st.map((s: any) => ({ name: s.name, selected: false, value: 0 })))
+        setServices(st.map((s: any) => ({ category: s.name, selected: false, subs: [], quantity: 0, unitPrice: 0, notes: '' })))
       })
       .catch(console.error)
   }, [])
 
-  const subtotal = services.filter(s => s.selected).reduce((sum, s) => sum + s.value, 0)
+  const serviceTotal = (s: OsService) => s.quantity * s.unitPrice
+  const subtotal = services.filter(s => s.selected).reduce((sum, s) => sum + serviceTotal(s), 0)
   const total = subtotal + equipmentRentalValue - discount + taxes
 
   const toggleCategory = (name: string) =>
     setSelectedCategories(prev => prev.includes(name) ? prev.filter(c => c !== name) : [...prev, name])
 
-  const toggleService = (name: string) =>
-    setServices(prev => prev.map(s => s.name === name ? { ...s, selected: !s.selected } : s))
+  const toggleService = (category: string) =>
+    setServices(prev => prev.map(s => s.category === category ? { ...s, selected: !s.selected } : s))
 
-  const setServiceValue = (name: string, value: number) =>
-    setServices(prev => prev.map(s => s.name === name ? { ...s, value } : s))
+  const updateService = (category: string, patch: Partial<OsService>) =>
+    setServices(prev => prev.map(s => s.category === category ? { ...s, ...patch } : s))
+
+  const toggleServiceSub = (category: string, sub: string) =>
+    setServices(prev => prev.map(s => s.category === category
+      ? { ...s, subs: s.subs.includes(sub) ? s.subs.filter(x => x !== sub) : [...s.subs, sub] }
+      : s))
+
+  // Sugestões de clientes cadastrados (chamado aprovado)
+  const clientSuggestions = isApproved && !clientId && contactName.trim().length >= 2
+    ? clients.filter(c => c.name.toLowerCase().includes(contactName.trim().toLowerCase())).slice(0, 5)
+    : []
+  const linkedClient = clients.find(c => c.id === clientId)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -126,10 +152,23 @@ export default function NovoChamadoPage() {
     setError('')
     try {
       // Auto-criar cliente se não existe cadastrado
+      // (no chamado aprovado, leva também os dados completos preenchidos)
       let finalClientId = clientId
       if (!clientId && contactName.trim()) {
-        const newClient = await createClient_({ name: contactName.trim(), phone: contactPhone || null })
-        finalClientId = newClient.id
+        const created = await createClient_({
+          name: contactName.trim(),
+          phone: contactPhone || null,
+          ...(isApproved ? {
+            cpf_cnpj: newClient.cpf_cnpj || null,
+            address: newClient.address || null,
+            neighborhood: newClient.neighborhood || callNeighborhood || null,
+            city: newClient.city || callCity || null,
+            state: newClient.state || null,
+            cep: newClient.cep || null,
+            email: newClient.email || null,
+          } : {}),
+        })
+        finalClientId = created.id
       }
 
       const call = await createCall({
@@ -144,6 +183,8 @@ export default function NovoChamadoPage() {
         scheduled_date: isScheduled ? scheduledDate || null : null,
         scheduled_time: isScheduled ? scheduledTime || null : null,
         call_address: callAddress || null,
+        call_city: callCity || null,
+        call_neighborhood: callNeighborhood || null,
       })
 
       if (isApproved) {
@@ -189,11 +230,23 @@ export default function NovoChamadoPage() {
           conditions: conditions || null,
           observations: observations || null,
         }
-        const validItems = services.filter(s => s.selected).map(s => ({ quantity: 1, description: s.name, unit_price: s.value }))
+        const validItems = services.filter(s => s.selected).map(s => ({
+          quantity: s.quantity || 1,
+          description: s.category + (s.subs.length ? ` — ${s.subs.join(', ')}` : ''),
+          unit_price: s.unitPrice,
+          category: s.category,
+          sub_options: s.subs.join(', ') || null,
+          notes: s.notes || null,
+        }))
         await createServiceOrder(orderData, validItems)
       }
 
-      router.push('/dashboard/chamados')
+      // Agendado vai para a página do chamado, onde fica o botão de enviar o romaneio
+      if (isScheduled) {
+        router.push(`/dashboard/chamados/${call.id}`)
+      } else {
+        router.push('/dashboard/chamados')
+      }
     } catch (err: any) {
       console.error(err)
       setError('Erro ao salvar chamado. Tente novamente.')
@@ -253,14 +306,28 @@ export default function NovoChamadoPage() {
 
         {/* Contato + telefone */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
+          <div className="relative">
             <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              Nome do Contato *
-              <span className="text-slate-400 font-normal ml-1">(quem ligou)</span>
+              {isApproved ? 'Nome do Cliente *' : 'Nome do Contato *'}
+              <span className="text-slate-400 font-normal ml-1">{isApproved ? '(busca nos cadastrados)' : '(quem ligou)'}</span>
             </label>
-            <input type="text" value={contactName} onChange={e => setContactName(e.target.value)}
+            <input type="text" value={contactName}
+              onChange={e => { setContactName(e.target.value); if (clientId) setClientId('') }}
               placeholder="Ex: João Silva"
               className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+            {clientSuggestions.length > 0 && (
+              <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden">
+                <p className="px-3 py-1.5 text-xs text-slate-400 bg-slate-50 border-b border-slate-100">Cliente já cadastrado? Clique para vincular:</p>
+                {clientSuggestions.map(c => (
+                  <button key={c.id} type="button"
+                    onClick={() => { setClientId(c.id); setContactName(c.name); if (!contactPhone && c.phone) setContactPhone(c.phone) }}
+                    className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-orange-50 transition">
+                    {c.name}
+                    {(c.city || c.phone) && <span className="text-xs text-slate-400 ml-2">{[c.city, c.phone].filter(Boolean).join(' · ')}</span>}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Telefone</label>
@@ -269,6 +336,66 @@ export default function NovoChamadoPage() {
               className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
           </div>
         </div>
+
+        {/* Cliente vinculado ou cadastro inline (chamado aprovado) */}
+        {isApproved && linkedClient && (
+          <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-2.5">
+            <p className="text-sm text-emerald-700">
+              ✓ Vinculado ao cliente cadastrado <span className="font-semibold">{linkedClient.name}</span>
+              {linkedClient.code && <span className="text-emerald-500 ml-1">({linkedClient.code})</span>}
+            </p>
+            <button type="button" onClick={() => setClientId('')}
+              className="text-xs text-emerald-600 hover:text-emerald-800 font-medium underline">
+              Desvincular
+            </button>
+          </div>
+        )}
+        {isApproved && !clientId && contactName.trim().length >= 2 && clientSuggestions.length === 0 && (
+          <div className="border border-orange-100 bg-orange-50/50 rounded-lg p-4 space-y-3">
+            <p className="text-sm font-semibold text-orange-600">
+              Cliente novo — será cadastrado automaticamente. Complete os dados:
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">CPF/CNPJ</label>
+                <input type="text" value={newClient.cpf_cnpj} onChange={e => setNewClient(p => ({ ...p, cpf_cnpj: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-medium text-slate-600 mb-1">Endereço</label>
+                <input type="text" value={newClient.address} onChange={e => setNewClient(p => ({ ...p, address: e.target.value }))}
+                  placeholder="Rua, número"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Bairro</label>
+                <input type="text" value={newClient.neighborhood} onChange={e => setNewClient(p => ({ ...p, neighborhood: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Cidade</label>
+                <input type="text" value={newClient.city} onChange={e => setNewClient(p => ({ ...p, city: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">UF</label>
+                <input type="text" maxLength={2} value={newClient.state} onChange={e => setNewClient(p => ({ ...p, state: e.target.value.toUpperCase() }))}
+                  placeholder="RS"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">CEP</label>
+                <input type="text" value={newClient.cep} onChange={e => setNewClient(p => ({ ...p, cep: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-medium text-slate-600 mb-1">E-mail</label>
+                <input type="email" value={newClient.email} onChange={e => setNewClient(p => ({ ...p, email: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Cliente cadastrado */}
         <div>
@@ -281,6 +408,22 @@ export default function NovoChamadoPage() {
             <option value="">— Não vincular —</option>
             {clients.map(c => <option key={c.id} value={c.id}>{c.name}{c.city ? ` - ${c.city}` : ''}</option>)}
           </select>
+        </div>
+
+        {/* Cidade e bairro — sempre disponíveis, mesmo sem aprovação ou visita */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Cidade</label>
+            <input type="text" value={callCity} onChange={e => setCallCity(e.target.value)}
+              placeholder="Ex: Porto Alegre"
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Bairro</label>
+            <input type="text" value={callNeighborhood} onChange={e => setCallNeighborhood(e.target.value)}
+              placeholder="Ex: Centro"
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+          </div>
         </div>
 
         {/* Campos de agendamento */}
@@ -316,9 +459,9 @@ export default function NovoChamadoPage() {
           <label className="block text-sm font-medium text-slate-700 mb-2">Tipo(s) de Serviço</label>
           <div className="flex flex-wrap gap-2">
             {services.map(s => (
-              <button key={s.name} type="button" onClick={() => toggleCategory(s.name)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${selectedCategories.includes(s.name) ? 'bg-orange-500 border-orange-500 text-white' : 'border-slate-200 text-slate-600 hover:border-orange-300'}`}>
-                {s.name}
+              <button key={s.category} type="button" onClick={() => toggleCategory(s.category)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${selectedCategories.includes(s.category) ? 'bg-orange-500 border-orange-500 text-white' : 'border-slate-200 text-slate-600 hover:border-orange-300'}`}>
+                {s.category}
               </button>
             ))}
           </div>
@@ -441,23 +584,59 @@ export default function NovoChamadoPage() {
               Tipo(s) de Serviço Realizado
             </h2>
             <div className="space-y-2">
-              {services.map(s => (
-                <div key={s.name} className="flex items-center justify-between gap-3">
-                  <label className="flex items-center gap-2.5 cursor-pointer py-1.5">
-                    <input type="checkbox" checked={s.selected} onChange={() => toggleService(s.name)}
-                      className="w-4 h-4 rounded text-orange-500" />
-                    <span className="text-sm text-slate-700">{s.name}</span>
-                  </label>
-                  {s.selected && (
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs text-slate-400">R$</span>
-                      <input type="number" min="0" step="0.01" value={s.value}
-                        onChange={e => setServiceValue(s.name, Number(e.target.value))}
-                        className="w-28 px-2 py-1.5 border border-slate-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-orange-400" />
-                    </div>
-                  )}
-                </div>
-              ))}
+              {services.map(s => {
+                const cfg = SERVICE_CONFIG[s.category]
+                return (
+                  <div key={s.category} className={`rounded-lg transition ${s.selected ? 'border border-orange-200 bg-orange-50/40 p-3' : ''}`}>
+                    <label className="flex items-center gap-2.5 cursor-pointer py-1">
+                      <input type="checkbox" checked={s.selected} onChange={() => toggleService(s.category)}
+                        className="w-4 h-4 rounded text-orange-500" />
+                      <span className="text-sm font-semibold text-slate-700 uppercase tracking-wide">{s.category}</span>
+                    </label>
+                    {s.selected && (
+                      <div className="mt-2 space-y-3 pl-6">
+                        {cfg?.subOptions && (
+                          <div className="flex flex-wrap gap-2">
+                            {cfg.subOptions.map(sub => (
+                              <button key={sub} type="button" onClick={() => toggleServiceSub(s.category, sub)}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${s.subs.includes(sub) ? 'bg-orange-500 border-orange-500 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-orange-300'}`}>
+                                {sub}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 mb-1">{cfg?.qtyLabel ?? 'Quantidade'}</label>
+                            <input type="number" min="0" step="0.01" value={s.quantity}
+                              onChange={e => updateService(s.category, { quantity: Number(e.target.value) })}
+                              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 mb-1">{cfg?.priceLabel ?? 'Valor (R$)'}</label>
+                            <input type="number" min="0" step="0.01" value={s.unitPrice}
+                              onChange={e => updateService(s.category, { unitPrice: Number(e.target.value) })}
+                              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                          </div>
+                          <div className="col-span-2 sm:col-span-1">
+                            <label className="block text-xs font-medium text-slate-600 mb-1">Valor total</label>
+                            <p className="px-3 py-2 text-sm font-bold text-orange-600 bg-white border border-slate-100 rounded-lg">
+                              R$ {serviceTotal(s).toFixed(2)}
+                            </p>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">Descrição</label>
+                          <input type="text" value={s.notes}
+                            onChange={e => updateService(s.category, { notes: e.target.value })}
+                            placeholder="Detalhes deste serviço..."
+                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
 
             <div className="border-t border-slate-100 pt-4 grid grid-cols-2 gap-4">

@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { Plus, Search, CheckCircle, XCircle, Clock, ChevronRight } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { Plus, Search, CheckCircle, XCircle, Clock, ChevronRight, ChevronLeft, List, CalendarDays } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { getCalls, updateCall } from '@/lib/db/calls'
@@ -41,7 +41,21 @@ export default function ChamadosPage() {
   const [calls, setCalls] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [view, setView] = useState<'lista' | 'calendario'>('lista')
+  const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1) })
+  const [selectedDay, setSelectedDay] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Agrupa os chamados por dia do serviço (usa a data agendada; sem ela, a data do chamado)
+  const callsByDay = useMemo(() => {
+    const map: Record<string, any[]> = {}
+    for (const c of calls) {
+      const day = c.scheduled_date ?? c.date
+      if (!map[day]) map[day] = []
+      map[day].push(c)
+    }
+    return map
+  }, [calls])
 
   const handleSearchChange = (value: string) => {
     setSearch(value)
@@ -91,12 +105,24 @@ export default function ChamadosPage() {
           <h1 className="text-2xl font-bold text-zinc-900">Chamados</h1>
           <p className="text-zinc-500 text-sm mt-0.5 hidden sm:block">Gerencie chamados e ordens de servico</p>
         </div>
-        <Link href="/dashboard/chamados/novo"
-          className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition shadow-sm">
-          <Plus className="w-4 h-4" />
-          <span className="hidden sm:inline">Novo Chamado</span>
-          <span className="sm:hidden">Novo</span>
-        </Link>
+        <div className="flex items-center gap-2">
+          <div className="flex bg-white border border-zinc-200 rounded-xl shadow-sm overflow-hidden">
+            <button onClick={() => setView('lista')} title="Lista"
+              className={`p-2.5 transition ${view === 'lista' ? 'bg-orange-500 text-white' : 'text-zinc-500 hover:bg-zinc-50'}`}>
+              <List className="w-4 h-4" />
+            </button>
+            <button onClick={() => setView('calendario')} title="Calendário"
+              className={`p-2.5 transition ${view === 'calendario' ? 'bg-orange-500 text-white' : 'text-zinc-500 hover:bg-zinc-50'}`}>
+              <CalendarDays className="w-4 h-4" />
+            </button>
+          </div>
+          <Link href="/dashboard/chamados/novo"
+            className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition shadow-sm">
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">Novo Chamado</span>
+            <span className="sm:hidden">Novo</span>
+          </Link>
+        </div>
       </div>
 
       {/* Search */}
@@ -127,6 +153,95 @@ export default function ChamadosPage() {
           {[...Array(4)].map((_, i) => (
             <div key={i} className="bg-white rounded-2xl border border-zinc-100 p-4 animate-pulse h-20" />
           ))}
+        </div>
+      ) : view === 'calendario' ? (
+        <div className="space-y-3">
+          {/* Navegação do mês */}
+          <div className="flex items-center justify-between bg-white rounded-2xl border border-zinc-100 px-4 py-3 shadow-sm">
+            <button onClick={() => { setCalMonth(m => new Date(m.getFullYear(), m.getMonth() - 1, 1)); setSelectedDay(null) }}
+              className="p-1.5 hover:bg-zinc-100 rounded-lg transition text-zinc-500">
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <p className="font-semibold text-zinc-800 capitalize">
+              {calMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+            </p>
+            <button onClick={() => { setCalMonth(m => new Date(m.getFullYear(), m.getMonth() + 1, 1)); setSelectedDay(null) }}
+              className="p-1.5 hover:bg-zinc-100 rounded-lg transition text-zinc-500">
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Grade do mês */}
+          <div className="bg-white rounded-2xl border border-zinc-100 p-3 shadow-sm">
+            <div className="grid grid-cols-7 text-center text-xs font-semibold text-zinc-400 uppercase mb-2">
+              {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map(d => <div key={d} className="py-1">{d}</div>)}
+            </div>
+            <div className="grid grid-cols-7 gap-1">
+              {(() => {
+                const year = calMonth.getFullYear()
+                const month = calMonth.getMonth()
+                const firstDow = (new Date(year, month, 1).getDay() + 6) % 7
+                const daysInMonth = new Date(year, month + 1, 0).getDate()
+                const todayKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`
+                const cells: (number | null)[] = [...Array(firstDow).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)]
+                return cells.map((day, idx) => {
+                  if (day === null) return <div key={`e${idx}`} />
+                  const key = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+                  const dayCalls = callsByDay[key] ?? []
+                  const isToday = key === todayKey
+                  const isSelected = key === selectedDay
+                  return (
+                    <button key={key} onClick={() => setSelectedDay(isSelected ? null : key)}
+                      className={`min-h-[52px] sm:min-h-[64px] rounded-lg border p-1 text-left transition flex flex-col ${
+                        isSelected ? 'border-orange-500 bg-orange-50' :
+                        isToday ? 'border-orange-300 bg-orange-50/40' :
+                        'border-zinc-100 hover:border-orange-200'
+                      }`}>
+                      <span className={`text-xs font-semibold ${isToday ? 'text-orange-600' : 'text-zinc-600'}`}>{day}</span>
+                      {dayCalls.length > 0 && (
+                        <span className="mt-auto self-center bg-orange-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 leading-none">
+                          {dayCalls.length}
+                        </span>
+                      )}
+                    </button>
+                  )
+                })
+              })()}
+            </div>
+          </div>
+
+          {/* Chamados do dia selecionado */}
+          {selectedDay && (
+            <div className="bg-white rounded-2xl border border-zinc-100 shadow-sm overflow-hidden">
+              <p className="px-4 py-3 border-b border-zinc-100 text-sm font-semibold text-zinc-700">
+                Chamados de {new Date(selectedDay + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
+              </p>
+              {(callsByDay[selectedDay] ?? []).length === 0 ? (
+                <p className="px-4 py-6 text-center text-sm text-zinc-400">Nenhum chamado neste dia</p>
+              ) : (
+                <div className="divide-y divide-zinc-50">
+                  {(callsByDay[selectedDay] ?? []).map(c => {
+                    const cfg = statusConfig[c.status]
+                    return (
+                      <Link key={c.id} href={`/dashboard/chamados/${c.id}`}
+                        className="flex items-center justify-between px-4 py-3 hover:bg-zinc-50 transition">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-zinc-800 truncate">
+                            {c.client?.name ?? c.contact_name ?? 'Sem identificacao'}
+                          </p>
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                            {c.scheduled_time && <span className="text-xs text-orange-600 font-semibold">🕐 {String(c.scheduled_time).slice(0, 5)}</span>}
+                            {c.service_category && <span className="text-xs text-zinc-500 truncate">{c.service_category}</span>}
+                          </div>
+                        </div>
+                        <span className={`flex-shrink-0 px-2 py-0.5 rounded-full text-xs font-medium border ${cfg?.color}`}>{cfg?.label}</span>
+                      </Link>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       ) : calls.length === 0 ? (
         <div className="bg-white rounded-2xl border border-zinc-100 p-12 text-center">

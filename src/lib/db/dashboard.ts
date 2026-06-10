@@ -64,7 +64,8 @@ export async function getNotifications() {
       .from('calls')
       .select('id, notes, contact_name, scheduled_time, call_address, service_category, client:clients(name)')
       .eq('status', 'agendado')
-      .eq('date', today)
+      // agendado para hoje: usa a data do serviço; chamados antigos sem ela usam a data do chamado
+      .or(`scheduled_date.eq.${today},and(scheduled_date.is.null,date.eq.${today})`)
       .order('scheduled_time', { ascending: true }),
     supabase
       .from('service_orders')

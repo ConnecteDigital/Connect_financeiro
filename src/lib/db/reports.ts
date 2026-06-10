@@ -44,6 +44,7 @@ export async function getReportData(
   const scheduledCalls = calls.filter(c => c.status === 'agendado').length
   const cancelledCalls = calls.filter(c => c.status === 'cancelado').length
   const noVisitCalls = calls.filter(c => c.status === 'nao_quis_visita').length
+  const notApprovedCalls = calls.filter(c => c.status === 'nao_aprovou').length
 
   // Financeiro
   const grossRevenue = orders.reduce((s, o) => s + Number(o.total_value || 0), 0)
@@ -98,7 +99,8 @@ export async function getReportData(
   // Receita por semana
   const weekMap: Record<string, { bruto: number; liquido: number }> = {}
   orders.forEach(o => {
-    const week = `Sem ${Math.ceil(new Date(o.date).getDate() / 7)}`
+    // 'T12:00:00' evita o deslocamento de um dia causado pelo fuso horário
+    const week = `Sem ${Math.ceil(new Date(o.date + 'T12:00:00').getDate() / 7)}`
     if (!weekMap[week]) weekMap[week] = { bruto: 0, liquido: 0 }
     const cost = Number(o.outsource_fuel_cost || 0) + Number(o.outsource_meal_cost || 0) + Number(o.outsource_truck_cost || 0) + Number(o.outsource_other_cost || 0)
     weekMap[week].bruto += Number(o.total_value || 0)
@@ -107,7 +109,7 @@ export async function getReportData(
   const revenueByWeek = Object.entries(weekMap).sort(([a], [b]) => a.localeCompare(b)).map(([name, data]) => ({ name, ...data }))
 
   return {
-    summary: { totalCalls, approvedCalls, scheduledCalls, cancelledCalls, noVisitCalls, grossRevenue, netRevenue, paidRevenue, pendingRevenue, totalExpenses, outsourceCosts },
+    summary: { totalCalls, approvedCalls, scheduledCalls, cancelledCalls, noVisitCalls, notApprovedCalls, grossRevenue, netRevenue, paidRevenue, pendingRevenue, totalExpenses, outsourceCosts },
     byOrigin,
     byCategory,
     byCity,

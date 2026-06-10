@@ -1,16 +1,9 @@
 import { createClient } from '@/lib/supabase/client'
 import { getMyTenantId } from './tenant'
 
-export const DEFAULT_SERVICE_TYPES = [
-  'Desentupidora de Ralo',
-  'Desentupidora de Pia',
-  'Desentupidora de Cano',
-  'Desentupidora de Vaso',
-  'Desentupidora de Coluna',
-  'Desentupidora de Esgoto',
-  'Limpa Fossa',
-  'Hidrojateamento',
-]
+import { SERVICE_CATEGORIES } from '@/lib/service-config'
+
+export const DEFAULT_SERVICE_TYPES = SERVICE_CATEGORIES
 
 // Garante que o tenant tenha os tipos padrão na primeira utilização
 export async function ensureDefaultServiceTypes() {

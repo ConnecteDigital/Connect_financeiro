@@ -12,12 +12,20 @@ import { getClients } from '@/lib/db/clients'
 import { getServiceTypes } from '@/lib/db/service-types'
 import { createClient } from '@/lib/supabase/client'
 import { useCallOrigins } from '@/lib/use-call-origins'
+import { SERVICE_CONFIG } from '@/lib/service-config'
 
 type ServiceType = 'proprio' | 'terceirizado_saida' | 'terceirizado_entrada'
 type PaymentStatus = 'pago' | 'pago_parcial' | 'pendente'
 type BillingSystem = 'metro_linear' | 'metro_linear_sem_hidraulica' | 'metro_cubico' | 'litros' | 'carga' | 'valor_fechado' | 'metro_quadrado'
 
-interface ServiceSel { name: string; selected: boolean; value: number }
+interface OsService {
+  category: string
+  selected: boolean
+  subs: string[]
+  quantity: number
+  unitPrice: number
+  notes: string
+}
 
 const CALL_STATUSES = [
   { value: 'agendado', label: 'Agendado' },
@@ -50,6 +58,8 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const [scheduledDate, setScheduledDate] = useState('')
   const [scheduledTime, setScheduledTime] = useState('')
   const [callAddress, setCallAddress] = useState('')
+  const [callCity, setCallCity] = useState('')
+  const [callNeighborhood, setCallNeighborhood] = useState('')
   const [isApproved, setIsApproved] = useState(false)
   const [isScheduled, setIsScheduled] = useState(false)
   const [existingSoId, setExistingSoId] = useState<string | null>(null)
@@ -58,7 +68,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const [serviceType, setServiceType] = useState<ServiceType>('proprio')
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('pendente')
   const [billingSystem, setBillingSystem] = useState<BillingSystem | ''>('')
-  const [services, setServices] = useState<ServiceSel[]>([])
+  const [services, setServices] = useState<OsService[]>([])
   const [discount, setDiscount] = useState(0)
   const [taxes, setTaxes] = useState(0)
   const [equipmentRentalPct, setEquipmentRentalPct] = useState(0)
@@ -111,6 +121,8 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
       setScheduledDate(call.scheduled_date ?? '')
       setScheduledTime(call.scheduled_time ? String(call.scheduled_time).slice(0,5) : '')
       setCallAddress(call.call_address ?? '')
+      setCallCity(call.call_city ?? '')
+      setCallNeighborhood(call.call_neighborhood ?? '')
       setIsApproved(call.status === 'aprovado')
       setIsScheduled(call.status === 'agendado')
 
@@ -131,7 +143,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
       setSelectedCategories(selected)
 
       // Tipos de serviço realizado (itens da OS)
-      const svcList: ServiceSel[] = typeNames.map(name => ({ name, selected: false, value: 0 }))
+      const svcList: OsService[] = typeNames.map(name => ({ category: name, selected: false, subs: [], quantity: 0, unitPrice: 0, notes: '' }))
 
       // Preencher OS se existir
       const so = call.service_orders?.[0]
@@ -173,16 +185,26 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         setTruckCost(Number(so.outsource_truck_cost ?? 0))
         setOtherCost(Number(so.outsource_other_cost ?? 0))
 
-        // Itens existentes: marca o tipo correspondente; itens avulsos antigos
-        // entram como linha extra para não perder nada ao salvar
+        // Itens existentes: itens novos têm a categoria gravada; itens antigos
+        // (avulsos) entram como linha extra para não perder nada ao salvar
         for (const item of so.items ?? []) {
-          const itemValue = Number(item.quantity) * Number(item.unit_price)
-          const match = svcList.find(s => s.name === item.description)
+          const category = item.category ?? item.description
+          const match = svcList.find(s => s.category === category)
           if (match) {
             match.selected = true
-            match.value += itemValue
+            match.quantity = Number(item.quantity)
+            match.unitPrice = Number(item.unit_price)
+            match.subs = item.sub_options ? String(item.sub_options).split(', ') : []
+            match.notes = item.notes ?? ''
           } else {
-            svcList.push({ name: item.description, selected: true, value: itemValue })
+            svcList.push({
+              category,
+              selected: true,
+              subs: item.sub_options ? String(item.sub_options).split(', ') : [],
+              quantity: Number(item.quantity),
+              unitPrice: Number(item.unit_price),
+              notes: item.notes ?? '',
+            })
           }
         }
       }
@@ -190,17 +212,23 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
     }).catch(console.error).finally(() => setLoading(false))
   }, [id])
 
-  const subtotal = services.filter(s => s.selected).reduce((sum, s) => sum + s.value, 0)
+  const serviceTotal = (s: OsService) => s.quantity * s.unitPrice
+  const subtotal = services.filter(s => s.selected).reduce((sum, s) => sum + serviceTotal(s), 0)
   const total = subtotal + equipmentRentalValue - discount + taxes
 
   const toggleCategory = (name: string) =>
     setSelectedCategories(prev => prev.includes(name) ? prev.filter(c => c !== name) : [...prev, name])
 
-  const toggleService = (name: string) =>
-    setServices(prev => prev.map(s => s.name === name ? { ...s, selected: !s.selected } : s))
+  const toggleService = (category: string) =>
+    setServices(prev => prev.map(s => s.category === category ? { ...s, selected: !s.selected } : s))
 
-  const setServiceValue = (name: string, value: number) =>
-    setServices(prev => prev.map(s => s.name === name ? { ...s, value } : s))
+  const updateService = (category: string, patch: Partial<OsService>) =>
+    setServices(prev => prev.map(s => s.category === category ? { ...s, ...patch } : s))
+
+  const toggleServiceSub = (category: string, sub: string) =>
+    setServices(prev => prev.map(s => s.category === category
+      ? { ...s, subs: s.subs.includes(sub) ? s.subs.filter(x => x !== sub) : [...s.subs, sub] }
+      : s))
 
   function handleStatusChange(status: string) {
     setCallStatus(status)
@@ -227,6 +255,8 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         scheduled_date: scheduledDate || null,
         scheduled_time: scheduledTime || null,
         call_address: callAddress || null,
+        call_city: callCity || null,
+        call_neighborhood: callNeighborhood || null,
       })
 
       // 2. Se aprovado, criar ou atualizar OS
@@ -275,9 +305,12 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         }
 
         const validItems = services.filter(s => s.selected).map(s => ({
-          quantity: 1,
-          description: s.name,
-          unit_price: s.value,
+          quantity: s.quantity || 1,
+          description: s.category + (s.subs.length ? ` — ${s.subs.join(', ')}` : ''),
+          unit_price: s.unitPrice,
+          category: s.category,
+          sub_options: s.subs.join(', ') || null,
+          notes: s.notes || null,
         }))
 
         if (existingSoId) {
@@ -393,6 +426,22 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
             <option value="">— Não vincular —</option>
             {clients.map(c => <option key={c.id} value={c.id}>{c.name}{c.city ? ` - ${c.city}` : ''}</option>)}
           </select>
+        </div>
+
+        {/* Cidade e bairro — sempre disponíveis, mesmo sem aprovação ou visita */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Cidade</label>
+            <input type="text" value={callCity} onChange={e => setCallCity(e.target.value)}
+              placeholder="Ex: Porto Alegre"
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Bairro</label>
+            <input type="text" value={callNeighborhood} onChange={e => setCallNeighborhood(e.target.value)}
+              placeholder="Ex: Centro"
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+          </div>
         </div>
 
         {/* Campos de agendamento */}
@@ -555,23 +604,59 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
               Tipo(s) de Serviço Realizado
             </h2>
             <div className="space-y-2">
-              {services.map(s => (
-                <div key={s.name} className="flex items-center justify-between gap-3">
-                  <label className="flex items-center gap-2.5 cursor-pointer py-1.5">
-                    <input type="checkbox" checked={s.selected} onChange={() => toggleService(s.name)}
-                      className="w-4 h-4 rounded text-orange-500" />
-                    <span className="text-sm text-slate-700">{s.name}</span>
-                  </label>
-                  {s.selected && (
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs text-slate-400">R$</span>
-                      <input type="number" min="0" step="0.01" value={s.value}
-                        onChange={e => setServiceValue(s.name, Number(e.target.value))}
-                        className="w-28 px-2 py-1.5 border border-slate-200 rounded-lg text-sm text-right focus:outline-none focus:ring-2 focus:ring-orange-400" />
-                    </div>
-                  )}
-                </div>
-              ))}
+              {services.map(s => {
+                const cfg = SERVICE_CONFIG[s.category]
+                return (
+                  <div key={s.category} className={`rounded-lg transition ${s.selected ? 'border border-orange-200 bg-orange-50/40 p-3' : ''}`}>
+                    <label className="flex items-center gap-2.5 cursor-pointer py-1">
+                      <input type="checkbox" checked={s.selected} onChange={() => toggleService(s.category)}
+                        className="w-4 h-4 rounded text-orange-500" />
+                      <span className="text-sm font-semibold text-slate-700 uppercase tracking-wide">{s.category}</span>
+                    </label>
+                    {s.selected && (
+                      <div className="mt-2 space-y-3 pl-6">
+                        {cfg?.subOptions && (
+                          <div className="flex flex-wrap gap-2">
+                            {cfg.subOptions.map(sub => (
+                              <button key={sub} type="button" onClick={() => toggleServiceSub(s.category, sub)}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${s.subs.includes(sub) ? 'bg-orange-500 border-orange-500 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-orange-300'}`}>
+                                {sub}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 mb-1">{cfg?.qtyLabel ?? 'Quantidade'}</label>
+                            <input type="number" min="0" step="0.01" value={s.quantity}
+                              onChange={e => updateService(s.category, { quantity: Number(e.target.value) })}
+                              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 mb-1">{cfg?.priceLabel ?? 'Valor (R$)'}</label>
+                            <input type="number" min="0" step="0.01" value={s.unitPrice}
+                              onChange={e => updateService(s.category, { unitPrice: Number(e.target.value) })}
+                              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                          </div>
+                          <div className="col-span-2 sm:col-span-1">
+                            <label className="block text-xs font-medium text-slate-600 mb-1">Valor total</label>
+                            <p className="px-3 py-2 text-sm font-bold text-orange-600 bg-white border border-slate-100 rounded-lg">
+                              R$ {serviceTotal(s).toFixed(2)}
+                            </p>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">Descrição</label>
+                          <input type="text" value={s.notes}
+                            onChange={e => updateService(s.category, { notes: e.target.value })}
+                            placeholder="Detalhes deste serviço..."
+                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
 
             <div className="border-t border-slate-100 pt-4 grid grid-cols-2 gap-4">
