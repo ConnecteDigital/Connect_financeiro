@@ -1,0 +1,734 @@
+-- ============================================================
+-- MIGRAÇÃO: Líder + Millenium → Connect_financeiro
+-- Execute no SQL Editor do projeto Connect_financeiro
+-- ============================================================
+-- ATENÇÃO: Execute PRIMEIRO a query abaixo para confirmar
+-- que os tenants estão cadastrados:
+--
+--   SELECT id, name, slug FROM public.tenants;
+--
+-- Se os slugs não baterem, ajuste os filtros na cláusula
+-- WHERE abaixo antes de executar o script principal.
+-- ============================================================
+
+DO $$
+DECLARE
+  lider_id uuid;
+  mill_id  uuid;
+BEGIN
+
+-- ── Lookup dos tenant_ids ──────────────────────────────────────
+SELECT id INTO lider_id
+  FROM public.tenants
+  WHERE name ILIKE '%l_der%' OR name ILIKE '%lider%'
+     OR slug ILIKE '%lider%'
+  LIMIT 1;
+
+SELECT id INTO mill_id
+  FROM public.tenants
+  WHERE name ILIKE '%millenium%' OR name ILIKE '%milenium%'
+     OR name ILIKE '%millennium%' OR slug ILIKE '%mill%'
+  LIMIT 1;
+
+IF lider_id IS NULL THEN
+  RAISE EXCEPTION 'Tenant LÍDER não encontrado. Cadastre o tenant primeiro.';
+END IF;
+IF mill_id IS NULL THEN
+  RAISE EXCEPTION 'Tenant MILLENIUM não encontrado. Cadastre o tenant primeiro.';
+END IF;
+
+RAISE NOTICE 'Líder    tenant_id: %', lider_id;
+RAISE NOTICE 'Millenium tenant_id: %', mill_id;
+
+
+-- ════════════════════════════════════════════════
+-- LÍDER
+-- ════════════════════════════════════════════════
+
+-- ── Líder → Equipes (1 registros) ──
+INSERT INTO public.teams (id, tenant_id, name, created_at)
+VALUES
+  ('a8a9fe93-a2c9-4150-95b7-7de9e19bd6b3', lider_id, 'Allan', '2026-06-02 00:36:14.452889+00')
+ON CONFLICT DO NOTHING;
+
+
+-- ── Líder → Fornecedores (2 registros) ──
+INSERT INTO public.suppliers (id, tenant_id, name, category, contact, phone, email, notes, created_at)
+VALUES
+  ('cb64f692-fd9c-4e54-adfd-43c8f398a7a1', lider_id, 'Connect digital', 'Marketing', NULL, NULL, NULL, NULL, '2026-06-02 01:05:41.841643+00'),
+  ('ce9c6f7b-e59e-40c1-bf0f-4b5c983942ad', lider_id, 'Hidro máquinas comércio de peças ltda', NULL, NULL, NULL, NULL, NULL, '2026-06-02 15:01:21.785807+00')
+ON CONFLICT DO NOTHING;
+
+
+-- ── Líder → Tipos de Serviço (8 registros) ──
+INSERT INTO public.service_types (id, tenant_id, name, category, active, created_at)
+VALUES
+  ('1e7bdfd1-64a8-4cd6-8939-ba0ecb484b55', lider_id, 'Desentupimento de coluna', 'Desentupimento', true, '2026-05-30 18:59:26.350569+00'),
+  ('2b26fbb1-53e7-4851-9a83-2d5663b3514a', lider_id, 'Desentupimento de ralo', 'Desentupimento', true, '2026-05-30 18:59:26.350569+00'),
+  ('68f4ef11-9bce-4bdc-a666-b30ed45b65a1', lider_id, 'Desentupimento de vaso', 'Desentupimento', true, '2026-05-30 18:59:26.350569+00'),
+  ('7bbf4b74-458d-4cba-8c70-4a8246d7ad50', lider_id, 'Limpeza de caixa de gordura', 'Limpeza', true, '2026-05-30 18:59:26.350569+00'),
+  ('85442602-cb9d-411e-a65d-f80ee527252e', lider_id, 'Desentupimento de pia', 'Desentupimento', true, '2026-05-30 18:59:26.350569+00'),
+  ('a397aff9-8cdf-4c40-894b-1e6e8898c0f0', lider_id, 'Limpa fossa', 'Fossa', true, '2026-05-30 18:59:26.350569+00'),
+  ('b1fbe3bf-e5b2-4396-b5a8-9d24a77e30ac', lider_id, 'Desentupimento de esgoto', 'Desentupimento', true, '2026-05-30 18:59:26.350569+00'),
+  ('ca95517c-0a7a-483f-bb96-bccddc6262e4', lider_id, 'Desentupimento de cano', 'Desentupimento', true, '2026-05-30 18:59:26.350569+00')
+ON CONFLICT DO NOTHING;
+
+
+-- ── Líder → Auxiliares (2 registros) ──
+INSERT INTO public.auxiliaries (id, tenant_id, name, percentage, created_at)
+VALUES
+  ('07856e74-88cf-4e17-9cd5-e6b8e70fc418', lider_id, 'Antonio', 10.0, '2026-06-10 01:04:53.838899+00'),
+  ('7ed5c75d-12c4-4112-a274-32fa2d3f9da2', lider_id, 'Antonio', 10.0, '2026-06-02 14:28:15.872562+00')
+ON CONFLICT DO NOTHING;
+
+
+-- ── Líder → Clientes (44 registros) ──
+INSERT INTO public.clients (id, tenant_id, code, name, cpf_cnpj, inscr_est, address, neighborhood, city, state, cep, phone, email, created_at)
+VALUES
+  ('0cde4696-2191-40ec-b232-837e3291ef3a', lider_id, '00008', 'Gabriel', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-02 13:02:22.049744+00'),
+  ('14d7ace4-b2ce-4a46-9c80-c0e916a8c4e0', lider_id, '00041', 'Raquel Santos ', '99642328020', NULL, 'Rua tapes 33', 'Granja esperança ', 'Cachoerinha', NULL, '94960710', '51992517454', NULL, '2026-06-10 12:51:04.700123+00'),
+  ('17fecbd2-cd95-40c9-b468-80acf9204e1f', lider_id, '00019', 'Marilena Rodrigues ', '09312008145', NULL, 'Rua das magnólias 45', 'Vale ville', 'Gravatai', NULL, '94070634', '51981671934', NULL, '2026-06-04 21:09:36.952538+00'),
+  ('1bc71346-e1a3-48e8-ac04-d858c8476a27', lider_id, '00012', 'Will', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-02 15:05:28.533483+00'),
+  ('1e02e82d-306c-4c5b-a0bf-4d9ca5f345c3', lider_id, '00014', 'Daniela Costa', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-02 19:50:41.548604+00'),
+  ('2230341d-dc34-4403-96ca-0911fd31d300', lider_id, '00029', 'Maria', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-08 20:19:29.779812+00'),
+  ('2337cbe9-1145-4e61-8326-4670c82d3912', lider_id, '00009', 'Gabriel 2', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-02 13:07:33.972781+00'),
+  ('2c46bde7-f352-4859-8065-b68bafa7eade', lider_id, '00031', 'Ubirajara Pereira Ramos', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-08 20:23:27.348054+00'),
+  ('444e146d-ef01-4c3c-ad74-3d62f55e0429', lider_id, '00002', 'Maria Souza', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-05-30 19:52:52.078378+00'),
+  ('5c5ebe24-8db1-4896-9052-49eddb1e9c19', lider_id, '00028', 'Ângela Raquel da Silva ', '56453736004', NULL, 'Rua São Guilherme 220 ap 101 bloco h', 'São José ', 'Porto Alegre ', NULL, '91520650', '51993957336', NULL, '2026-06-08 19:08:30.931608+00'),
+  ('63cc835b-857d-46c6-b118-5041966ee1ad', lider_id, '00030', 'Maria de Lurdes', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-08 20:21:27.337126+00'),
+  ('72d885c7-9885-4b9d-ba39-7abf3bc5d830', lider_id, '00027', 'Marcelo Souza de Fraga ', '71782311068', NULL, 'Rua Atalaia 953', 'Taruma', 'Viamão ', NULL, '94000400130', '51989267573', NULL, '2026-06-08 15:02:12.106087+00'),
+  ('80cac070-cb35-45b9-9d6d-572ff041b7cd', lider_id, '00011', 'Derik', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-02 14:34:48.891098+00'),
+  ('81491b90-f97a-4bd2-9a82-ca678886c5e9', lider_id, '00037', 'Ubirajara Pereira Ramos ', '80489451004', NULL, 'Av serraria 1844 casa 31 ', 'Guaruja', 'Porto algre', NULL, '91770010', '51992729984', NULL, '2026-06-09 18:11:52.847044+00'),
+  ('83c23f10-18c8-4e28-bda7-757a27ca10b7', lider_id, '00032', 'Rafaela', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-08 20:49:28.237921+00'),
+  ('87bdeb40-1ab8-4f64-893c-018d725014f9', lider_id, '00007', 'Ariane Santos', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-02 00:52:42.434073+00'),
+  ('8df5e1f6-970f-4649-8c4d-3feeb020fe29', lider_id, '00025', 'Michy', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 00:44:49.060455+00'),
+  ('8f1c4b07-531b-4160-babe-5de1e0360a39', lider_id, '00026', 'Liliene Silva Bráz', '74801813020', NULL, 'Rua capitão padilha 568', 'Glória ', 'Porto Alegre ', NULL, '91710100', '51993354273', NULL, '2026-06-07 15:16:07.429941+00'),
+  ('93420575-d338-4f9b-b768-7a2151312e0d', lider_id, '00005', 'Willian', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-02 00:39:52.207723+00'),
+  ('94e17ac4-ad5f-425b-83f1-dc62af3374c9', lider_id, '00043', 'Jeisi ferreira', '03303193029', NULL, 'Av feitoria 1297 lote f8', 'Santo André ', 'São leopoldo', NULL, '93042651', '51981651007', NULL, '2026-06-10 16:28:52.740292+00'),
+  ('986096f0-e717-495c-9f80-a7d972553719', lider_id, '00010', 'Gabriel 3', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-02 13:51:47.809589+00'),
+  ('a1d94ffc-0585-43f4-9347-de54cd292d38', lider_id, '00022', 'Guilherme', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-05 19:57:39.705234+00'),
+  ('aba16024-f6ef-4fd6-b374-dec102d84116', lider_id, '00023', 'Fernanda', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 00:35:49.01894+00'),
+  ('abc8851f-69b0-4df3-af0c-3853686393b4', lider_id, '00036', 'Marco', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-09 13:56:00.528069+00'),
+  ('ac484e06-e9a9-46a0-9f89-8496c1f52b6e', lider_id, '00044', 'Sem', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-10 17:49:16.338582+00'),
+  ('ae7322d4-4f77-4cdb-b2ae-86017890ff47', lider_id, '00017', 'Celso kemmerich ', '53165250006', NULL, 'Rua dos ucranianos 4', 'Fatima', 'Canoas', NULL, '922001520', '51996619518', NULL, '2026-06-04 16:01:42.822679+00'),
+  ('b4a219cc-273f-49a3-8f01-8e25f9a70db3', lider_id, '00006', 'Gerusa', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-02 00:44:55.535079+00'),
+  ('b5c917f6-ad84-480c-a260-7d3827a14598', lider_id, '00039', 'Fernanda', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-09 19:19:24.602693+00'),
+  ('ba4602ed-1991-4bba-92b3-eae0a70f2ac0', lider_id, '00042', 'Paulo Ribeiro de oliveira', '34516964015', NULL, 'Rua tropeiro 1150', 'Pascoalini', 'Sapucaia do sul ', NULL, '93224660', '51993314221', NULL, '2026-06-10 14:47:35.026392+00'),
+  ('c35938e2-b626-4c69-941f-c11ec01a8e3b', lider_id, '00035', 'Marcia', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-09 13:17:48.628197+00'),
+  ('c435e88b-60dc-46ef-a374-835286a9a456', lider_id, '00001', 'teste', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-05-30 19:11:51.926424+00'),
+  ('c7f18f2f-ebbd-4cce-9fea-655f8d7c7856', lider_id, '00033', 'Luís', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-08 20:50:54.503465+00'),
+  ('cd5ed07e-b0b8-4de1-a1ef-1f1a34f69d73', lider_id, '00015', 'Evander Ribeiro araujo', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-02 19:56:24.082406+00'),
+  ('d17317b4-8fa5-4ff9-949b-295bd4fa8b3e', lider_id, '00024', 'Joel Vargas', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 00:42:45.778565+00'),
+  ('d50bd7e9-34a5-4fa4-a2c9-7af55b77a7be', lider_id, '00038', 'Neusa', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-09 19:18:24.429709+00'),
+  ('dd9d2d11-d287-4183-99b2-a1d4692c2b6a', lider_id, '00004', 'Silvana muller', '44275137000', NULL, 'Rua tamanduá 34', 'Canudos', 'Novo Hamburgo ', NULL, NULL, '51999934751', NULL, '2026-06-01 19:53:56.180598+00'),
+  ('e209bc88-b6f5-4799-a0f3-3dbb4c07a175', lider_id, '00018', 'Gabriel Fortunato ', '98059270087', NULL, 'Engenheiro Afonso Cavalcante 135 ap 601', 'Bela vista ', 'Porto Algarve ', NULL, '90440110', '51993426525', NULL, '2026-06-04 17:31:34.840807+00'),
+  ('e508bf14-b63b-4f73-80da-dba03e1c0ba9', lider_id, '00016', 'Nelson Luís Vargas ', '45431183087', NULL, 'Av terra nova 601 casa 351', 'Algarve ', 'Alvorada', NULL, '94857550', '51990073528', NULL, '2026-06-03 17:03:34.540074+00'),
+  ('ee08bc7c-8bcc-41da-bebf-9a8ff9900a3d', lider_id, '00013', 'Willian Corrêa ', '94347182015', NULL, 'Rua Pedro canga 59', 'Sarandi', 'Porto Alegre ', NULL, '91110370', '51992040556', NULL, '2026-06-02 16:25:31.707612+00'),
+  ('f82a91cf-68f4-4913-8ebf-89ac713c5c96', lider_id, '00020', 'Fernanda Fernandes', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-05 19:52:52.453976+00'),
+  ('f8e7f9d8-982d-46fc-a778-c65f48c50d50', lider_id, '00003', 'João Pedro Silva', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-05-30 19:54:47.079315+00'),
+  ('f9a500dc-d734-4989-a6a5-d27db5891d69', lider_id, '00034', 'Maria de Lourdes ruga', '18376606034', NULL, 'Rua Santos neto 123 ap 1302', 'Petrópolis ', NULL, NULL, '90460090', '51991766898', NULL, '2026-06-09 12:42:28.390979+00'),
+  ('fb4031d6-2bdf-4943-bcc5-10db79581660', lider_id, '00040', 'Irána Maria ', '53597818072', NULL, 'Rua Afonso taunay 163 ap 403', 'Boa Vista ', 'Porto Alegre ', NULL, '90520540', '51999731608', NULL, '2026-06-09 19:55:12.356277+00'),
+  ('fbf62996-558d-4418-8731-7db6118f13fa', lider_id, '00021', 'Michy', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-05 19:56:43.567997+00')
+ON CONFLICT DO NOTHING;
+
+
+-- ── Líder → Chamados (33 registros) ──
+INSERT INTO public.calls (id, tenant_id, date, client_id, contact_name, contact_phone, origin, status, notes, service_category, scheduled_time, scheduled_date, call_address, created_at)
+VALUES
+  ('0734a005-1066-4c6d-bc43-a221157992ef', lider_id, '2026-06-08', '83c23f10-18c8-4e28-bda7-757a27ca10b7', 'Rafaela', '(51) 99937-5018', 'site_poa', 'agendado', NULL, NULL, '09:00:00', '2026-06-09', 'Rua Casemiro de Abreu 1033  Porto Alegre ', '2026-06-08 20:49:28.445935+00'),
+  ('0a2e3d26-9d5d-46a8-bc4b-f3a685ef7743', lider_id, '2026-06-09', 'f9a500dc-d734-4989-a6a5-d27db5891d69', 'Maria de Lurdes ', '‪+55 51 99176‑6898‬', 'site_poa', 'aprovado', NULL, NULL, '09:00:00', '2026-06-09', 'Rua Santos Neto 123/1302 Porto Alegre ', '2026-06-08 20:21:27.455932+00'),
+  ('0a46f0cc-02f3-4b8d-9cad-df42ed4a839c', lider_id, '2026-06-02', '80cac070-cb35-45b9-9d6d-572ff041b7cd', 'Derik', '51 99907-4576', 'site_poa', 'nao_quis_visita', 'Porto Alegre ', NULL, NULL, NULL, NULL, '2026-06-02 14:34:49.118891+00'),
+  ('0b7ad1c4-9faa-4379-b253-c16f10314151', lider_id, '2026-06-01', '87bdeb40-1ab8-4f64-893c-018d725014f9', 'Ariane Santos ', NULL, 'site_lider', 'nao_quis_visita', 'Desentupimento de cano ', NULL, NULL, NULL, NULL, '2026-06-02 00:52:42.728932+00'),
+  ('0d4122e2-d163-44d8-9408-ae683bd32d10', lider_id, '2026-06-09', 'abc8851f-69b0-4df3-af0c-3853686393b4', 'Marco', NULL, 'site_poa', 'nao_aprovou', NULL, NULL, NULL, NULL, 'Porto Alegre Petrópolis ', '2026-06-09 13:56:00.709655+00'),
+  ('100a0b87-e7d2-466f-8b2e-d5f210f94cc3', lider_id, '2026-06-08', '72d885c7-9885-4b9d-ba39-7abf3bc5d830', NULL, NULL, 'site_poa', 'aprovado', NULL, NULL, NULL, '2026-06-08', NULL, '2026-06-08 15:04:05.864257+00'),
+  ('12fce857-b8df-4714-8441-dbf752c1ed45', lider_id, '2026-06-04', '17fecbd2-cd95-40c9-b468-80acf9204e1f', 'Marilena Rodrigues ', NULL, 'site_lider', 'aprovado', NULL, 'Desentupidora de Vaso', '18:10:00', NULL, NULL, '2026-06-04 21:11:51.17742+00'),
+  ('16b7a460-fb66-434a-83c4-0aaae8af3f1d', lider_id, '2026-06-07', '8f1c4b07-531b-4160-babe-5de1e0360a39', NULL, NULL, 'site_poa', 'aprovado', NULL, 'Desentupidora de Ralo', NULL, NULL, NULL, '2026-06-07 15:19:48.3101+00'),
+  ('1d0d4150-d16d-4551-9e99-1f45d73d786a', lider_id, '2026-06-01', 'dd9d2d11-d287-4183-99b2-a1d4692c2b6a', 'Silvana muller', NULL, 'site_poa', 'aprovado', NULL, 'Outros', NULL, NULL, NULL, '2026-06-02 00:26:17.326902+00'),
+  ('2c9a76ba-4aeb-4573-bd23-5c78dc71cc9a', lider_id, '2026-06-08', '5c5ebe24-8db1-4896-9052-49eddb1e9c19', NULL, NULL, 'site_lider', 'aprovado', NULL, 'Desentupidora de Cano', NULL, NULL, NULL, '2026-06-08 19:10:59.392455+00'),
+  ('32f585f2-608a-4437-a5a8-2491681970d2', lider_id, '2026-06-05', 'aba16024-f6ef-4fd6-b374-dec102d84116', 'Fernanda ', '‪+55 51 99401‑8605‬', 'site_poa', 'nao_quis_visita', NULL, NULL, NULL, NULL, 'Porto Alegre ', '2026-06-06 00:35:49.174846+00'),
+  ('33d2023d-7c59-409c-8c22-790caab0a52c', lider_id, '2026-06-10', 'ac484e06-e9a9-46a0-9f89-8496c1f52b6e', 'Sem nome ', NULL, 'site_lider', 'nao_quis_visita', 'Cliente tem orçamento por 500,00
+Viamão águas claras ', NULL, NULL, '2026-06-10', NULL, '2026-06-10 17:49:16.47621+00'),
+  ('3a8668e7-1383-4d79-afea-551fb9fa464a', lider_id, '2026-06-05', '8df5e1f6-970f-4649-8c4d-3feeb020fe29', 'Michy', NULL, 'site_lider', 'nao_quis_visita', NULL, NULL, NULL, NULL, NULL, '2026-06-06 00:44:49.264534+00'),
+  ('3b4d6d47-0537-46ae-990a-ca0cbdb14e50', lider_id, '2026-06-05', 'd17317b4-8fa5-4ff9-949b-295bd4fa8b3e', 'Joel Vargas ', '‪+55 51 99865‑7768‬', 'site_lider', 'nao_quis_visita', NULL, NULL, NULL, NULL, 'Gravatai ', '2026-06-06 00:42:46.001139+00'),
+  ('3cdb4b72-3090-431c-aa8f-407cf2b84230', lider_id, '2026-06-03', 'e508bf14-b63b-4f73-80da-dba03e1c0ba9', 'Nelson Luís vargas', '51990073528', 'site_poa', 'aprovado', 'Desobistruçao da tubulação da caixa de gordura com maquinário eletro rotativo 
+
+
+Desobistruçao do vaso sanitário com co2 ', NULL, '13:00:00', '2026-06-03', NULL, '2026-06-03 17:09:49.214785+00'),
+  ('4a58dc6d-6b51-48d4-b0a2-2e3304190d75', lider_id, '2026-06-05', 'a1d94ffc-0585-43f4-9347-de54cd292d38', 'Guilherme ', '51999760469', 'site_lider', 'agendado', 'Nao quis visita . Queria preço por telefone .', 'Limpa Fossa', NULL, '2026-06-05', 'Novo Hamburgo ', '2026-06-05 19:57:39.864024+00'),
+  ('4f6c8771-907a-43aa-99c3-657b8abdbb62', lider_id, '2026-06-09', 'b5c917f6-ad84-480c-a260-7d3827a14598', 'Fernanda ', '51997272809', 'terceirizado', 'aprovado', 'Descrição do Serviço Realizado lider rs 
+
+Foi realizada raspagem interna da tubulação com máquina autoelétrica rotativa para remoção de incrustações e resíduos aderidos às paredes da rede. Durante a execução do serviço, foi identificada grande quantidade de resíduos de obra, incluindo restos de cimento no interior da tubulação. Também foi utilizado gás em alta pressão como procedimento complementar de limpeza e inspeção da rede.
+
+Metros: 8,50 R$179,00
+Aplicação:5x R$280,00
+
+Total.2.921,50', 'Desentupidora de Pia', '16:01:00', '2026-06-09', 'Cachoeirinha ,ritter', '2026-06-09 19:19:24.77555+00'),
+  ('52a65834-e441-4769-9de0-1472f35f878d', lider_id, '2026-06-10', 'ba4602ed-1991-4bba-92b3-eae0a70f2ac0', NULL, NULL, 'site_poa', 'aprovado', NULL, 'Hidrojateamento', NULL, NULL, NULL, '2026-06-10 14:49:22.083731+00'),
+  ('59186f55-e22d-46ad-884b-e40032a53149', lider_id, '2026-06-10', '14d7ace4-b2ce-4a46-9c80-c0e916a8c4e0', NULL, NULL, 'site_lider', 'aprovado', NULL, 'Desentupidora de Vaso, Desentupidora de Cano', NULL, NULL, NULL, '2026-06-10 12:56:57.616838+00'),
+  ('5e48d815-341a-49c2-bf76-bcaa7afc802d', lider_id, '2026-06-08', 'fb4031d6-2bdf-4943-bcc5-10db79581660', 'Maria ', '(051) 99973-1608', 'site_poa', 'aprovado', NULL, 'Desentupidora de Ralo', '16:03:00', '2026-06-09', 'Rua Afonso taunay163 ap 403', '2026-06-08 20:19:30.124267+00'),
+  ('5eb0048b-6d14-441a-9913-1781797ad722', lider_id, '2026-06-05', 'fbf62996-558d-4418-8731-7db6118f13fa', 'Michy', '51991498946', 'site_lider', 'agendado', 'Vai falar com o filho . Não demonstrou interesse e já tem orçamentos . ', 'Desentupidora de Vaso', NULL, '2026-06-05', NULL, '2026-06-05 19:56:43.870505+00'),
+  ('63a7fa57-3e9d-4806-8431-acf459e8c0eb', lider_id, '2026-06-08', 'c35938e2-b626-4c69-941f-c11ec01a8e3b', 'Marcia ', '584608166', 'site_lider', 'nao_aprovou', 'Visita feita.
+ Cliente precisa trocar o vaso ,pois retirando o atual irá quebrar.', NULL, NULL, NULL, NULL, '2026-06-09 13:17:48.861372+00'),
+  ('6b350832-90f6-4113-bbd9-4d32d49b65e9', lider_id, '2026-06-04', 'e209bc88-b6f5-4799-a0f3-3dbb4c07a175', 'Gabriel fortunato', NULL, 'site_poa', 'aprovado', NULL, 'Desentupidora de Ralo', NULL, NULL, NULL, '2026-06-04 17:33:52.418161+00'),
+  ('70eaf1d5-accb-4ad2-bdb7-437e94eee94e', lider_id, '2026-06-02', 'cd5ed07e-b0b8-4de1-a1ef-1f1a34f69d73', 'Evander Ribeiro araujo', '‪+55 51 99349‑0804‬', 'site_poa', 'nao_aprovou', NULL, NULL, '17:30:00', '2026-06-02', 'Rua José Barcelos Garcia 265 Porto Alegre ', '2026-06-02 19:56:24.291053+00'),
+  ('89702702-16ac-4307-b548-a9e4440f75ed', lider_id, '2026-06-04', 'ae7322d4-4f77-4cdb-b2ae-86017890ff47', 'Celso kemmerich', NULL, 'site_poa', 'aprovado', NULL, 'Hidrojateamento', NULL, NULL, NULL, '2026-06-04 16:04:40.446152+00'),
+  ('9aea8d3b-2250-4a7b-92c7-d2d36b2ac300', lider_id, '2026-06-02', 'ee08bc7c-8bcc-41da-bebf-9a8ff9900a3d', NULL, NULL, 'site_lider', 'aprovado', NULL, 'Hidrojateamento', NULL, NULL, NULL, '2026-06-02 16:28:09.008512+00'),
+  ('9db5349d-3513-4ce3-a5c2-973735fa3544', lider_id, '2026-06-03', '93420575-d338-4f9b-b768-7a2151312e0d', 'Willian ', NULL, 'site_poa', 'cancelado', NULL, NULL, '09:00:00', '2026-06-03', 'Rua neves , acesso 78, casa  218, Santa Tereza - POA', '2026-06-02 00:39:52.375324+00'),
+  ('a2439832-4954-40aa-913c-5a701576756e', lider_id, '2026-06-10', '94e17ac4-ad5f-425b-83f1-dc62af3374c9', NULL, NULL, 'site_lider', 'aprovado', NULL, 'Desentupidora de Vaso', NULL, NULL, NULL, '2026-06-10 16:30:08.988701+00'),
+  ('a2a597f2-e79b-4359-9c2b-40f507d90f16', lider_id, '2026-06-08', 'c7f18f2f-ebbd-4cce-9fea-655f8d7c7856', 'Luís ', NULL, 'site_poa', 'agendado', NULL, NULL, '10:00:00', '2026-06-09', 'Rua nossa Senhora Aparecida 221', '2026-06-08 20:50:54.760922+00'),
+  ('db5d1a03-8791-423d-871b-6d85f6022894', lider_id, '2026-06-05', 'f82a91cf-68f4-4913-8ebf-89ac713c5c96', 'Fernanda Fernandes ', '51998195479', 'site_lider', 'nao_quis_visita', 'Nao respondeu mais ', NULL, NULL, NULL, NULL, '2026-06-05 19:52:52.822192+00'),
+  ('f4575524-27e2-4e4f-8f13-b3be0c6477ad', lider_id, '2026-06-03', NULL, 'Nelson Luís Vargas ', '‪51 99007‑3528‬', 'site_poa', 'agendado', NULL, NULL, '10:29:00', '2026-06-03', 'Avenida terra nova 601 jardim Algarve  alvorada ', '2026-06-02 19:50:41.854461+00'),
+  ('f6a78f5c-ab85-4caa-8e56-0612e399e5fc', lider_id, '2026-06-09', '81491b90-f97a-4bd2-9a82-ca678886c5e9', 'Ubirajara Pereira Ramos ', '51 992729984', 'site_poa', 'aprovado', NULL, 'Desentupidora de Cano, Hidrojateamento', '14:00:00', '2026-06-09', 'Avenida da Serraria, 1844 Casa 31.  Porto Alegre ', '2026-06-08 20:23:27.524583+00'),
+  ('f8b014e3-a673-4f9f-9aac-10a4d2285090', lider_id, '2026-06-09', 'd50bd7e9-34a5-4fa4-a2c9-7af55b77a7be', 'Neusa', '5130725881', 'site_lider', 'cancelado', 'Cancelou! Filha levou alguém .', NULL, NULL, NULL, NULL, '2026-06-09 19:18:24.601697+00')
+ON CONFLICT DO NOTHING;
+
+
+-- ── Líder → Ordens de Serviço (22 registros) ──
+INSERT INTO public.service_orders (id, tenant_id, call_id, os_number, date, client_id, team_id, driver, nf_number, vehicle, due_date, service_type, billing_system, has_floor_plan, has_no_floor_plan, has_no_knowledge, has_hydraulic_plan, has_no_hydraulic_plan, has_guarantee, has_no_guarantee, has_guarantee_60, has_guarantee_90, equipment_rental_pct, equipment_rental_value, subtotal, discount, taxes, total_value, own_material_cost, own_fuel_cost, own_other_cost, outsource_fuel_cost, outsource_meal_cost, outsource_truck_cost, outsource_other_cost, outsource_profit_pct, partner_name, my_revenue_pct, payment_method, payment_status, amount_paid, remaining_amount, remaining_due_date, conditions, observations, auxiliary_id, auxiliary_value, other_service_value, created_at)
+VALUES
+  ('0568f596-774f-4654-9480-3dd09f909ba2', lider_id, '59186f55-e22d-46ad-884b-e40032a53149', 'OS-00021', '2026-06-10', '14d7ace4-b2ce-4a46-9c80-c0e916a8c4e0', 'a8a9fe93-a2c9-4150-95b7-7de9e19bd6b3', NULL, NULL, NULL, NULL, 'proprio', NULL, false, true, true, false, true, false, false, false, true, 0.0, 0.0, 1645.0, 82.25, 0.0, 1562.75, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, '7ed5c75d-12c4-4112-a274-32fa2d3f9da2', 0.0, 0.0, '2026-06-10 12:56:57.900487+00'),
+  ('09640d35-8faf-4ea3-9185-78e04a87b3da', lider_id, '2c9a76ba-4aeb-4573-bd23-5c78dc71cc9a', 'OS-00014', '2026-06-08', '5c5ebe24-8db1-4896-9052-49eddb1e9c19', 'a8a9fe93-a2c9-4150-95b7-7de9e19bd6b3', NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, true, false, false, 0.0, 0.0, 400.0, 0.0, 0.0, 400.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'PIX', 'pago', 0.0, 0.0, NULL, NULL, NULL, '7ed5c75d-12c4-4112-a274-32fa2d3f9da2', 0.0, 0.0, '2026-06-08 19:10:59.623039+00'),
+  ('11fb8303-71f0-4133-9cf7-6eefaf9fdf05', lider_id, '100a0b87-e7d2-466f-8b2e-d5f210f94cc3', 'OS-00013', '2026-06-08', '72d885c7-9885-4b9d-ba39-7abf3bc5d830', 'a8a9fe93-a2c9-4150-95b7-7de9e19bd6b3', NULL, NULL, NULL, NULL, 'proprio', NULL, false, true, true, false, true, false, true, false, false, 0.0, 0.0, 5202.9400000000005, 0.0, 0.0, 5202.9400000000005, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, 'Sanevac', 50.0, 'PIX', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-08 15:04:06.490272+00'),
+  ('14fd676a-bb25-4505-a2e6-2c59a86408c3', lider_id, '9aea8d3b-2250-4a7b-92c7-d2d36b2ac300', 'OS-00003', '2026-06-02', 'ee08bc7c-8bcc-41da-bebf-9a8ff9900a3d', 'a8a9fe93-a2c9-4150-95b7-7de9e19bd6b3', NULL, NULL, 'Montana', NULL, 'proprio', NULL, false, true, true, false, true, false, false, false, true, 0.0, 0.0, 1980.0, 0.0, 0.0, 1980.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'PIX', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-02 16:28:09.548582+00'),
+  ('1fa4c12e-5197-4d82-99dc-b5b7429dbfcb', lider_id, '89702702-16ac-4307-b548-a9e4440f75ed', 'OS-00007', '2026-06-04', 'ae7322d4-4f77-4cdb-b2ae-86017890ff47', 'a8a9fe93-a2c9-4150-95b7-7de9e19bd6b3', NULL, NULL, 'Montana', NULL, 'proprio', 'metro_linear', false, true, true, false, true, false, false, false, true, 0.0, 0.0, 3199.84, 0.0, 0.0, 3199.84, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'Cartão de Crédito', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-04 16:04:40.781517+00'),
+  ('3ead643e-46b5-4fc4-8cdd-a7b37b085b4a', lider_id, '0734a005-1066-4c6d-bc43-a221157992ef', 'OS-00018', '2026-06-09', '83c23f10-18c8-4e28-bda7-757a27ca10b7', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pendente', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-08 20:49:28.606398+00'),
+  ('4dd742d9-e8cd-4ae9-a595-85820853bf79', lider_id, '52a65834-e441-4769-9de0-1472f35f878d', 'OS-00022', '2026-06-10', 'ba4602ed-1991-4bba-92b3-eae0a70f2ac0', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, true, true, false, true, false, false, false, true, 0.0, 0.0, 2086.0, 86.0, 0.0, 2000.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'Dinheiro', 'pago', 0.0, 0.0, NULL, NULL, NULL, '7ed5c75d-12c4-4112-a274-32fa2d3f9da2', 0.0, 0.0, '2026-06-10 14:49:22.248381+00'),
+  ('6e44c10e-15bc-413a-b5de-a2ac2d60a40f', lider_id, '5eb0048b-6d14-441a-9913-1781797ad722', 'OS-00010', '2026-06-05', 'fbf62996-558d-4418-8731-7db6118f13fa', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pendente', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-05 19:56:44.043093+00'),
+  ('78dfe917-fe7b-4831-b4be-de78e6d2c632', lider_id, 'a2a597f2-e79b-4359-9c2b-40f507d90f16', 'OS-00019', '2026-06-09', 'c7f18f2f-ebbd-4cce-9fea-655f8d7c7856', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pendente', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-08 20:50:54.881965+00'),
+  ('86e53aad-2182-471a-9148-d549c55fadcc', lider_id, '4f6c8771-907a-43aa-99c3-657b8abdbb62', 'OS-00020', '2026-06-09', 'b5c917f6-ad84-480c-a260-7d3827a14598', NULL, NULL, NULL, NULL, NULL, 'terceirizado_saida', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 2921.5, 0.0, 0.0, 2921.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, 'Desentupidora bravo patrik', 50.0, 'PIX', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-09 19:19:24.91613+00'),
+  ('87be26fc-25c2-4489-8ff6-ad732edc0e07', lider_id, '0a2e3d26-9d5d-46a8-bc4b-f3a685ef7743', 'OS-00016', '2026-06-09', 'f9a500dc-d734-4989-a6a5-d27db5891d69', 'a8a9fe93-a2c9-4150-95b7-7de9e19bd6b3', NULL, NULL, 'Montana ', NULL, 'proprio', 'metro_linear', false, true, true, false, true, false, false, false, true, 0.0, 0.0, 2650.5, 0.0, 0.0, 2650.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'PIX', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-08 20:21:27.550515+00'),
+  ('9a14909e-f1e9-4cff-8876-29a57352e8d2', lider_id, 'a2439832-4954-40aa-913c-5a701576756e', 'OS-00023', '2026-06-10', '94e17ac4-ad5f-425b-83f1-dc62af3374c9', 'a8a9fe93-a2c9-4150-95b7-7de9e19bd6b3', NULL, NULL, NULL, NULL, 'proprio', NULL, false, true, true, false, true, false, false, false, true, 0.0, 0.0, 500.0, 0.0, 0.0, 500.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'PIX', 'pago', 0.0, 0.0, NULL, NULL, NULL, '7ed5c75d-12c4-4112-a274-32fa2d3f9da2', 0.0, 0.0, '2026-06-10 16:30:09.251515+00'),
+  ('9a2c42d3-58db-4dc9-8f2b-a461dfdf9646', lider_id, '3cdb4b72-3090-431c-aa8f-407cf2b84230', 'OS-00006', '2026-06-03', 'e508bf14-b63b-4f73-80da-dba03e1c0ba9', 'a8a9fe93-a2c9-4150-95b7-7de9e19bd6b3', NULL, NULL, NULL, NULL, 'proprio', 'metro_linear', false, true, true, false, true, false, false, false, true, 0.0, 0.0, 1860.0, 0.0, 0.0, 1860.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'PIX', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-03 17:09:49.409312+00'),
+  ('aab7b1ed-82e8-4200-88e6-195391a7d30b', lider_id, '70eaf1d5-accb-4ad2-bdb7-437e94eee94e', 'OS-00005', '2026-06-02', 'cd5ed07e-b0b8-4de1-a1ef-1f1a34f69d73', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pendente', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-02 19:56:24.380077+00'),
+  ('aca617bc-8409-4f85-bf7c-fd49b9c1772f', lider_id, 'f4575524-27e2-4e4f-8f13-b3be0c6477ad', 'OS-00004', '2026-06-02', '1e02e82d-306c-4c5b-a0bf-4d9ca5f345c3', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pendente', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-02 19:50:41.981674+00'),
+  ('c6ccf5ae-37d3-4b33-b7eb-578da4e89268', lider_id, '5e48d815-341a-49c2-bf76-bcaa7afc802d', 'OS-00015', '2026-06-08', 'fb4031d6-2bdf-4943-bcc5-10db79581660', 'a8a9fe93-a2c9-4150-95b7-7de9e19bd6b3', NULL, NULL, NULL, NULL, 'proprio', 'metro_linear', false, true, true, false, true, false, false, false, true, 0.0, 0.0, 1379.954, 0.0, 0.0, 1379.954, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'Cartão de Crédito', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-08 20:19:30.274391+00'),
+  ('cf68f7f7-04dd-447f-ba12-b33a7d2457c8', lider_id, '4a58dc6d-6b51-48d4-b0a2-2e3304190d75', 'OS-00011', '2026-06-05', 'a1d94ffc-0585-43f4-9347-de54cd292d38', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pendente', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-05 19:57:40.045625+00'),
+  ('d7410182-d9a4-496d-ac64-a6575bde1417', lider_id, '6b350832-90f6-4113-bbd9-4d32d49b65e9', 'OS-00008', '2026-06-04', 'e209bc88-b6f5-4799-a0f3-3dbb4c07a175', 'a8a9fe93-a2c9-4150-95b7-7de9e19bd6b3', NULL, NULL, NULL, NULL, 'proprio', NULL, false, true, true, false, true, false, false, false, true, 0.0, 0.0, 1679.9160000000002, 0.0, 0.0, 1679.9160000000002, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'PIX', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-04 17:33:52.662823+00'),
+  ('e32925dc-8295-4486-9a10-a648fae1e149', lider_id, '16b7a460-fb66-434a-83c4-0aaae8af3f1d', 'OS-00012', '2026-06-07', '8f1c4b07-531b-4160-babe-5de1e0360a39', 'a8a9fe93-a2c9-4150-95b7-7de9e19bd6b3', NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 1000.0, 0.0, 0.0, 1000.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'PIX', 'pendente', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-07 15:19:48.555344+00'),
+  ('f22e2f2b-f833-4e17-827a-a9c09b0d0c25', lider_id, 'f6a78f5c-ab85-4caa-8e56-0612e399e5fc', 'OS-00017', '2026-06-09', '81491b90-f97a-4bd2-9a82-ca678886c5e9', 'a8a9fe93-a2c9-4150-95b7-7de9e19bd6b3', NULL, NULL, 'Montana', NULL, 'proprio', NULL, false, true, true, false, false, false, false, false, true, 0.0, 0.0, 2500.0, 0.0, 0.0, 2500.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'Cartão de Crédito', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-08 20:23:27.602363+00'),
+  ('f5609a30-2ee4-400f-b78d-90d32e10a22f', lider_id, '12fce857-b8df-4714-8441-dbf752c1ed45', 'OS-00009', '2026-06-04', '17fecbd2-cd95-40c9-b468-80acf9204e1f', 'a8a9fe93-a2c9-4150-95b7-7de9e19bd6b3', NULL, NULL, NULL, NULL, 'proprio', NULL, false, true, true, false, true, false, false, false, true, 0.0, 0.0, 780.0, 0.0, 0.0, 780.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'PIX', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-04 21:11:51.483383+00'),
+  ('f935b082-bd1b-4ec9-bc9e-1fb4238e33da', lider_id, '1d0d4150-d16d-4551-9e99-1f45d73d786a', 'OS-00002', '2026-06-01', 'dd9d2d11-d287-4183-99b2-a1d4692c2b6a', NULL, NULL, NULL, NULL, NULL, 'proprio', 'metro_linear', false, true, true, false, true, true, false, false, false, 0.0, 0.0, 2366.0, 0.0, 0.0, 2366.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'Pix', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-02 00:26:17.51687+00')
+ON CONFLICT DO NOTHING;
+
+
+-- ── Líder → Itens de OS (19 registros) ──
+INSERT INTO public.service_order_items (id, service_order_id, quantity, description, unit_price, created_at)
+VALUES
+  ('0cfced1c-593b-4f00-9b01-3d7ca2635c0b', 'd7410182-d9a4-496d-ac64-a6575bde1417', 8.4, 'Desentupidora de Ralo - Metro Linear', 199.99, '2026-06-04 17:33:52.835566+00'),
+  ('19e81c53-89e8-4d3f-860f-a5a35180da8f', '9a2c42d3-58db-4dc9-8f2b-a461dfdf9646', 2.0, 'Desentupidora de Cano - Metro Linear', 170.0, '2026-06-03 17:11:22.631285+00'),
+  ('24543e4d-3b4d-4814-84b8-c5e24961f0fa', '87be26fc-25c2-4489-8ff6-ad732edc0e07', 9.5, 'Desentupidora de Cano - Metro Linear', 279.0, '2026-06-09 18:26:48.692884+00'),
+  ('2d763d91-f03a-487d-aa49-a35782a55f3c', 'f5609a30-2ee4-400f-b78d-90d32e10a22f', 1.0, 'Desentupidora de Vaso - Valor Fechado', 780.0, '2026-06-04 21:11:51.737943+00'),
+  ('383fa999-fac8-4998-bf9e-9f8e3d0d8b23', 'e32925dc-8295-4486-9a10-a648fae1e149', 5.0, 'Desentupidora de Ralo - Metro Linear', 200.0, '2026-06-07 15:19:48.697455+00'),
+  ('43c8b376-24ef-410e-856a-82349a31d9cd', '09640d35-8faf-4ea3-9185-78e04a87b3da', 1.0, 'Desentupidora de Cano - Valor Fechado', 400.0, '2026-06-08 19:10:59.816551+00'),
+  ('4b4a8bf2-c3f7-4ab0-9ea3-9bd601448cc8', 'f22e2f2b-f833-4e17-827a-a9c09b0d0c25', 10.0, 'Desentupidora de Cano - Metro Linear', 149.0, '2026-06-09 18:16:39.113691+00'),
+  ('4d621a03-a0c2-4782-845c-56e6587ee355', '9a14909e-f1e9-4cff-8876-29a57352e8d2', 1.0, 'Desentupidora de Vaso - Valor Fechado', 500.0, '2026-06-10 16:30:09.441826+00'),
+  ('52caea2a-c500-4e22-80f2-3a99d55ef741', 'f22e2f2b-f833-4e17-827a-a9c09b0d0c25', 1.0, 'Hidrojateamento - Valor Fechado', 1010.0, '2026-06-09 18:16:39.113691+00'),
+  ('6a88fc7b-17a3-46f6-8440-e2091d45fcf6', '4dd742d9-e8cd-4ae9-a595-85820853bf79', 14.0, 'Hidrojateamento - Metro Quadrado', 149.0, '2026-06-10 14:49:22.436479+00'),
+  ('7a83177c-59f2-41ce-a3d4-8c15b83dd6da', '9a2c42d3-58db-4dc9-8f2b-a461dfdf9646', 4.0, 'Desentupidora de Vaso - Metro Linear', 380.0, '2026-06-03 17:11:22.631285+00'),
+  ('85abab3d-417e-4a93-b892-387e043c8aaa', '1fa4c12e-5197-4d82-99dc-b5b7429dbfcb', 16.0, 'Hidrojateamento - Metro Quadrado', 199.99, '2026-06-04 16:04:40.979848+00'),
+  ('8802563a-8c6a-4645-91e5-10c88fa29dc4', '11fb8303-71f0-4133-9cf7-6eefaf9fdf05', 5846.0, 'Limpa Fossa - Litros', 0.89, '2026-06-08 19:13:18.897255+00'),
+  ('9067a130-bc48-43ae-b917-716381825f84', '14fd676a-bb25-4505-a2e6-2c59a86408c3', 11.0, 'Hidrojateamento - Metro Quadrado', 180.0, '2026-06-02 16:28:09.738556+00'),
+  ('91104aeb-34ca-411a-8eef-0e90507a07a1', 'c6ccf5ae-37d3-4b33-b7eb-578da4e89268', 4.6, 'Desentupidora de Ralo - Metro Linear', 299.99, '2026-06-09 19:58:03.235512+00'),
+  ('b12847d9-f6f1-4497-9cd7-7f33be01de5a', '86e53aad-2182-471a-9148-d549c55fadcc', 1.0, 'Desentupidora de Pia - Valor Fechado', 2921.5, '2026-06-10 01:01:28.630083+00'),
+  ('d189e172-d0f6-41fa-b8e6-b29c00d900ac', '0568f596-774f-4654-9480-3dd09f909ba2', 1.0, 'Desentupidora de Vaso - Valor Fechado', 150.0, '2026-06-10 12:56:58.096967+00'),
+  ('e97f5f9e-f1f3-49b6-93fe-c3c2613d1df4', '0568f596-774f-4654-9480-3dd09f909ba2', 5.0, 'Desentupidora de Cano - Metro Linear', 299.0, '2026-06-10 12:56:58.096967+00'),
+  ('eed0f6f5-7b7c-47f1-bea0-9097fce8398d', 'f935b082-bd1b-4ec9-bc9e-1fb4238e33da', 14.0, 'Hidrojateamento da tubulação da caixa de gordura', 169.0, '2026-06-02 00:30:51.818692+00')
+ON CONFLICT DO NOTHING;
+
+
+-- ── Líder → Saídas (18 registros) ──
+INSERT INTO public.expenses (id, tenant_id, description, category, amount, type, status, due_date, paid_date, recurrence_day, notes, supplier_id, client_id, created_at)
+VALUES
+  ('0d43fa87-fc43-415a-8fb0-992f0e357437', lider_id, 'Almoço', 'Operacional', 53.0, 'avulso', 'pago', '2026-06-08', '2026-06-08', NULL, NULL, NULL, NULL, '2026-06-08 15:58:49.849462+00'),
+  ('0fd7b247-062d-4b15-bcf2-a46b44cff020', lider_id, 'Gasolina', 'Operacional', 150.0, 'avulso', 'pago', '2026-06-08', '2026-06-08', NULL, NULL, NULL, NULL, '2026-06-08 22:19:04.782402+00'),
+  ('18cba87c-47dd-4852-8bd7-b27dd3ff9e87', lider_id, 'Saldo Google ', 'Marketing', 1000.0, 'avulso', 'pago', '2026-06-04', '2026-06-04', NULL, NULL, NULL, NULL, '2026-06-04 21:37:15.414509+00'),
+  ('20ba8aca-bdce-4725-88f4-850198e19f3a', lider_id, 'Gasolina ', 'Operacional', 170.0, 'avulso', 'pago', '2026-06-10', '2026-06-10', NULL, NULL, NULL, NULL, '2026-06-10 15:16:39.578911+00'),
+  ('3f8dceca-04fd-4054-b097-523890063442', lider_id, 'Saldo Google ', 'Marketing', 1000.0, 'avulso', 'pago', '2026-06-05', '2026-06-05', NULL, NULL, NULL, NULL, '2026-06-05 18:16:28.156893+00'),
+  ('40f716c4-3213-4433-ad65-d6dfedb668df', lider_id, 'Saldo Google ', 'Outros', 1000.0, 'avulso', 'pago', '2026-06-01', '2026-06-02', NULL, NULL, NULL, NULL, '2026-06-02 01:01:46.239652+00'),
+  ('50c79bc1-dec9-4152-a4b7-068d0164d513', lider_id, 'Google', 'Saldo Google', 1000.0, 'avulso', 'pago', '2026-06-02', '2026-06-02', NULL, NULL, NULL, NULL, '2026-06-02 13:04:19.322611+00'),
+  ('636fc32c-9b65-45ab-b113-4089dfbb1302', lider_id, 'Mensalidade Google ads', 'Marketing', 3000.0, 'fixo', 'pendente', '2026-06-10', NULL, '10', NULL, 'cb64f692-fd9c-4e54-adfd-43c8f398a7a1', NULL, '2026-06-02 01:07:40.685589+00'),
+  ('7f2fb49b-3ad1-45cb-b887-4dd4551c810d', lider_id, 'Saldo Google 2000', 'Marketing', 2000.0, 'avulso', 'pago', '2026-06-08', '2026-06-08', NULL, NULL, NULL, NULL, '2026-06-08 15:41:31.197359+00'),
+  ('9410104b-ed29-4052-a869-4dfb31a1686b', lider_id, 'Saldo Google ', 'Marketing', 1000.0, 'avulso', 'pago', '2026-06-09', '2026-06-09', NULL, NULL, NULL, NULL, '2026-06-09 22:19:17.68789+00'),
+  ('aeb5a7e9-e9ec-4bbe-8668-af4f1ee3033e', lider_id, 'Saldo Google ', 'Marketing', 1000.0, 'avulso', 'pago', '2026-06-03', '2026-06-03', NULL, NULL, NULL, NULL, '2026-06-03 11:17:42.557759+00'),
+  ('c935a02f-341b-4959-a8dc-61cd210d09d2', lider_id, 'Mangueira hidrojato', 'Operacional', 497.0, 'avulso', 'pago', '2026-06-02', '2026-06-02', NULL, NULL, 'ce9c6f7b-e59e-40c1-bf0f-4b5c983942ad', NULL, '2026-06-02 15:02:54.230156+00'),
+  ('ccbd1c00-7d30-4256-8612-62e2e2ae9dba', lider_id, 'Pagamento Desentupidora bravo ', 'Operacional', 1460.75, 'avulso', 'pago', '2026-06-10', '2026-06-10', NULL, NULL, NULL, NULL, '2026-06-10 01:07:33.081792+00'),
+  ('decb4fd8-8e30-4b92-b0e3-586cfcbe7386', lider_id, 'Gasolina ', 'Operacional', 170.0, 'avulso', 'pago', '2026-06-02', '2026-06-02', NULL, NULL, NULL, NULL, '2026-06-03 11:16:33.293991+00'),
+  ('ea04dc40-61cd-4a3f-afc7-2e7a0d155941', lider_id, 'Almoço ', 'Operacional', 89.0, 'avulso', 'pago', '2026-06-09', '2026-06-09', NULL, NULL, NULL, NULL, '2026-06-09 22:19:50.783252+00'),
+  ('ed67ebfd-d377-4686-aa03-017f9e0130c3', lider_id, 'Saldo Google ', 'Marketing', 1500.0, 'avulso', 'pago', '2026-06-10', '2026-06-10', NULL, NULL, NULL, NULL, '2026-06-10 15:17:04.824223+00'),
+  ('fa16845e-fcbe-4e04-a949-24335333e4aa', lider_id, 'Contador', 'Administrativo', 750.0, 'avulso', 'pago', '2026-06-08', '2026-06-08', NULL, NULL, NULL, NULL, '2026-06-08 22:19:33.892909+00'),
+  ('fc4b44a4-72d9-4a30-b896-2feee27b4499', lider_id, 'Gasolina', 'Operacional', 180.0, 'avulso', 'pago', '2026-06-05', '2026-06-05', NULL, NULL, NULL, NULL, '2026-06-05 18:16:49.543571+00')
+ON CONFLICT DO NOTHING;
+
+
+-- ════════════════════════════════════════════════
+-- MILLENIUM
+-- ════════════════════════════════════════════════
+
+-- ── Millenium → Equipes (2 registros) ──
+INSERT INTO public.teams (id, tenant_id, name, created_at)
+VALUES
+  ('4bf7182e-aa82-4fc0-aa2a-44299520ee07', mill_id, 'Equipe B', '2026-05-29 12:01:26.570373+00'),
+  ('c37ccf15-d036-4b6e-bb65-d1410a53a240', mill_id, 'Equipe A', '2026-05-29 12:01:26.570373+00')
+ON CONFLICT DO NOTHING;
+
+
+-- ── Millenium → Fornecedores (2 registros) ──
+INSERT INTO public.suppliers (id, tenant_id, name, category, contact, phone, email, notes, created_at)
+VALUES
+  ('5a584aff-a6cf-4bdf-9aef-796a32117b99', mill_id, 'HIDROMAQUINAS ', 'Serviços', 'VICTOR', '5133686569', NULL, NULL, '2026-06-06 15:07:17.180203+00'),
+  ('f7436c02-04ad-4253-8e88-e064459fa6b4', mill_id, 'GOOGLE INC', 'Marketing', NULL, NULL, NULL, NULL, '2026-06-02 23:39:32.211059+00')
+ON CONFLICT DO NOTHING;
+
+
+-- ── Millenium → Tipos de Serviço (8 registros) ──
+INSERT INTO public.service_types (id, tenant_id, name, category, active, created_at)
+VALUES
+  ('0cd95024-e79a-4891-849f-043cc12b1a9b', mill_id, 'Desentupimento de ralo', 'Desentupimento', true, '2026-05-29 21:46:39.888474+00'),
+  ('106e33b0-d603-4b9b-8538-9f28648c45d1', mill_id, 'Desentupimento de esgoto', 'Desentupimento', true, '2026-05-29 21:46:39.888474+00'),
+  ('3464f8e4-f6dd-4253-a9c1-95e45a91a162', mill_id, 'Desentupimento de vaso', 'Desentupimento', true, '2026-05-29 21:46:39.888474+00'),
+  ('46403a36-fed8-4afc-ba5e-992cab652da4', mill_id, 'Limpa fossa', 'Fossa', true, '2026-05-29 21:46:39.888474+00'),
+  ('46886211-a15a-456d-a455-26aee9428f35', mill_id, 'Desentupimento de cano', 'Desentupimento', true, '2026-05-29 21:46:39.888474+00'),
+  ('9b7cd255-60a9-4392-a165-5205c01b7357', mill_id, 'Desentupimento de coluna', 'Desentupimento', true, '2026-05-29 21:46:39.888474+00'),
+  ('ba773d09-c402-4200-bac1-fda8769823ff', mill_id, 'Limpeza de caixa de gordura', 'Limpeza', true, '2026-05-29 21:46:39.888474+00'),
+  ('f3f67348-635e-4bc7-8f43-7f03f3b32f07', mill_id, 'Desentupimento de pia', 'Desentupimento', true, '2026-05-29 21:46:39.888474+00')
+ON CONFLICT DO NOTHING;
+
+
+-- ── Millenium → Clientes (106 registros) ──
+INSERT INTO public.clients (id, tenant_id, code, name, cpf_cnpj, inscr_est, address, neighborhood, city, state, cep, phone, email, created_at)
+VALUES
+  ('04f7784e-b95b-490a-87c7-c6796a13cae3', mill_id, 'CLI-0084', 'CLEBERSON SANTOS', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 19:47:10.378073+00'),
+  ('06aea83c-1822-403c-ae65-75f20d601bd5', mill_id, 'CLI-0055', 'CLAUDIRENE MORECH', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 18:07:27.931764+00'),
+  ('06be74b9-7a97-48ed-b0c3-a702f3af0ebd', mill_id, 'CLI-0002', 'PAULO', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-01 16:37:51.526172+00'),
+  ('0e01ad43-f339-457e-a58d-0aefa9a6ff6c', mill_id, 'CLI-0043', 'ROSELI', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 15:25:34.84703+00'),
+  ('13b7ff90-7732-49a5-b748-4eb9a9cfb190', mill_id, 'CLI-0092', 'CARLOS SILVA', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 19:58:18.463529+00'),
+  ('156f6fc4-cc9e-441f-a0c1-22a0027cc971', mill_id, 'CLI-0044', 'ROSELI RIGHI', '47902230006', NULL, 'ERMINIO MACHADO 68', 'JD. ALGARVE', 'ALVORADA', NULL, NULL, NULL, NULL, '2026-06-06 15:27:10.734956+00'),
+  ('161363b5-271c-430f-bdde-b05746476894', mill_id, 'CLI-0074', 'JOÃO BATISTA DA SILVA', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 19:07:55.621006+00'),
+  ('165b002a-924e-4212-8a29-6fac236547ee', mill_id, 'CLI-0019', 'teste', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-03 19:01:13.894564+00'),
+  ('165c5387-e0db-4bb7-9088-7717ef916415', mill_id, 'CLI-0064', 'EDIFICIO BANCO NACIONAL DO COMERCIO', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 18:37:37.20803+00'),
+  ('16e92b00-132b-454d-a6d6-2e10140110b7', mill_id, 'CLI-0028', 'RAQUEL BERNARDES', '02187269027', NULL, 'RUA SERGIO MORAES 30', 'OLARIA ', 'CANOAS', NULL, '92035290', '51994483968', NULL, '2026-06-04 18:40:30.292665+00'),
+  ('1999bcb3-6db8-4185-ba6a-fc94f84f32f7', mill_id, 'CLI-0024', 'teste', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-03 19:02:24.89663+00'),
+  ('1c3a5735-a1b4-4c6c-9d9f-9690888bad03', mill_id, 'CLI-0099', 'ANA LUIZA', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 20:07:56.049252+00'),
+  ('1ef4c508-3b6a-4033-a65b-df2aa05154a4', mill_id, 'CLI-0072', 'GEISON ANDRADE', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 19:01:59.581196+00'),
+  ('259fa82b-1a40-496a-a47c-1510ebcc4426', mill_id, 'CLI-0026', 'teste', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-03 19:09:23.916392+00'),
+  ('25ab0ce4-17ee-4440-bbe9-6cf8ba7cfd22', mill_id, 'CLI-0005', 'JEFERSON', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-01 16:40:45.442139+00'),
+  ('2a5ad3b1-fa5a-46d1-bb05-1e6f202de202', mill_id, 'CLI-0106', 'PAULO DA MAIA PEÇAS LTDA', NULL, NULL, 'AV. SENADOR SALGADO FILHO 1303', 'SANTA CECILIA', 'VIAMÃO', NULL, '94475000', NULL, NULL, '2026-06-10 16:38:00.357443+00'),
+  ('30fe159f-e0a1-487c-b525-9982be4b0353', mill_id, 'CLI-0048', 'CAROLINE DA SILVA MARTINS', '04379791050', NULL, 'AV MARANAS 350', 'FATIMA', 'CACHOEIRINHA', NULL, '94955030', NULL, NULL, '2026-06-06 16:04:36.335525+00'),
+  ('38de0fdd-b9b1-47ca-9c88-fd3bd02d1034', mill_id, 'CLI-0041', 'SENOMAR', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 15:14:38.112022+00'),
+  ('3a9e4c34-fbc6-479b-87a4-0897526826fa', mill_id, 'CLI-0035', '-', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-05 12:54:25.720389+00'),
+  ('3c026de1-bbbe-4dcb-9426-29a996c0057a', mill_id, 'CLI-0001', 'JEFERSOM RUBIM', '01174273062', NULL, 'WENSESLAU ESCOBAR', 'TRISTESA', NULL, NULL, '91110712', NULL, NULL, '2026-05-29 23:18:12.495094+00'),
+  ('3f61fdb3-10b3-43f1-9e48-207fa4ddc2ae', mill_id, 'CLI-0034', '-', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-05 12:54:15.938954+00'),
+  ('432b4168-f044-4849-b0d7-711cbdc5eb6b', mill_id, 'CLI-0003', 'PAULO', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-01 16:38:18.922022+00'),
+  ('43e701f4-66d7-4e5a-a269-295c73583979', mill_id, 'CLI-0020', 'teste', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-03 19:01:15.210581+00'),
+  ('44be76a1-fd0f-4039-9026-b4e5e8d307b6', mill_id, 'CLI-0088', 'RONALD SILVEIRA', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 19:53:14.962817+00'),
+  ('457e3ce5-75d0-4667-9350-187277b0516b', mill_id, 'CLI-0018', 'teste', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-03 19:00:53.524776+00'),
+  ('46924c6c-9f07-427c-b55d-bd7236f31d33', mill_id, 'CLI-0090', 'CRISTIANE TAUGER', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 19:56:06.27661+00'),
+  ('47123027-77ff-42af-9e08-4a3cee2f80cd', mill_id, 'CLI-0101', 'LUIZA FROES ', '01189428083', NULL, 'RUA VITORIA 107/202', 'SANTANA', 'PORTO ALEGRE', NULL, '90260180', '5199868184', NULL, '2026-06-07 15:50:48.333079+00'),
+  ('472387c6-7434-4160-9e6f-4dcd838bca54', mill_id, 'CLI-0025', 'teste gabriel', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-03 19:07:38.445207+00'),
+  ('49f3df9a-f100-448e-bb2b-e1c83aab4543', mill_id, 'CLI-0102', 'TIAGO ALVES DA SILVA', '84336480046', NULL, 'RUA JOSE ALBANO WOLMER 280/1108', 'JD DO SALSO', 'PORTO ALEGRE', NULL, '91410180', '53981336323', NULL, '2026-06-07 15:57:48.573162+00'),
+  ('4a1ac036-5e37-4783-8fcd-87e889f6a273', mill_id, 'CLI-0040', 'MAURO GRONENVALT', '29873509020', NULL, 'RUA AFONSO ARINOS 291/633', NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 15:01:53.706567+00'),
+  ('4dfcdb4d-bfc0-4586-b6f5-d0769267ee36', mill_id, 'CLI-0046', 'JOÃO ALTAIR  DOS SANTOS', '29680433072', NULL, 'RUA INCONFIDENTE 244', 'PRIMAVERA', 'NOVO HAMBURGO', NULL, NULL, '51991295989', NULL, '2026-06-06 15:40:32.864145+00'),
+  ('4e8a8cf7-e27e-49d8-a052-091ceefbc789', mill_id, 'CLI-0063', 'CONDOMINIO ELIAS', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 18:35:55.583244+00'),
+  ('4f23f8f0-4c51-419f-a741-c4eed73781bc', mill_id, 'CLI-0093', 'MARIA VERICIMO', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 19:59:12.455722+00'),
+  ('501ec2ad-275d-4e99-a698-d94bcae8805e', mill_id, 'CLI-0097', 'LAERCIO KERBER', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 20:05:10.716127+00'),
+  ('52be7fe7-c7aa-455d-b043-c6c2e01afc52', mill_id, 'CLI-0021', 'teste', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-03 19:01:30.663948+00'),
+  ('5340bece-2f7f-40b4-b431-65d7fb97f097', mill_id, 'CLI-0011', 'SEM NOME', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-02 23:47:09.177955+00'),
+  ('560b3725-2d76-4f8a-afc3-16a2485c7d85', mill_id, 'CLI-0042', 'SENOMAR BRASEL', '78295521001', NULL, 'RUA LOUREIRO DA SILVA 78', 'PIRATINI', 'ALVORADA', NULL, '9983837', '51991834425', NULL, '2026-06-06 15:21:12.078084+00'),
+  ('57c6474f-ad40-403e-8506-47d6a862690d', mill_id, 'CLI-0069', 'LEANDRO SILVA', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 18:56:27.004161+00'),
+  ('5813efe7-5aeb-4f24-ae50-ed4f3e518810', mill_id, 'CLI-0013', 'PAULO', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-03 00:22:35.284878+00'),
+  ('5bed06fd-d8c8-4948-87b3-058bea50553c', mill_id, 'CLI-0038', 'VÉDICA SANTOS DE PAULA', '847283880034', NULL, 'RUA ARAPEI 483 CS FUNDOS', 'CRISTAL', 'Porto Alegre', 'RS', NULL, '51993523679', NULL, '2026-06-05 19:59:46.856009+00'),
+  ('5c596995-5fcc-4210-a2a8-f6158aab60e7', mill_id, 'CLI-0007', 'RENATO', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-02 23:17:22.788354+00'),
+  ('6167c210-9c6f-4e99-b97e-93bf2fb83ef2', mill_id, 'CLI-0077', 'MARIA CATARINA SANTOS', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 19:17:05.185307+00'),
+  ('6332c3af-d3d2-4d41-bff7-0c0889f1d766', mill_id, 'CLI-0068', 'MARIA INES', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 18:53:46.071895+00'),
+  ('640c89f6-c235-4e2c-a82d-12844b33276c', mill_id, 'CLI-0017', 'teste', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-03 19:00:37.892532+00'),
+  ('653e7e78-7f88-42f2-a4df-0a9d3a24a880', mill_id, 'CLI-0061', 'JAIR GOMES', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 18:21:10.0953+00'),
+  ('6ad5f2c1-d755-40f2-a378-7035db12d77e', mill_id, 'CLI-0036', '-', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-05 12:54:41.681338+00'),
+  ('6d3e4d43-f07c-49af-90cd-15253bc5b4a2', mill_id, 'CLI-0087', 'BANHUR OLIVEIRA', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 19:51:19.798691+00'),
+  ('6ec2eab1-2f9e-4fde-af1f-bbf45a9d9fc9', mill_id, 'CLI-0056', 'VIEIRA IMOBILIARIA', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 18:09:44.446079+00'),
+  ('7178b5c1-7526-4484-b4ab-2ea05bf7ea35', mill_id, 'CLI-0057', 'CHINA INBOX', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 18:12:19.09966+00'),
+  ('78c6d08a-2c98-42bf-90e9-ea73fbc96b15', mill_id, 'CLI-0014', 'PAULO', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-03 00:23:14.144903+00'),
+  ('78f04017-07ac-4802-b83e-22d66ba84cd9', mill_id, 'CLI-0009', 'PAULO', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-02 23:32:27.784667+00'),
+  ('7bd0a317-944a-4584-8684-bbfb7fdedbcc', mill_id, 'CLI-0060', 'JOSE AUGUSTO', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 18:18:42.667716+00'),
+  ('7ca142d6-a0e5-47ae-8b2e-8afede8110f3', mill_id, 'CLI-0083', 'PAULO FORNARI', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 19:46:04.308623+00'),
+  ('80205618-6849-4da2-88c5-7a7a165ea31a', mill_id, 'CLI-0065', 'LEOMARA RIBEIRO', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 18:42:16.2424+00'),
+  ('8032dc91-aff2-470e-8d8f-e21c405e4f28', mill_id, 'CLI-0045', 'FLAVIA GILSLAND', '04876477930', NULL, 'AV CEL. LUCAS DE OLIVEIRA', 'BELA VISTA', 'PORTO ALEGRE', NULL, NULL, '51999081657', NULL, '2026-06-06 15:31:36.072787+00'),
+  ('808b9505-d4ea-45c3-9068-e342bf1eaac7', mill_id, 'CLI-0016', 'teste', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-03 19:00:15.857722+00'),
+  ('832631c3-a6c0-45f2-a08f-0ed66e0ba7df', mill_id, 'CLI-0066', 'MATHEUS MAURA', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 18:45:14.798659+00'),
+  ('87df3903-d6e9-4e23-886a-7befba92355d', mill_id, 'CLI-0091', 'MARINA GOETE', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 19:57:27.29811+00'),
+  ('89db244d-426f-40f4-9b92-c477ad664b0d', mill_id, 'CLI-0089', 'ALEXANDRE GUERRA', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 19:54:31.937196+00'),
+  ('8ac55a03-ca72-42ab-87ec-132aa01e9d64', mill_id, 'CLI-0010', 'PAULO', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-02 23:33:46.053494+00'),
+  ('8e3f168a-ea15-4219-a5d5-1b2e6d70130b', mill_id, 'CLI-0079', 'ALCIDES BELOBUI', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 19:40:08.876046+00'),
+  ('96908060-619e-46d1-9a5e-cf7b4cf823ff', mill_id, 'CLI-0073', 'LUIS FERNANDO SCHULER', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 19:05:59.238904+00'),
+  ('96a44431-eeb2-473b-a3ab-0f5f0e646a3e', mill_id, 'CLI-0067', 'EDIFICIO BANCO NACIONAL DO COMERCIO', '74877085000127', NULL, 'AV. OSVALDO ARANHA 1376', 'BOM FIM', 'PORTO ALEGRE', NULL, '90035191', '51981236464', NULL, '2026-06-06 18:48:49.387693+00'),
+  ('96be7f0c-527c-4667-a257-1676e894d95e', mill_id, 'CLI-0031', 'PAULO', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-05 12:14:29.545247+00'),
+  ('991192de-baaf-4cee-8485-b402554576d7', mill_id, 'CLI-0070', 'CLAUDIO PIASSON', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 18:58:20.324374+00'),
+  ('9aae00f1-0cfa-4e9d-aad4-b86e0290fcda', mill_id, 'CLI-0023', 'teste', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-03 19:02:19.227581+00'),
+  ('9eb6551a-26ec-4212-a4ab-7c4b969c3470', mill_id, 'CLI-0058', 'PAULO ROSA', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 18:13:46.983088+00'),
+  ('9fbb97bb-f873-4cca-980c-0c8a560746c4', mill_id, 'CLI-0008', 'MARIANA', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-02 23:31:05.359629+00'),
+  ('a920aa9b-f8eb-45d0-a4b6-7e1db113d237', mill_id, 'CLI-0037', '-', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-05 12:54:55.607973+00'),
+  ('a9f3d3b8-ff40-45cc-847f-a76f0f8105c2', mill_id, 'CLI-0029', 'LEONARDO DE MATOS ', '80560350015', NULL, 'RUA LUCAS OLIVEIRA ', 'PETROPOLIS', 'PORTO ALEGRE', NULL, NULL, NULL, NULL, '2026-06-04 18:46:19.299827+00'),
+  ('abf92e9b-d1a1-43f4-bdc5-3016aa4b1292', mill_id, 'CLI-0039', 'PAULO', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 15:00:20.109077+00'),
+  ('ae8cefc2-d25d-4aae-919a-15cb2563c735', mill_id, 'CLI-0080', 'PLINIO MEDAGLIA', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 19:41:47.412125+00'),
+  ('b1733116-c632-4d84-ba27-ff6679a97979', mill_id, 'CLI-0049', 'WAGNER JOSE SCHNEIDERS (ESPAÇO TAE)', '01510767070', NULL, 'RUA MARCILIO DIAS 135', 'RIO BRANCO', 'NOVO HAMBURGO', NULL, '93310135', NULL, NULL, '2026-06-06 16:14:00.334467+00'),
+  ('b201ec63-6d79-4ea6-accb-b05a2e2c4ac2', mill_id, 'CLI-0051', 'LAURO FERNANDES', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 17:36:07.94075+00'),
+  ('b2951e32-0631-4082-9a24-bb65944390b9', mill_id, 'CLI-0082', 'ABEL RODRIGO', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 19:45:08.866231+00'),
+  ('b315116b-0670-4939-a5c0-5671a5852aa5', mill_id, 'CLI-0053', 'ELON DELAZARI', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 17:42:02.25777+00'),
+  ('b499043c-b0a7-4ae1-b68e-17b0b4e2b7e8', mill_id, 'CLI-0027', 'JAQUELINE CRISTIANE TASSINARI', '51816970034', NULL, 'RUA TUIUTI 310 APTO105', 'NOSSA SENHORA DA GRAÇAS ', 'CANOAS', NULL, NULL, '51981412488', NULL, '2026-06-04 15:04:07.302581+00'),
+  ('b5190f55-479b-4f56-b559-001227a13b80', mill_id, 'CLI-0103', 'BRUNA SUPERTE', '82337713091', NULL, 'RUA ATILIO ESPERTE 1313', 'VILA NOVA', 'PORTO ALEGRE', NULL, NULL, NULL, NULL, '2026-06-07 16:01:40.596365+00'),
+  ('b81024ab-55eb-4338-ab56-e22435d84966', mill_id, 'CLI-0104', 'PAULO ROBERTO', '84661518004', NULL, 'RUA FERNANDO CORTEZ 465/704', 'CRISTO REDENTOR', 'PORTO ALEGRE', NULL, NULL, NULL, NULL, '2026-06-07 16:06:38.38338+00'),
+  ('b88621e7-7f4d-4eb6-8b08-a9cb498e80d4', mill_id, 'CLI-0022', 'teste', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-03 19:01:33.463474+00'),
+  ('be0bef6a-6f92-4351-929b-b0c398a6be6c', mill_id, 'CLI-0032', 'PAULO', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-05 12:14:54.998183+00'),
+  ('bf0ff179-a101-40c7-bc30-7e89b7a93686', mill_id, 'CLI-0085', 'MARIA ADELIA', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 19:47:58.984689+00'),
+  ('c40c7b1b-bb41-42fe-abcf-33901f7f75d4', mill_id, 'CLI-0033', 'GILSONEI', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-05 12:17:27.337886+00'),
+  ('c6065ae0-39f1-4e92-b7dd-0d77127ba0dc', mill_id, 'CLI-0076', 'SAVAR VEICULOS LTDA', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 19:14:20.954692+00'),
+  ('c869011b-ee11-493d-ab0d-b23cc458ed86', mill_id, 'CLI-0052', 'DANIELE MALAQUIAS', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 17:38:42.383291+00'),
+  ('ca890d75-ae52-450f-a984-ad8de14ff3b4', mill_id, 'CLI-0086', 'VINICIOS BASTOS', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 19:50:13.322565+00'),
+  ('cbb1b2f9-62b1-45f1-abef-32ac2b41c7fc', mill_id, 'CLI-0050', 'NILO ZONDILA', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 17:33:59.046773+00'),
+  ('cbdfd178-0bd2-4cde-96d8-46979e75c8c6', mill_id, 'CLI-0054', 'FRANCISCO SERGIO', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 17:44:03.111573+00'),
+  ('cdd635da-ff44-4b08-810e-1c2227707884', mill_id, 'CLI-0094', 'LAERCIO KERBER', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 20:00:32.114554+00'),
+  ('cf0967b1-83e6-48da-9b21-1243d2c4dc15', mill_id, 'CLI-0098', 'SILVIA LOIZA', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 20:07:08.800063+00'),
+  ('cf52585b-6165-481e-a70d-e0cc5553f611', mill_id, 'CLI-0006', 'CARLOS (SINDICO)', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-02 23:09:53.128247+00'),
+  ('cfa9be9d-694d-4ba2-93b6-2d2526843bf7', mill_id, 'CLI-0071', 'AUGUSTO BOZZETTI', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 19:00:05.528297+00'),
+  ('d6f6627e-3777-4534-b06d-90b26875a214', mill_id, 'CLI-0081', 'CLERIA BENDER', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 19:44:09.781528+00'),
+  ('da89219d-0710-436b-9f0c-30d48cde40c1', mill_id, 'CLI-0100', 'CARLOS ALEXANDRE BITENCOURT DUTRA', '01534258060', NULL, 'RUA SANTO AUGUSTO 124', 'PQ PRIMAVERA', 'SAPUCAIA', NULL, '93230068', '51983053415', NULL, '2026-06-07 15:44:23.019658+00'),
+  ('e2703591-4220-4264-b001-f1a4a214785e', mill_id, 'CLI-0078', 'DENIS HOGFEL', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 19:36:20.729147+00'),
+  ('e326d852-4c65-461b-9f4b-80a780d36efb', mill_id, 'CLI-0105', 'PAULO MAIA PEÇAS', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-10 16:35:41.485972+00'),
+  ('e4c646d4-a6df-4724-9f55-547cf8ccb7e7', mill_id, 'CLI-0030', 'CONDOMINIO ROMEU LIMA', '446101115000', NULL, 'GONZAGA DA GAMA 636', 'CANUDOS', 'NOVO HAMBURGO', NULL, '93540410', NULL, NULL, '2026-06-05 12:02:27.443677+00'),
+  ('e718af01-9776-49fc-a990-430e598a16c7', mill_id, 'CLI-0059', 'MAICON FERNANDES', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 18:15:50.147486+00'),
+  ('e756a04e-0bb9-4096-8fcb-c52cfdf8c818', mill_id, 'CLI-0096', 'KAREN CATTO', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 20:02:53.62014+00'),
+  ('eaad84a7-ca68-4c8a-8222-3fa6cfb452ce', mill_id, 'CLI-0075', 'MAICON LOPES MOTTA', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 19:12:20.700057+00'),
+  ('f4000a0f-9bf1-4aa5-a8d5-47b2b1634da7', mill_id, 'CLI-0012', 'PAULO', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-03 00:22:12.924499+00'),
+  ('f4869f72-355f-4229-8759-a9976587298e', mill_id, 'CLI-0047', 'ANA MARTINS', '34595625049', NULL, 'RUA ARIZONAS 24', 'SANTA BARBARA', 'ALVORADA', NULL, '94853777', '51993020583', NULL, '2026-06-06 15:55:07.654017+00'),
+  ('f8f4735f-3781-4d3b-8747-ffac93e71fe5', mill_id, 'CLI-0062', 'DANIEL MORAES', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 18:29:55.737699+00'),
+  ('fbf8b5be-fc55-4ef9-8ead-e93ae893a4c8', mill_id, 'CLI-0004', 'LELE RAMBO', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-01 16:38:59.19481+00'),
+  ('fe7dddd9-fed8-4675-b356-d7dfd43ded32', mill_id, 'CLI-0095', 'MARCELO MORAIS', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-06 20:01:06.766509+00'),
+  ('ff92b7e5-3083-4fd3-93d7-d766f706e47d', mill_id, 'CLI-0015', 'gabriel teste', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-03 18:59:01.143491+00')
+ON CONFLICT DO NOTHING;
+
+
+-- ── Millenium → Chamados (89 registros) ──
+INSERT INTO public.calls (id, tenant_id, date, client_id, contact_name, contact_phone, origin, status, notes, service_category, scheduled_time, scheduled_date, call_address, call_number, created_at)
+VALUES
+  ('034438cd-665e-4c82-a40a-4c3c32586a51', mill_id, '2026-05-20', '04f7784e-b95b-490a-87c7-c6796a13cae3', 'CLEBERSON SANTOS', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-20', NULL, NULL, '2026-06-06 19:47:10.462712+00'),
+  ('05188690-6e14-4778-a472-ed6df1a752ab', mill_id, '2026-05-24', '13b7ff90-7732-49a5-b748-4eb9a9cfb190', 'CARLOS SILVA', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-24', NULL, NULL, '2026-06-06 19:58:18.5087+00'),
+  ('0cab2538-2b30-4f56-be58-43b315c30e46', mill_id, '2026-05-28', '3c026de1-bbbe-4dcb-9426-29a996c0057a', 'JEFERSON RUBIN', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-28', NULL, NULL, '2026-06-06 20:06:09.078473+00'),
+  ('0f3818ac-a7eb-43f1-b630-70200b6a66d7', mill_id, '2026-05-29', 'cf0967b1-83e6-48da-9b21-1243d2c4dc15', 'SILVIA LOIZA', NULL, 'site_millenium', 'aprovado', NULL, 'Limpa Fossa', NULL, '2026-05-29', NULL, NULL, '2026-06-06 20:07:08.865207+00'),
+  ('10b7964c-e107-4293-a98d-baa95c145886', mill_id, '2026-06-06', 'f8f4735f-3781-4d3b-8747-ffac93e71fe5', 'DANIEL MORAES', '51984458938', 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-06-06', NULL, NULL, '2026-06-06 18:29:55.856864+00'),
+  ('146e13aa-6a25-4d9d-868e-878ef281148c', mill_id, '2026-06-01', '78c6d08a-2c98-42bf-90e9-ea73fbc96b15', 'PAULO', NULL, 'site_millenium', 'nao_quis_visita', NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-03 00:23:14.277538+00'),
+  ('15cdc08b-7f83-45a2-986a-47b568650f5e', mill_id, '2026-06-01', '25ab0ce4-17ee-4440-bbe9-6cf8ba7cfd22', 'JEFERSON', NULL, 'terceirizado', 'aprovado', NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-01 16:40:45.544387+00'),
+  ('18f7b2b6-e5d6-4de1-ad1c-5c52eaca2a64', mill_id, '2026-05-15', 'b2951e32-0631-4082-9a24-bb65944390b9', 'ABEL RODRIGO', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-15', NULL, NULL, '2026-06-06 19:45:08.923256+00'),
+  ('1d4e405c-1029-46a0-aafb-039626f33aa1', mill_id, '2026-05-27', '96908060-619e-46d1-9a5e-cf7b4cf823ff', 'LUIS FERNANDO SCHULER', '51996423368', 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-27', NULL, NULL, '2026-06-06 19:05:59.35458+00'),
+  ('1fed7713-6ea1-4369-ba97-f340d3c2f3cd', mill_id, '2026-05-21', '6d3e4d43-f07c-49af-90cd-15253bc5b4a2', 'BANHUR OLIVEIRA', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-21', NULL, NULL, '2026-06-06 19:51:19.852898+00'),
+  ('20244e41-005c-43ef-be89-d40a2f0cf28a', mill_id, '2026-05-15', '8e3f168a-ea15-4219-a5d5-1b2e6d70130b', 'ALCIDES BELOBUI', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-15', NULL, NULL, '2026-06-06 19:40:08.935835+00'),
+  ('209cf712-1d56-4d2b-90ce-be572ca9c447', mill_id, '2026-05-15', 'd6f6627e-3777-4534-b06d-90b26875a214', 'CLERIA BENDER', NULL, 'site_millenium', 'aprovado', NULL, 'Limpa Fossa', NULL, '2026-05-15', NULL, NULL, '2026-06-06 19:44:09.845811+00'),
+  ('2727b652-9730-4de0-8ec1-eea084c1379d', mill_id, '2026-06-10', '2a5ad3b1-fa5a-46d1-bb05-1e6f202de202', 'PAULO DA MATA PEÇAS ', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-06-10', NULL, NULL, '2026-06-10 16:35:41.675617+00'),
+  ('297e32d3-6e93-4437-839a-52acf9f187d2', mill_id, '2026-05-27', 'eaad84a7-ca68-4c8a-8222-3fa6cfb452ce', 'MAICON LOPES MOTTA', '51994312519', 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-27', NULL, NULL, '2026-06-06 19:12:20.77334+00'),
+  ('29828c65-0d14-462a-936a-af123671563b', mill_id, '2026-05-04', 'cbdfd178-0bd2-4cde-96d8-46979e75c8c6', 'FRANCISCO SERGIO', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-04', NULL, NULL, '2026-06-06 17:44:03.174734+00'),
+  ('2c299309-5d4d-4144-b2b2-aad544e487d6', mill_id, '2026-05-26', '1ef4c508-3b6a-4033-a65b-df2aa05154a4', 'GEISON ANDRADE', '51', 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-26', NULL, NULL, '2026-06-06 19:01:59.667827+00'),
+  ('2c83f6d2-585c-4b36-ae8f-c72fdd199eb6', mill_id, '2026-06-01', '432b4168-f044-4849-b0d7-711cbdc5eb6b', 'PAULO', NULL, 'site_millenium', 'agendado', 'MARCADO VISITA', NULL, NULL, NULL, NULL, NULL, '2026-06-01 16:38:18.985732+00'),
+  ('2e27a97a-1392-4789-ae6a-69566400f66e', mill_id, '2026-05-22', '832631c3-a6c0-45f2-a08f-0ed66e0ba7df', 'MATHEUS MAURA', '51989512020', 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-22', NULL, NULL, '2026-06-06 18:45:14.866824+00'),
+  ('2f70de5a-08d6-420d-aeae-8e5ef87ce057', mill_id, '2026-06-05', 'f4869f72-355f-4229-8759-a9976587298e', 'ANA', '51993020583', 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-06-05', NULL, NULL, '2026-06-06 15:55:44.640841+00'),
+  ('3014773c-25ac-4757-8538-0f745291b4cc', mill_id, '2026-05-18', '4e8a8cf7-e27e-49d8-a052-091ceefbc789', 'CONDOMINIO ELIAS ', '51996980603', 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-06-06', NULL, NULL, '2026-06-06 18:35:55.709581+00'),
+  ('3021b736-58ce-428c-9bbe-735e6d340400', mill_id, '2026-06-01', '06be74b9-7a97-48ed-b0c3-a702f3af0ebd', 'PAULO', NULL, 'site_praja', 'agendado', 'MARCADO VISTA', NULL, NULL, NULL, NULL, NULL, '2026-06-01 16:37:51.776627+00'),
+  ('30ac2639-12e5-493d-bd32-9d09c25248d0', mill_id, '2026-06-05', '560b3725-2d76-4f8a-afc3-16a2485c7d85', 'SENOMAR', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-06-05', NULL, NULL, '2026-06-06 15:14:38.189348+00'),
+  ('3508a6da-f52e-4f47-89f1-75aba5445bb2', mill_id, '2026-05-23', '87df3903-d6e9-4e23-886a-7befba92355d', 'MARINA GOETE', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-23', NULL, NULL, '2026-06-06 19:57:27.38684+00'),
+  ('355d10d7-cd35-4fc1-ab06-dee446913e47', mill_id, '2026-06-03', '96be7f0c-527c-4667-a257-1676e894d95e', 'PAULO', NULL, 'site_praja', 'nao_quis_visita', NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-05 12:14:29.642775+00'),
+  ('364a7006-6d3c-4d20-b0eb-c1f1256e6406', mill_id, '2026-06-05', '8032dc91-aff2-470e-8d8f-e21c405e4f28', 'FLAVIA', '51999081657', 'terceirizado', 'aprovado', NULL, NULL, NULL, '2026-06-05', NULL, NULL, '2026-06-06 15:37:05.15823+00'),
+  ('37556296-b560-4bd9-a680-e086dd806cac', mill_id, '2026-05-26', '501ec2ad-275d-4e99-a698-d94bcae8805e', 'LAERCIO KERBER', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-26', NULL, NULL, '2026-06-06 20:05:10.771195+00'),
+  ('378eaf34-b0fc-4505-8970-23218a7f3fae', mill_id, '2026-05-18', '7ca142d6-a0e5-47ae-8b2e-8afede8110f3', 'PAULO FORNARI', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-18', NULL, NULL, '2026-06-06 19:46:04.366895+00'),
+  ('3ae28b25-dac4-4c88-b992-8dadd29c644b', mill_id, '2026-06-02', NULL, 'CANOAS', NULL, 'site_millenium', 'agendado', NULL, NULL, '13:30:00', NULL, NULL, NULL, '2026-06-02 23:47:09.386358+00'),
+  ('3d8c6777-4f27-4256-ab56-f76395d86dfd', mill_id, '2026-05-01', 'cbb1b2f9-62b1-45f1-abef-32ac2b41c7fc', 'NILO ZONDILA', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-01', NULL, NULL, '2026-06-06 17:33:59.242165+00'),
+  ('3e6da056-f260-45de-a1fa-2ad191559ee8', mill_id, '2026-06-04', '4dfcdb4d-bfc0-4586-b6f5-d0769267ee36', 'JOÃO', '51991295989', 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-06-04', NULL, NULL, '2026-06-06 15:41:20.36411+00'),
+  ('3eb6ed7b-8f4a-40eb-9c03-bbfb9d12bfe1', mill_id, '2026-06-05', '156f6fc4-cc9e-441f-a0c1-22a0027cc971', 'ROSELI', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-06-05', NULL, NULL, '2026-06-06 15:25:34.944632+00'),
+  ('3fb65c84-66ee-4ec2-bdfb-de184445bf23', mill_id, '2026-06-01', 'e4c646d4-a6df-4724-9f55-547cf8ccb7e7', '-', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-06-01', NULL, NULL, '2026-06-05 12:03:37.699675+00'),
+  ('416984cf-8f5f-4bec-93fd-345545a4d999', mill_id, '2026-05-28', '991192de-baaf-4cee-8485-b402554576d7', 'CLAUDIO PIASSON', '51993064906', 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-28', NULL, NULL, '2026-06-06 18:58:20.392873+00'),
+  ('424f8d14-cd0b-460d-ad4f-b7d9253f51ce', mill_id, '2026-05-23', '6332c3af-d3d2-4d41-bff7-0c0889f1d766', 'MARIA INES ', '51993346176', 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-23', NULL, NULL, '2026-06-06 18:53:46.17973+00'),
+  ('44783fdc-353c-4b0f-831e-30d2aefcb903', mill_id, '2026-06-04', '16e92b00-132b-454d-a6d6-2e10140110b7', 'RAQUEL', '51994483968', 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-06-04', NULL, NULL, '2026-06-04 18:41:30.027729+00'),
+  ('4756d030-9ceb-424b-8202-884fc208c8f9', mill_id, '2026-06-03', '6ad5f2c1-d755-40f2-a378-7035db12d77e', '-', NULL, 'site_millenium', 'nao_quis_visita', NULL, NULL, NULL, '2026-06-05', NULL, NULL, '2026-06-05 12:54:41.731224+00'),
+  ('488b16bb-0489-42f6-91b4-f6fd38f940cb', mill_id, '2026-06-01', '78f04017-07ac-4802-b83e-22d66ba84cd9', 'PAULO', NULL, 'site_millenium', 'nao_quis_visita', NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-02 23:32:28.064092+00'),
+  ('4a118e7f-4678-4ba5-b972-378928b5128a', mill_id, '2026-05-28', '57c6474f-ad40-403e-8506-47d6a862690d', 'LEANDRO SILVA ', '51996546581', 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-28', NULL, NULL, '2026-06-06 18:56:27.079794+00'),
+  ('4ce67724-30f7-4104-b61f-112e3f3054b8', mill_id, '2026-06-03', 'c40c7b1b-bb41-42fe-abcf-33901f7f75d4', 'GILSONEI', NULL, 'terceirizado', 'aprovado', NULL, 'Limpa Fossa', NULL, '2026-06-03', NULL, NULL, '2026-06-05 12:17:27.419571+00'),
+  ('54b02ccd-bcfd-40ca-a6ba-8f3da1c76b60', mill_id, '2026-05-12', 'e718af01-9776-49fc-a990-430e598a16c7', 'MAICON FERNANDES', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-12', NULL, NULL, '2026-06-06 18:15:50.21227+00'),
+  ('58efe04e-61f0-4542-91ef-4757a819ef30', mill_id, '2026-06-01', 'cf52585b-6165-481e-a70d-e0cc5553f611', 'CARLOS (SINDICO)', NULL, 'terceirizado', 'aprovado', NULL, NULL, NULL, '2026-06-01', NULL, NULL, '2026-06-02 23:09:53.36779+00'),
+  ('5d6ff337-e105-4fc6-86ef-bf0d68869c58', mill_id, '2026-06-01', 'f4000a0f-9bf1-4aa5-a8d5-47b2b1634da7', 'PAULO', NULL, 'site_millenium', 'nao_quis_visita', NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-03 00:22:13.114386+00'),
+  ('5d9e060f-b9a4-47ed-a51c-89a2ff9695cc', mill_id, '2026-05-15', 'ae8cefc2-d25d-4aae-919a-15cb2563c735', 'PLINIO MEDAGLIA', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-15', NULL, NULL, '2026-06-06 19:41:47.48558+00'),
+  ('5dd65c8f-4818-47b8-b640-2ac0a6a5773a', mill_id, '2026-06-06', '47123027-77ff-42af-9e08-4a3cee2f80cd', 'LUIZA FROES', NULL, 'site_millenium', 'aprovado', 'REMOÇÃO DE ACUMULO DE CABELO', NULL, NULL, '2026-06-06', NULL, NULL, '2026-06-07 15:51:26.341567+00'),
+  ('60f7104a-c480-4265-8058-94f54f49f899', mill_id, '2026-06-01', '9fbb97bb-f873-4cca-980c-0c8a560746c4', 'MARIANA', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-06-01', NULL, NULL, '2026-06-02 23:31:05.524736+00'),
+  ('6380b378-f7e7-4d01-85f4-1d9629b06422', mill_id, '2026-05-28', 'c6065ae0-39f1-4e92-b7dd-0d77127ba0dc', 'SAVAR VEICULOS LTDA', '51991883726', 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-28', NULL, NULL, '2026-06-06 19:14:21.065379+00'),
+  ('639e7da9-c7f1-4104-b23b-db73f2f795ae', mill_id, '2026-05-31', '30fe159f-e0a1-487c-b525-9982be4b0353', 'CAROLINE', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-31', NULL, NULL, '2026-06-06 16:05:26.836884+00'),
+  ('63f34345-ec83-4aa1-a56b-a79ea5005a67', mill_id, '2026-05-29', '1c3a5735-a1b4-4c6c-9d9f-9690888bad03', 'ANA LUIZA', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-29', NULL, NULL, '2026-06-06 20:07:56.100691+00'),
+  ('6561fb9b-9313-4755-b32f-934667f174d9', mill_id, '2026-05-23', '46924c6c-9f07-427c-b55d-bd7236f31d33', 'CRISTIANE TAUGER', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-23', NULL, NULL, '2026-06-06 19:56:06.341058+00'),
+  ('6963a56c-6c7c-40fe-9ede-7ca89f366748', mill_id, '2026-06-06', 'da89219d-0710-436b-9f0c-30d48cde40c1', 'CARLOS DUTRA', '51983053415', 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-06-06', NULL, NULL, '2026-06-07 15:45:09.897708+00'),
+  ('69ba0621-1fca-446a-8562-e1e275a556a7', mill_id, '2026-05-24', 'cfa9be9d-694d-4ba2-93b6-2d2526843bf7', 'AUGUSTO BOZZETTI', '51989048558', 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-24', NULL, NULL, '2026-06-06 19:00:05.607245+00'),
+  ('6b447908-a7b3-4085-b1f7-34328cb49081', mill_id, '2026-05-04', 'b315116b-0670-4939-a5c0-5671a5852aa5', 'ELON DELAZARI', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-04', NULL, NULL, '2026-06-06 17:42:02.33353+00'),
+  ('6e409764-d1fa-40a3-bfdf-114b38542bf3', mill_id, '2026-05-12', '7bd0a317-944a-4584-8684-bbfb7fdedbcc', 'JOSE AUGUSTO', '51985446080', 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-12', NULL, NULL, '2026-06-06 18:18:42.74065+00'),
+  ('7184c458-cf7d-407d-9bbb-e458c1b6119e', mill_id, '2026-05-24', '4f23f8f0-4c51-419f-a741-c4eed73781bc', 'MARIA VERICIMO', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-24', NULL, NULL, '2026-06-06 19:59:12.505842+00'),
+  ('76da68cb-edb1-483f-8aaf-d474c4ef518a', mill_id, '2026-05-23', '96a44431-eeb2-473b-a3ab-0f5f0e646a3e', 'BANCO NACIONAL - LAURA', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-23', NULL, NULL, '2026-06-06 18:49:38.677718+00'),
+  ('78808c11-27ce-4608-9260-a48e5099c41f', mill_id, '2026-05-27', '161363b5-271c-430f-bdde-b05746476894', 'JOÃO BATISTA DA SILVA ', '51', 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-27', NULL, NULL, '2026-06-06 19:07:55.708829+00'),
+  ('79d8e027-1e31-40a4-9c49-6ae8a4e2d5a2', mill_id, '2026-05-28', '3c026de1-bbbe-4dcb-9426-29a996c0057a', 'JEFERSOM RUBIM', NULL, 'indicacao', 'aprovado', NULL, NULL, NULL, NULL, NULL, NULL, '2026-05-29 23:21:59.683074+00'),
+  ('7ea9795c-9c45-494a-80a9-708254849f8e', mill_id, '2026-05-01', 'b201ec63-6d79-4ea6-accb-b05a2e2c4ac2', 'LAURO FERNANDES', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-01', NULL, NULL, '2026-06-06 17:36:08.024467+00'),
+  ('82bbf3eb-7781-4af2-b5d3-0ce9ee517664', mill_id, '2026-06-01', '5c596995-5fcc-4210-a2a8-f6158aab60e7', 'RENATO', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-02 23:17:26.73673+00'),
+  ('86f17271-3226-40e2-88d3-dafdf24b3bc4', mill_id, '2026-06-04', 'b499043c-b0a7-4ae1-b68e-17b0b4e2b7e8', 'JAQUELINE', '51981412488', 'indicacao', 'aprovado', NULL, NULL, NULL, '2026-06-04', 'RUA TUIUTI 310 APTO 105 - CANOAS ', NULL, '2026-06-04 15:10:53.255828+00'),
+  ('8e4a6d30-6c5a-4fbe-97cc-b1cdbb109567', mill_id, '2026-06-03', '3a9e4c34-fbc6-479b-87a4-0897526826fa', '-', NULL, 'site_praja', 'cancelado', NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-05 12:54:25.797074+00'),
+  ('8e8c139c-767c-41de-bc9a-082875117f12', mill_id, '2026-05-11', '7178b5c1-7526-4484-b4ab-2ea05bf7ea35', 'CHINA INBOX', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-11', NULL, NULL, '2026-06-06 18:12:19.176266+00'),
+  ('9df2aade-94be-450b-b69c-29098cbadac6', mill_id, '2026-05-11', '9eb6551a-26ec-4212-a4ab-7c4b969c3470', 'PAULO ROSA', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-11', NULL, NULL, '2026-06-06 18:13:47.055112+00'),
+  ('9fc808c5-103f-47bb-99a5-29a8481d06dd', mill_id, '2026-06-07', 'b81024ab-55eb-4338-ab56-e22435d84966', 'PAULO ROBERTO', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-06-07', NULL, NULL, '2026-06-07 16:07:16.204796+00'),
+  ('a787d4b9-4937-4de2-bb7b-25ea4fbbfa64', mill_id, '2026-06-01', 'fbf8b5be-fc55-4ef9-8ead-e93ae893a4c8', 'LELE RAMBO', NULL, 'terceirizado', 'agendado', NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-01 16:38:59.291452+00'),
+  ('a7c5c8ed-544c-4ee8-9622-b7c893bab8b4', mill_id, '2026-05-18', 'ca890d75-ae52-450f-a984-ad8de14ff3b4', 'VINICIOS BASTOS ', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-18', NULL, NULL, '2026-06-06 19:50:13.396876+00'),
+  ('a95a4221-912b-4d5d-9951-0c5685b16ac3', mill_id, '2026-06-06', 'b5190f55-479b-4f56-b559-001227a13b80', 'BRUNA SUPERTE', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-06-06', NULL, NULL, '2026-06-07 16:02:11.672798+00'),
+  ('aeabc009-3f54-4844-bec2-38c95ede48fc', mill_id, '2026-05-06', '6ec2eab1-2f9e-4fde-af1f-bbf45a9d9fc9', 'VIEIRA IMOBILIARIA', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-06', NULL, NULL, '2026-06-06 18:09:44.508168+00'),
+  ('b394e8fc-2135-42f4-8cff-bef4d49cfd0e', mill_id, '2026-06-05', '4a1ac036-5e37-4783-8fcd-87e889f6a273', 'PAULO', NULL, 'site_millenium', 'aprovado', 'Foi realizada a desobstrução da tubulação com utilização de máquina autoelétrica rotativa e gás de alta pressão.
+Durante o serviço, foi constatada a presença de excesso de gordura, borra de café e resíduos de Bombril no interior da tubulação, materiais que estavam comprometendo o fluxo adequado.
+Após a remoção dos resíduos, a tubulação foi desobstruída e testada, apresentando funcionamento normal.
+', NULL, NULL, '2026-06-05', NULL, NULL, '2026-06-06 15:00:20.289795+00'),
+  ('b4ab9953-c655-4e77-a2b2-bafcff308f5e', mill_id, '2026-05-22', '44be76a1-fd0f-4039-9026-b4e5e8d307b6', 'RONALD SILVEIRA ', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-22', NULL, NULL, '2026-06-06 19:53:15.078985+00'),
+  ('b647e539-ac8d-4ada-a916-dceab8a20cef', mill_id, '2026-06-01', '8ac55a03-ca72-42ab-87ec-132aa01e9d64', 'PAULO', NULL, 'site_praja', 'nao_quis_visita', NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-02 23:33:46.155764+00'),
+  ('bcf9b724-dc9d-4f51-9677-8b7e431b9004', mill_id, '2026-06-04', 'a9f3d3b8-ff40-45cc-847f-a76f0f8105c2', 'LEONARDO', NULL, 'indicacao', 'aprovado', NULL, 'Hidrojateamento', NULL, NULL, NULL, NULL, '2026-06-04 18:53:28.843982+00'),
+  ('bd741b42-cbf9-4dd5-a011-0e851a33a345', mill_id, '2026-06-03', 'f4000a0f-9bf1-4aa5-a8d5-47b2b1634da7', 'PRAJÁ', NULL, 'site_praja', 'nao_quis_visita', NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-05 12:52:34.978745+00'),
+  ('be0bab71-e61c-4a3d-878b-0b8414ef88c3', mill_id, '2026-06-06', '49f3df9a-f100-448e-bb2b-e1c83aab4543', 'TIAGO SILVA', '51981336323', 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-06-06', NULL, NULL, '2026-06-07 15:58:32.907082+00'),
+  ('bf78d0b9-4e49-4254-be61-0783fc74e38f', mill_id, '2026-05-05', '06aea83c-1822-403c-ae65-75f20d601bd5', 'CLAUDIRENE MORECH', NULL, 'site_millenium', 'aprovado', 'SEM GARANTIA POIS ESTA COM UMA CAIXA COM RESIDIOS', NULL, NULL, '2026-05-05', NULL, NULL, '2026-06-06 18:07:28.046439+00'),
+  ('cb057801-bc3d-453a-9789-05f4f0164c3d', mill_id, '2026-05-30', '6167c210-9c6f-4e99-b97e-93bf2fb83ef2', 'MARIA CATARINA SANTOS', '51992535781', 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-30', NULL, NULL, '2026-06-06 19:17:05.253487+00'),
+  ('ce962181-01ad-46ff-82cd-f901f1bfa258', mill_id, '2026-05-22', '80205618-6849-4da2-88c5-7a7a165ea31a', 'LEOMARA RIBEIRO', '51993362889', 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-22', NULL, NULL, '2026-06-06 18:42:16.317721+00'),
+  ('d57b350b-b059-41e8-b9a6-a0f158e65516', mill_id, '2026-05-21', 'bf0ff179-a101-40c7-bc30-7e89b7a93686', 'MARIA ADELIA', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-21', NULL, NULL, '2026-06-06 19:47:59.039767+00'),
+  ('d6cac515-857a-4350-9739-4273bba8b50c', mill_id, '2026-05-19', '96a44431-eeb2-473b-a3ab-0f5f0e646a3e', 'EDIFICIO BANCO NACIONAL - LAURA', '51981236464', 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-19', NULL, NULL, '2026-06-06 19:20:53.73278+00'),
+  ('d741195a-4784-4f71-8e11-a7617997cd7f', mill_id, '2026-06-03', 'be0bef6a-6f92-4351-929b-b0c398a6be6c', 'PAULO', NULL, 'site_millenium', 'aprovado', NULL, NULL, '10:00:00', '2026-06-06', NULL, NULL, '2026-06-05 12:14:55.065781+00'),
+  ('e2dae0e0-cf96-4e90-bb6c-971c5a83c0a5', mill_id, '2026-05-02', 'c869011b-ee11-493d-ab0d-b23cc458ed86', 'DANIELE MALAQUIAS', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-02', NULL, NULL, '2026-06-06 17:38:42.439666+00'),
+  ('e35de04c-fae7-4df4-9915-e671bb9355da', mill_id, '2026-05-21', 'e2703591-4220-4264-b001-f1a4a214785e', 'DENIS HOGFEL', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-21', NULL, NULL, '2026-06-06 19:36:20.872508+00'),
+  ('f01c986e-2887-400e-94bf-dde8a8964616', mill_id, '2026-05-26', 'e756a04e-0bb9-4096-8fcb-c52cfdf8c818', 'KAREN CATTO', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-26', NULL, NULL, '2026-06-06 20:02:53.673025+00'),
+  ('f0941035-3e83-4018-aa24-ffd6a4c336d6', mill_id, '2026-06-05', '5bed06fd-d8c8-4948-87b3-058bea50553c', 'VÉDICA ', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-06-05', NULL, NULL, '2026-06-05 20:02:50.664606+00'),
+  ('f9b33a01-d1b8-4c20-a13b-0a58184b9e58', mill_id, '2026-06-01', '5813efe7-5aeb-4f24-ae50-ed4f3e518810', 'PAULO', NULL, 'site_millenium', 'nao_quis_visita', NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-03 00:22:35.565497+00'),
+  ('fbdf5570-9a2e-4cf9-ad90-3f93646410e4', mill_id, '2026-05-22', '89db244d-426f-40f4-9b92-c477ad664b0d', 'ALEXANDRE GUERRA', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-22', NULL, NULL, '2026-06-06 19:54:32.02959+00'),
+  ('fbe0f8c8-77bc-44df-9461-c5b64600d065', mill_id, '2026-06-14', '653e7e78-7f88-42f2-a4df-0a9d3a24a880', 'JAIR GOMES ', '51996599803', 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-06-14', NULL, NULL, '2026-06-06 18:21:10.159057+00'),
+  ('fcaa3e5e-97dd-4d9b-8af9-b636c611de44', mill_id, '2026-06-03', 'a920aa9b-f8eb-45d0-a4b6-7e1db113d237', '-', NULL, 'site_millenium', 'cancelado', NULL, NULL, NULL, NULL, NULL, NULL, '2026-06-05 12:54:55.666417+00'),
+  ('ff955750-f520-4b8c-bffb-c9ef1c712f04', mill_id, '2026-05-25', 'fe7dddd9-fed8-4675-b356-d7dfd43ded32', 'MARCELO MORAIS', NULL, 'site_millenium', 'aprovado', NULL, NULL, NULL, '2026-05-25', NULL, NULL, '2026-06-06 20:01:06.83116+00')
+ON CONFLICT DO NOTHING;
+
+
+-- ── Millenium → Ordens de Serviço (73 registros) ──
+INSERT INTO public.service_orders (id, tenant_id, call_id, os_number, date, client_id, team_id, driver, nf_number, vehicle, due_date, service_type, billing_system, has_floor_plan, has_no_floor_plan, has_no_knowledge, has_hydraulic_plan, has_no_hydraulic_plan, has_guarantee, has_no_guarantee, has_guarantee_60, has_guarantee_90, equipment_rental_pct, equipment_rental_value, subtotal, discount, taxes, total_value, own_material_cost, own_fuel_cost, own_other_cost, outsource_fuel_cost, outsource_meal_cost, outsource_truck_cost, outsource_other_cost, outsource_profit_pct, partner_name, my_revenue_pct, payment_method, payment_status, amount_paid, remaining_amount, remaining_due_date, conditions, observations, auxiliary_id, auxiliary_value, other_service_value, created_at)
+VALUES
+  ('032dc4f4-2fbe-4b72-8715-aafb2d84e2c5', mill_id, '30ac2639-12e5-493d-bd32-9d09c25248d0', 'OS-00021', '2026-06-05', '560b3725-2d76-4f8a-afc3-16a2485c7d85', NULL, 'ROBERT', NULL, NULL, NULL, 'proprio', 'metro_linear', false, false, false, false, false, false, false, false, false, 0.0, 0.0, 3528.5, 178.5, 0.0, 3350.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, 'ROBERT', 80.0, 'PIX', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 15:14:38.253422+00'),
+  ('035eb8a0-46ce-46c6-8d2b-e007f8fbbef8', mill_id, '0cab2538-2b30-4f56-be58-43b315c30e46', 'OS-00077', '2026-05-28', '3c026de1-bbbe-4dcb-9426-29a996c0057a', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 3320.5, 0.5, 0.0, 3320.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 20:06:09.133689+00'),
+  ('03b37ed8-36ec-43d1-bcd0-4a83cf9b30ec', mill_id, '378eaf34-b0fc-4505-8970-23218a7f3fae', 'OS-00062', '2026-05-18', '7ca142d6-a0e5-47ae-8b2e-8afede8110f3', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 814.0, 14.0, 0.0, 800.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 19:46:04.415063+00'),
+  ('05d4bfe8-e599-4178-b1e5-1cf80cde98c7', mill_id, '4ce67724-30f7-4104-b61f-112e3f3054b8', 'OS-00018', '2026-06-03', 'c40c7b1b-bb41-42fe-abcf-33901f7f75d4', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 500.0, 0.0, 0.0, 500.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-05 12:17:27.485793+00'),
+  ('05e1f648-9a67-4dfc-b7ac-cccd08d4adba', mill_id, '3014773c-25ac-4757-8538-0f745291b4cc', 'OS-00041', '2026-05-18', '4e8a8cf7-e27e-49d8-a052-091ceefbc789', NULL, NULL, NULL, NULL, NULL, 'proprio', 'valor_fechado', false, false, false, false, false, false, false, false, false, 0.0, 0.0, 700.0, 0.0, 0.0, 700.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'Dinheiro', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 18:35:55.808611+00'),
+  ('0facc75b-598d-4ee2-a166-9d47908a243e', mill_id, '6380b378-f7e7-4d01-85f4-1d9629b06422', 'OS-00054', '2026-05-28', 'c6065ae0-39f1-4e92-b7dd-0d77127ba0dc', NULL, NULL, NULL, NULL, NULL, 'proprio', 'metro_linear', false, true, true, false, true, true, false, false, false, 0.0, 0.0, 13330.51, 830.51, 0.0, 12500.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'PIX', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 19:14:21.134761+00'),
+  ('11fc15d0-2805-4e33-826b-2d65051b8eaa', mill_id, '60f7104a-c480-4265-8058-94f54f49f899', 'OS-00004', '2026-06-01', '9fbb97bb-f873-4cca-980c-0c8a560746c4', NULL, 'PAULO', NULL, 'STRADA', NULL, 'proprio', 'metro_linear', false, false, false, false, false, true, false, false, false, 0.0, 0.0, 2475.9, 0.0, 0.0, 2475.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'CARTÃO', 'pago', 0.0, 0.0, NULL, 'CARTÃO EM 5X SEM JUROS ', 'CASO RETORNE A OBSTRUÇÃO, SERÁ NESCESSARIO A REMOÇÃO DO VASO SANITARIO', NULL, 0.0, 0.0, '2026-06-02 23:31:05.722261+00'),
+  ('13dad11b-3994-4f01-9ebf-323764e3e574', mill_id, 'b394e8fc-2135-42f4-8cff-bef4d49cfd0e', 'OS-00020', '2026-06-05', '4a1ac036-5e37-4783-8fcd-87e889f6a273', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, true, false, false, false, 0.0, 0.0, 2796.7, 0.0, 0.0, 2796.7, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, 'TERCEIROS', 50.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 15:00:20.422656+00'),
+  ('156c6cef-e2e9-48f6-b4c2-8562483f4017', mill_id, '6e409764-d1fa-40a3-bfdf-114b38542bf3', 'OS-00038', '2026-05-12', '7bd0a317-944a-4584-8684-bbfb7fdedbcc', NULL, NULL, NULL, NULL, NULL, 'proprio', 'litros', false, false, false, false, false, false, false, false, false, 0.0, 0.0, 2250.0, 0.0, 0.0, 2250.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'Cartão de Crédito', 'pago', 1000.0, 1250.0, '2026-06-11', NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 18:18:42.8128+00'),
+  ('157ef971-36a8-417e-90a6-2070b5845c26', mill_id, '2727b652-9730-4de0-8ec1-eea084c1379d', 'OS-00086', '2026-06-10', '2a5ad3b1-fa5a-46d1-bb05-1e6f202de202', NULL, NULL, NULL, NULL, NULL, 'proprio', 'metro_linear', false, true, true, false, true, false, false, false, false, 0.0, 0.0, 1200.0, 0.0, 0.0, 1200.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, 'PAGAMENTO A VISTA ', NULL, NULL, 0.0, 0.0, '2026-06-10 16:35:41.798011+00'),
+  ('16669b79-88b3-4dca-8f35-5800bc8f8d31', mill_id, '76da68cb-edb1-483f-8aaf-d474c4ef518a', 'OS-00045', '2026-05-23', '96a44431-eeb2-473b-a3ab-0f5f0e646a3e', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 11778.5, 0.5, 0.0, 11778.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 18:49:38.777166+00'),
+  ('20b2d5e4-43fc-4e38-aa58-051a2864b209', mill_id, 'e2dae0e0-cf96-4e90-bb6c-971c5a83c0a5', 'OS-00030', '2026-05-02', 'c869011b-ee11-493d-ab0d-b23cc458ed86', NULL, NULL, NULL, NULL, NULL, 'proprio', 'metro_linear', false, true, true, false, true, true, false, false, false, 0.0, 0.0, 4976.13, 1.13, 0.0, 4975.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 17:38:42.487688+00'),
+  ('245c231f-6fad-4f42-b64f-14efb423fbec', mill_id, '86f17271-3226-40e2-88d3-dafdf24b3bc4', 'OS-00008', '2026-06-04', 'b499043c-b0a7-4ae1-b68e-17b0b4e2b7e8', NULL, 'ALLAN', NULL, NULL, '2026-06-04', 'proprio', 'metro_linear', false, false, false, false, false, false, false, false, true, 0.0, 0.0, 1970.1, 0.0, 0.0, 1970.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, 'ALLAN', 50.0, 'Dinheiro', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-04 15:10:53.527528+00'),
+  ('285b512a-fcfc-4aa4-bd89-32454e8adaec', mill_id, '79d8e027-1e31-40a4-9c49-6ae8a4e2d5a2', 'OS-00001', '2026-05-28', '3c026de1-bbbe-4dcb-9426-29a996c0057a', NULL, 'PAULO', '54', NULL, '2026-05-28', 'proprio', 'metro_linear', false, false, false, false, false, false, false, false, false, 0.0, 0.0, 3320.0, 0.0, 0.0, 3320.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'PIX', 'pago', 0.0, 0.0, NULL, 'PIX', NULL, NULL, 0.0, 0.0, '2026-05-29 23:21:59.81616+00'),
+  ('2c38db2b-6f33-4208-953b-ea6147a3f843', mill_id, 'aeabc009-3f54-4844-bec2-38c95ede48fc', 'OS-00034', '2026-05-06', '6ec2eab1-2f9e-4fde-af1f-bbf45a9d9fc9', NULL, NULL, NULL, NULL, NULL, 'proprio', 'metro_linear', false, false, false, false, false, false, false, false, false, 0.0, 0.0, 5292.0, 0.0, 0.0, 5292.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'Cartão de Débito', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 18:09:44.56107+00'),
+  ('3174c20e-1072-4fdc-a534-2f9ea9266eea', mill_id, '44783fdc-353c-4b0f-831e-30d2aefcb903', 'OS-00009', '2026-06-04', '16e92b00-132b-454d-a6d6-2e10140110b7', NULL, 'PAULO', NULL, NULL, NULL, 'proprio', 'valor_fechado', false, false, false, false, false, false, false, false, false, 0.0, 0.0, 500.0, 0.0, 0.0, 500.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'PIX', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-04 18:41:30.230949+00'),
+  ('3260f167-77da-4a92-914d-18ddc581d012', mill_id, 'fbdf5570-9a2e-4cf9-ad90-3f93646410e4', 'OS-00068', '2026-05-22', '89db244d-426f-40f4-9b92-c477ad664b0d', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 7845.5, 845.5, 0.0, 7000.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 19:54:32.1335+00'),
+  ('34500f44-c984-4ab3-accf-457bc3df27c1', mill_id, 'e35de04c-fae7-4df4-9915-e671bb9355da', 'OS-00057', '2026-05-21', 'e2703591-4220-4264-b001-f1a4a214785e', NULL, NULL, NULL, NULL, NULL, 'proprio', 'metro_linear', false, true, true, false, true, false, false, false, true, 0.0, 0.0, 1690.0, 90.0, 0.0, 1600.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'PIX', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 19:36:20.974513+00'),
+  ('362b255c-37a9-4165-8657-993a56dfd478', mill_id, '1d4e405c-1029-46a0-aafb-039626f33aa1', 'OS-00051', '2026-05-27', '96908060-619e-46d1-9a5e-cf7b4cf823ff', NULL, NULL, NULL, NULL, NULL, 'proprio', 'valor_fechado', false, false, false, false, false, false, false, false, false, 0.0, 0.0, 5000.0, 0.0, 0.0, 5000.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 19:05:59.423396+00'),
+  ('36b02e00-c6cc-4113-a49b-425fa8a661bd', mill_id, '7184c458-cf7d-407d-9bbb-e458c1b6119e', 'OS-00072', '2026-05-24', '4f23f8f0-4c51-419f-a741-c4eed73781bc', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 3126.3, 1.3, 0.0, 3125.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 19:59:12.550969+00'),
+  ('41e6fefc-bf78-4324-a282-98d7e9a3df28', mill_id, '20244e41-005c-43ef-be89-d40a2f0cf28a', 'OS-00058', '2026-05-15', '8e3f168a-ea15-4219-a5d5-1b2e6d70130b', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 5048.03, 0.0, 0.0, 5048.03, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'Cartão de Crédito', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 19:40:08.984904+00'),
+  ('4973d9f4-dc13-4e34-aa33-a85fb7ac1da0', mill_id, '9df2aade-94be-450b-b69c-29098cbadac6', 'OS-00036', '2026-05-11', '9eb6551a-26ec-4212-a4ab-7c4b969c3470', NULL, NULL, NULL, NULL, NULL, 'proprio', 'litros', false, false, false, false, false, true, false, false, false, 0.0, 0.0, 2197.8, 0.0, 0.0, 2197.8, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'Cartão de Crédito', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 18:13:47.104569+00'),
+  ('4988edbd-0939-41eb-81a5-cfc04546e1c2', mill_id, '034438cd-665e-4c82-a40a-4c3c32586a51', 'OS-00063', '2026-05-20', '04f7784e-b95b-490a-87c7-c6796a13cae3', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 3700.0, 0.0, 0.0, 3700.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 19:47:10.528165+00'),
+  ('4ff6aac3-3f15-461b-8969-0f06c145e28a', mill_id, '2f70de5a-08d6-420d-aeae-8e5ef87ce057', 'OS-00026', '2026-06-05', 'f4869f72-355f-4229-8759-a9976587298e', NULL, 'PAULO', NULL, NULL, NULL, 'proprio', 'metro_linear', false, false, false, false, false, true, false, false, false, 0.0, 0.0, 2665.6, 165.6, 0.0, 2500.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'Dinheiro', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 15:55:44.768778+00'),
+  ('53773749-d434-4a23-acc9-02034ada67cb', mill_id, '82bbf3eb-7781-4af2-b5d3-0ce9ee517664', 'OS-00003', '2026-06-01', '5c596995-5fcc-4210-a2a8-f6158aab60e7', NULL, NULL, NULL, NULL, NULL, 'terceirizado_saida', 'metro_linear', false, false, false, false, false, false, false, false, false, 0.0, 0.0, 2280.0, 1740.0, 0.0, 540.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'CARTÃO 10X', 'pago', 0.0, 0.0, NULL, 'CARTÃO EM 10X', 'SERVIÇO APENAS 25% PAULO', NULL, 0.0, 0.0, '2026-06-02 23:17:27.027291+00'),
+  ('59760c1b-6229-4e6d-bcf4-817f6f59fe16', mill_id, '10b7964c-e107-4293-a98d-baa95c145886', 'OS-00040', '2026-06-06', 'f8f4735f-3781-4d3b-8747-ffac93e71fe5', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 5081.13, 0.0, 0.0, 5081.13, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 18:29:55.921441+00'),
+  ('5b57a33c-6be8-4dca-9835-b9a98e9d21a5', mill_id, '209cf712-1d56-4d2b-90ce-be572ca9c447', 'OS-00060', '2026-05-15', 'd6f6627e-3777-4534-b06d-90b26875a214', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 1639.0, 0.0, 0.0, 1639.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'Cartão de Crédito', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 19:44:09.90127+00'),
+  ('64b26ec8-efa1-4e1c-a80e-14970b874931', mill_id, '3eb6ed7b-8f4a-40eb-9c03-bbfb9d12bfe1', 'OS-00022', '2026-06-05', '156f6fc4-cc9e-441f-a0c1-22a0027cc971', NULL, NULL, NULL, NULL, NULL, 'proprio', 'metro_linear', false, true, true, false, true, true, false, false, false, 0.0, 0.0, 1352.0, 0.0, 0.0, 1352.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, 'ROBERT/MADRUGA', 30.0, NULL, 'pago', 0.0, 0.0, NULL, 'CARTÃO', NULL, NULL, 0.0, 0.0, '2026-06-06 15:25:35.008202+00'),
+  ('6569a7d0-dd8e-4593-86bb-e54744582944', mill_id, '416984cf-8f5f-4bec-93fd-345545a4d999', 'OS-00048', '2026-05-28', '991192de-baaf-4cee-8485-b402554576d7', NULL, NULL, NULL, NULL, NULL, 'proprio', 'valor_fechado', false, false, false, false, false, false, false, false, false, 0.0, 0.0, 800.0, 0.0, 0.0, 800.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 18:58:20.460314+00'),
+  ('658c9110-ae6a-46cd-a85f-0a941f66a97f', mill_id, 'd6cac515-857a-4350-9739-4273bba8b50c', 'OS-00056', '2026-05-19', '96a44431-eeb2-473b-a3ab-0f5f0e646a3e', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 16737.5, 0.0, 0.0, 16737.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 19:20:53.8678+00'),
+  ('6bdcf1b1-9bff-4cb6-afd8-20f84dd54379', mill_id, '3d8c6777-4f27-4256-ab56-f76395d86dfd', 'OS-00028', '2026-05-01', 'cbb1b2f9-62b1-45f1-abef-32ac2b41c7fc', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 10547.29, 0.29, 0.0, 10547.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 17:33:59.358324+00'),
+  ('7615c503-cd68-4113-9fe6-d50a5196e17b', mill_id, '3508a6da-f52e-4f47-89f1-75aba5445bb2', 'OS-00070', '2026-05-23', '87df3903-d6e9-4e23-886a-7befba92355d', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 1494.0, 0.0, 0.0, 1494.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 19:57:27.435678+00'),
+  ('7bf48c28-31ce-4422-bfd7-658935939e76', mill_id, 'f0941035-3e83-4018-aa24-ffd6a4c336d6', 'OS-00019', '2026-06-05', '5bed06fd-d8c8-4948-87b3-058bea50553c', NULL, 'PAULO', NULL, NULL, NULL, 'proprio', 'metro_linear', false, false, false, false, false, false, false, false, false, 0.0, 0.0, 1400.0, 0.0, 0.0, 1400.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 5.0, 'Dinheiro', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-05 20:02:50.828526+00'),
+  ('81d4c135-6bfa-4d7b-92d5-3c206fa0f2b7', mill_id, '6963a56c-6c7c-40fe-9ede-7ca89f366748', 'OS-00080', '2026-06-06', 'da89219d-0710-436b-9f0c-30d48cde40c1', NULL, 'PAULO', NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 2116.81, 0.0, 0.0, 2116.81, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, 'TERCEIRO', 50.0, 'PIX', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-07 15:45:10.210109+00'),
+  ('848aa9f3-1584-43aa-86fc-22ecffef3e08', mill_id, '297e32d3-6e93-4437-839a-52acf9f187d2', 'OS-00053', '2026-05-27', 'eaad84a7-ca68-4c8a-8222-3fa6cfb452ce', NULL, NULL, NULL, NULL, NULL, 'proprio', 'metro_linear', false, false, false, false, false, false, false, false, false, 0.0, 0.0, 2772.9, 0.0, 0.0, 2772.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 19:12:20.840944+00'),
+  ('89a5b817-c522-473d-b9ae-8049fd819ed4', mill_id, 'd741195a-4784-4f71-8e11-a7617997cd7f', 'OS-00017', '2026-06-03', 'be0bef6a-6f92-4351-929b-b0c398a6be6c', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-05 12:14:55.135829+00'),
+  ('8b2cd435-c42c-4466-8377-899ba9c6f658', mill_id, '58efe04e-61f0-4542-91ef-4757a819ef30', 'OS-00002', '2026-06-01', 'cf52585b-6165-481e-a70d-e0cc5553f611', NULL, 'LUAN/LUCA', NULL, 'KANGOO', NULL, 'terceirizado_saida', 'metro_linear', false, false, false, false, false, false, false, false, false, 0.0, 0.0, 6840.0, 3420.0, 0.0, 3420.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'BOLETO', 'pago', 0.0, 0.0, NULL, 'BOLETO 3X (ENTRADA P/ 05/06 + 2X IGUAIS)', '50% ELITE + 50% PAULO', NULL, 0.0, 0.0, '2026-06-02 23:09:53.582962+00'),
+  ('8d8adfb4-b5de-4576-992c-73e22eb10f28', mill_id, 'bf78d0b9-4e49-4254-be61-0783fc74e38f', 'OS-00033', '2026-05-05', '06aea83c-1822-403c-ae65-75f20d601bd5', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, true, true, false, true, false, true, false, false, 0.0, 0.0, 1000.0, 0.0, 0.0, 1000.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 18:07:28.116571+00'),
+  ('8f7a9720-b824-43bd-9dcd-8d28a74a005d', mill_id, 'ce962181-01ad-46ff-82cd-f901f1bfa258', 'OS-00043', '2026-05-22', '80205618-6849-4da2-88c5-7a7a165ea31a', NULL, NULL, NULL, NULL, NULL, 'proprio', 'valor_fechado', false, false, false, false, false, false, false, false, false, 0.0, 0.0, 1100.0, 0.0, 0.0, 1100.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'Dinheiro', 'pago', 0.0, 0.0, NULL, 'DINHEIRO + CARTÃO 3X', NULL, NULL, 0.0, 0.0, '2026-06-06 18:42:16.398511+00'),
+  ('92bac2aa-4903-4090-91d2-225527ba1e47', mill_id, '7ea9795c-9c45-494a-80a9-708254849f8e', 'OS-00029', '2026-05-01', 'b201ec63-6d79-4ea6-accb-b05a2e2c4ac2', NULL, NULL, NULL, NULL, NULL, 'proprio', 'metro_linear', false, true, true, false, true, true, false, false, false, 0.0, 0.0, 4508.0, 0.0, 0.0, 4508.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'Cartão de Crédito', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 17:36:08.078678+00'),
+  ('99296546-35e5-4b00-be2d-efbd98c0eb6a', mill_id, 'a95a4221-912b-4d5d-9951-0c5685b16ac3', 'OS-00083', '2026-06-06', 'b5190f55-479b-4f56-b559-001227a13b80', NULL, NULL, NULL, NULL, NULL, 'proprio', 'metro_linear', false, true, true, false, true, true, false, false, false, 0.0, 0.0, 3336.21, 36.21, 0.0, 3300.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, 'ROBERT', 80.0, 'PIX', 'pago', 0.0, 0.0, NULL, '2X DE 1000,00 NO PIX + 1X 1300 NO CARTÃO', NULL, NULL, 0.0, 0.0, '2026-06-07 16:02:11.738049+00'),
+  ('a090c87c-0051-4670-9c52-c69aa8288004', mill_id, '69ba0621-1fca-446a-8562-e1e275a556a7', 'OS-00049', '2026-05-24', 'cfa9be9d-694d-4ba2-93b6-2d2526843bf7', NULL, NULL, NULL, NULL, NULL, 'proprio', 'metro_linear', false, false, false, false, false, false, false, false, false, 0.0, 0.0, 1557.3, 0.0, 0.0, 1557.3, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 19:00:05.683604+00'),
+  ('a106984b-36a3-44ad-8496-c8723644fcfa', mill_id, 'd57b350b-b059-41e8-b9a6-a0f158e65516', 'OS-00064', '2026-05-21', 'bf0ff179-a101-40c7-bc30-7e89b7a93686', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 4495.5, 0.5, 0.0, 4495.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 19:47:59.088588+00'),
+  ('a24a46f3-2bb2-4226-bc9c-67e3d0dadc57', mill_id, '29828c65-0d14-462a-936a-af123671563b', 'OS-00032', '2026-05-04', 'cbdfd178-0bd2-4cde-96d8-46979e75c8c6', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 17:44:03.231891+00'),
+  ('a673eff6-5dac-4811-a15f-c91d1e5803f6', mill_id, '9fc808c5-103f-47bb-99a5-29a8481d06dd', 'OS-00084', '2026-06-07', 'b81024ab-55eb-4338-ab56-e22435d84966', NULL, 'PAULO', NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, true, false, false, false, 0.0, 0.0, 1552.2, 0.0, 0.0, 1552.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'Cartão de Débito', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-07 16:07:16.294663+00'),
+  ('a957f8c4-ef81-4e96-930a-9858bf5b834a', mill_id, 'ff955750-f520-4b8c-bffb-c9ef1c712f04', 'OS-00074', '2026-05-25', 'fe7dddd9-fed8-4675-b356-d7dfd43ded32', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 2401.38, 1.38, 0.0, 2400.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 20:01:06.886964+00'),
+  ('aa7fa320-eb4a-4cec-93e8-2373cba2b5d5', mill_id, 'fbe0f8c8-77bc-44df-9461-c5b64600d065', 'OS-00039', '2026-06-14', '653e7e78-7f88-42f2-a4df-0a9d3a24a880', NULL, NULL, NULL, NULL, NULL, 'proprio', 'valor_fechado', false, false, false, false, false, false, false, false, false, 0.0, 0.0, 1300.0, 0.0, 0.0, 1300.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'PIX', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 18:21:10.205609+00'),
+  ('adc1bda7-5af0-44fe-babf-d13502caab67', mill_id, '6b447908-a7b3-4085-b1f7-34328cb49081', 'OS-00031', '2026-05-04', 'b315116b-0670-4939-a5c0-5671a5852aa5', NULL, NULL, NULL, NULL, NULL, 'proprio', 'valor_fechado', false, false, false, false, false, true, false, false, false, 0.0, 0.0, 4300.0, 0.0, 0.0, 4300.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 17:42:02.394039+00'),
+  ('aed3b288-cc57-45be-aa27-19197b542c56', mill_id, '0f3818ac-a7eb-43f1-b630-70200b6a66d7', 'OS-00078', '2026-05-29', 'cf0967b1-83e6-48da-9b21-1243d2c4dc15', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 2700.0, 0.0, 0.0, 2700.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 20:07:08.926538+00'),
+  ('afef1419-124a-4f78-a788-7158c8b4f4a8', mill_id, '6561fb9b-9313-4755-b32f-934667f174d9', 'OS-00069', '2026-05-23', '46924c6c-9f07-427c-b55d-bd7236f31d33', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 300.0, 0.0, 0.0, 300.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 19:56:06.401028+00'),
+  ('b0eb4719-9d30-40b5-9b4e-7d4c05254a2c', mill_id, '5dd65c8f-4818-47b8-b640-2ac0a6a5773a', 'OS-00081', '2026-06-06', '47123027-77ff-42af-9e08-4a3cee2f80cd', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 973.0, 0.0, 0.0, 973.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'Cartão de Crédito', 'pago', 0.0, 0.0, NULL, '3X', NULL, NULL, 0.0, 0.0, '2026-06-07 15:51:26.546369+00'),
+  ('b2c2d8b8-d5b9-4b08-8442-94a08044e787', mill_id, '4a118e7f-4678-4ba5-b972-378928b5128a', 'OS-00047', '2026-05-28', '57c6474f-ad40-403e-8506-47d6a862690d', NULL, NULL, NULL, NULL, NULL, 'proprio', 'metro_linear', false, false, false, false, false, true, false, false, false, 0.0, 0.0, 1507.5, 0.0, 0.0, 1507.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 18:56:27.149661+00'),
+  ('b33d15ad-1a82-4bbc-a2dd-906958335275', mill_id, '2e27a97a-1392-4789-ae6a-69566400f66e', 'OS-00044', '2026-05-22', '832631c3-a6c0-45f2-a08f-0ed66e0ba7df', NULL, NULL, NULL, NULL, NULL, 'proprio', 'metro_linear', false, false, false, false, false, false, false, false, false, 0.0, 0.0, 3790.5, 290.5, 0.0, 3500.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'PIX', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 18:45:14.939702+00'),
+  ('b5113c8b-5d8f-4ef8-9057-e606a6cec184', mill_id, '63f34345-ec83-4aa1-a56b-a79ea5005a67', 'OS-00079', '2026-05-29', '1c3a5735-a1b4-4c6c-9d9f-9690888bad03', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 687.5, 0.5, 0.0, 687.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 20:07:56.149214+00'),
+  ('bdbee006-aaf6-47c1-80ff-0b11dbc61c10', mill_id, '2c299309-5d4d-4144-b2b2-aad544e487d6', 'OS-00050', '2026-05-26', '1ef4c508-3b6a-4033-a65b-df2aa05154a4', NULL, NULL, NULL, NULL, NULL, 'proprio', 'litros', false, true, true, false, true, true, false, false, false, 0.0, 0.0, 2780.19, 0.0, 0.0, 2780.19, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 19:01:59.743233+00'),
+  ('bebde4fc-d9c2-4356-846f-894a4d83d72a', mill_id, '1fed7713-6ea1-4369-ba97-f340d3c2f3cd', 'OS-00066', '2026-05-21', '6d3e4d43-f07c-49af-90cd-15253bc5b4a2', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 2212.0, 1012.0, 0.0, 1200.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 19:51:19.898099+00'),
+  ('c270ce48-e357-4918-bdaa-96a50d3e38de', mill_id, 'a7c5c8ed-544c-4ee8-9622-b7c893bab8b4', 'OS-00065', '2026-05-18', 'ca890d75-ae52-450f-a984-ad8de14ff3b4', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 1741.5, 0.5, 0.0, 1741.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 19:50:13.466054+00'),
+  ('c3faec72-74bf-4c6d-8ded-48316e2d5773', mill_id, '364a7006-6d3c-4d20-b0eb-c1f1256e6406', 'OS-00023', '2026-06-05', '8032dc91-aff2-470e-8d8f-e21c405e4f28', NULL, NULL, NULL, NULL, NULL, 'terceirizado_saida', 'metro_linear', false, true, true, false, true, true, false, false, false, 0.0, 0.0, 2200.0, 0.0, 0.0, 2200.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, 'TERCEIROS', 50.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 15:37:05.279385+00'),
+  ('c9e5d33d-ae02-4d18-ae88-97930c85355b', mill_id, '78808c11-27ce-4608-9260-a48e5099c41f', 'OS-00052', '2026-05-27', '161363b5-271c-430f-bdde-b05746476894', NULL, NULL, NULL, NULL, NULL, 'proprio', 'metro_linear', false, false, false, false, false, false, false, false, false, 0.0, 0.0, 3832.5, 0.5, 0.0, 3832.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'Cartão de Crédito', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 19:07:55.778925+00'),
+  ('cb272a51-6471-4bee-b618-0987c08d3c07', mill_id, '8e8c139c-767c-41de-bc9a-082875117f12', 'OS-00035', '2026-05-11', '7178b5c1-7526-4484-b4ab-2ea05bf7ea35', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 1300.0, 0.0, 0.0, 1300.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'PIX', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 18:12:19.23474+00'),
+  ('ccdda9a0-85cd-499f-8148-c916d3c0ecc7', mill_id, 'b4ab9953-c655-4e77-a2b2-bafcff308f5e', 'OS-00067', '2026-05-22', '44be76a1-fd0f-4039-9026-b4e5e8d307b6', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 1832.0, 0.0, 0.0, 1832.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 19:53:15.150074+00'),
+  ('d5747bf8-995e-4808-852a-858e27f88e1c', mill_id, '05188690-6e14-4778-a472-ed6df1a752ab', 'OS-00071', '2026-05-24', '13b7ff90-7732-49a5-b748-4eb9a9cfb190', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 2085.0, 85.0, 0.0, 2000.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 19:58:18.557325+00'),
+  ('d6d13ccc-bf3e-4e46-9060-c97b95079514', mill_id, '3fb65c84-66ee-4ec2-bdfb-de184445bf23', 'OS-00016', '2026-06-01', 'e4c646d4-a6df-4724-9f55-547cf8ccb7e7', NULL, 'ROBERT/PAULO', NULL, NULL, NULL, 'proprio', 'litros', false, true, false, false, true, true, false, false, false, 0.0, 0.0, 10279.51, 0.0, 0.0, 10279.51, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, 'ROBERT + PREMIO ', 78.0, 'Dinheiro', 'pago', 0.0, 0.0, NULL, 'R$ 3.250,00 DINHEIRO / R$ 2.000,00 PIX / R$ 4.200,00 CARTÃO 3X / R$ 750,00 DEBITO', NULL, NULL, 0.0, 0.0, '2026-06-05 12:03:37.867411+00'),
+  ('d8e38d4b-56c4-41ee-ad8d-a9dd93ac907a', mill_id, '424f8d14-cd0b-460d-ad4f-b7d9253f51ce', 'OS-00046', '2026-05-23', '6332c3af-d3d2-4d41-bff7-0c0889f1d766', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 2735.8, 35.8, 0.0, 2700.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 18:53:46.247027+00'),
+  ('dac8795e-2358-4c70-aba2-8987fe64653b', mill_id, '37556296-b560-4bd9-a680-e086dd806cac', 'OS-00076', '2026-05-26', '501ec2ad-275d-4e99-a698-d94bcae8805e', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 3700.0, 0.0, 0.0, 3700.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 20:05:10.823972+00'),
+  ('f236cd49-25d6-4562-a627-e389f00bed4a', mill_id, '639e7da9-c7f1-4104-b23b-db73f2f795ae', 'OS-00027', '2026-05-31', '30fe159f-e0a1-487c-b525-9982be4b0353', NULL, NULL, NULL, NULL, NULL, 'proprio', 'metro_linear', false, false, true, false, true, false, false, false, true, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 16:05:26.97268+00'),
+  ('f32bfea3-8d4f-49a2-87e4-b404649f5a4c', mill_id, '5d9e060f-b9a4-47ed-a51c-89a2ff9695cc', 'OS-00059', '2026-05-15', 'ae8cefc2-d25d-4aae-919a-15cb2563c735', NULL, NULL, NULL, NULL, NULL, 'proprio', 'metro_linear', false, false, false, false, false, true, false, false, false, 0.0, 0.0, 2556.0, 0.0, 0.0, 2556.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'PIX', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 19:41:47.54175+00'),
+  ('f369e0f8-61af-495b-aca2-a4bc1fed78ca', mill_id, 'be0bab71-e61c-4a3d-878b-0b8414ef88c3', 'OS-00082', '2026-06-06', '49f3df9a-f100-448e-bb2b-e1c83aab4543', NULL, NULL, NULL, NULL, NULL, 'proprio', 'metro_linear', false, false, false, false, false, true, false, false, false, 0.0, 0.0, 1277.5, 0.0, 0.0, 1277.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'Dinheiro', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-07 15:58:33.013389+00'),
+  ('f64cfff2-2755-4127-bcc3-db4f1bdc33bf', mill_id, '3e6da056-f260-45de-a1fa-2ad191559ee8', 'OS-00024', '2026-06-04', '4dfcdb4d-bfc0-4586-b6f5-d0769267ee36', NULL, 'ROBERT', NULL, NULL, NULL, 'proprio', 'metro_linear', false, true, true, false, true, true, false, false, false, 0.0, 0.0, 1908.0, 58.0, 0.0, 1850.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'PIX', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 15:41:20.51164+00'),
+  ('f7c9be2f-72ad-4446-8783-9f824ac624bd', mill_id, 'f01c986e-2887-400e-94bf-dde8a8964616', 'OS-00075', '2026-05-26', 'e756a04e-0bb9-4096-8fcb-c52cfdf8c818', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 1717.5, 117.5, 0.0, 1600.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 20:02:53.728186+00'),
+  ('f8f2276c-c0c6-4846-897a-415634a8e77d', mill_id, '54b02ccd-bcfd-40ca-a6ba-8f3da1c76b60', 'OS-00037', '2026-05-12', 'e718af01-9776-49fc-a990-430e598a16c7', NULL, NULL, NULL, NULL, NULL, 'proprio', 'metro_linear', false, false, false, false, false, true, false, false, false, 0.0, 0.0, 3359.6, 0.0, 0.0, 3359.6, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'Cartão de Crédito', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 18:15:50.260964+00'),
+  ('fb529666-5312-4439-9ed1-4634d7050348', mill_id, '18f7b2b6-e5d6-4de1-ad1c-5c52eaca2a64', 'OS-00061', '2026-05-15', 'b2951e32-0631-4082-9a24-bb65944390b9', NULL, NULL, NULL, NULL, NULL, 'proprio', NULL, false, false, false, false, false, false, false, false, false, 0.0, 0.0, 450.0, 0.0, 0.0, 450.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, NULL, 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 19:45:08.976764+00'),
+  ('ff36a3ce-8ccf-403d-bfb0-e0d9ef96b26f', mill_id, 'cb057801-bc3d-453a-9789-05f4f0164c3d', 'OS-00055', '2026-05-30', '6167c210-9c6f-4e99-b97e-93bf2fb83ef2', NULL, NULL, NULL, NULL, NULL, 'proprio', 'valor_fechado', false, false, false, false, false, true, false, false, false, 0.0, 0.0, 2500.0, 0.0, 0.0, 2500.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, NULL, 100.0, 'Cartão de Crédito', 'pago', 0.0, 0.0, NULL, NULL, NULL, NULL, 0.0, 0.0, '2026-06-06 19:17:05.321498+00')
+ON CONFLICT DO NOTHING;
+
+
+-- ── Millenium → Itens de OS (88 registros) ──
+INSERT INTO public.service_order_items (id, service_order_id, quantity, description, unit_price, created_at)
+VALUES
+  ('01ade183-1d2f-478d-b932-444f6ba821df', 'bebde4fc-d9c2-4356-846f-894a4d83d72a', 28.0, 'HIDROJATEAMENTO', 79.0, NULL),
+  ('049801aa-3c4f-4c21-b79c-10a472ce3163', '16669b79-88b3-4dca-8f35-5800bc8f8d31', 1874.0, 'SUCÇÃO RES CAIXA DE PASSAGEM', 2.25, NULL),
+  ('086ccce9-02ad-4416-a8cf-5075330875dd', '156c6cef-e2e9-48f6-b4c2-8562483f4017', 1500.0, 'SUCÇÃO RES. FOSSA SEPTICA JUNTO A LAVAGEM DA MESMA ', 1.5, NULL),
+  ('0a68924e-a5c8-40ea-8dc6-65dbbe9a6b62', 'a106984b-36a3-44ad-8496-c8723644fcfa', 27.5, 'HIDROJATEAMENTO', 149.0, NULL),
+  ('0c42e2a4-2a55-4922-9a89-e7e4745d497c', '5b57a33c-6be8-4dca-9835-b9a98e9d21a5', 11.0, 'RASPAGEM ', 149.0, NULL),
+  ('0d9a6d71-f112-4a2f-953b-8149ca4951a9', 'c270ce48-e357-4918-bdaa-96a50d3e38de', 13.5, 'HIDROJATEAMENTO', 129.0, NULL),
+  ('0f414dd9-617c-4d2b-9b84-78ba6e028ffe', '99296546-35e5-4b00-be2d-efbd98c0eb6a', 479.0, 'SUCÇÃO DE RES. CLOACAL', 2.99, NULL),
+  ('126e1d29-d386-45b4-8af6-95c0b1970b10', 'fb529666-5312-4439-9ed1-4634d7050348', 1.0, 'TROCA DE TORNEIRA', 450.0, NULL),
+  ('12bccf2c-54a5-4a7b-a1a6-7746f22fe74c', '81d4c135-6bfa-4d7b-92d5-3c206fa0f2b7', 11.2, 'HIDROJATEAMENTO DE ALTA PRESSÃO ', 189.0, NULL),
+  ('14096ddf-72a5-48d1-bfa5-262d6367e1c2', '7bf48c28-31ce-4422-bfd7-658935939e76', 10.0, 'DESOBSTRUÇÃO DA TUBULAÇÃO DO RALO COM MAQUINARIO ELETRO ROTATIVO', 140.0, NULL),
+  ('14415333-823a-42be-a28c-b157ac0f0973', '41e6fefc-bf78-4324-a282-98d7e9a3df28', 2987.0, 'SUC FOSSA SEPTICA', 1.69, NULL),
+  ('18f01ebb-f824-4512-a7eb-63be1044315b', '16669b79-88b3-4dca-8f35-5800bc8f8d31', 38.0, 'HIDROJATEAMENTO CLOACAL', 199.0, NULL),
+  ('1c2711b1-4478-4eb5-a875-9959913ca240', '032dc4f4-2fbe-4b72-8715-aafb2d84e2c5', 20.5, 'HIDROJATEAMENTO NA TUBULAÇÃO (CAMINHÃO)', 119.0, NULL),
+  ('1f9afa65-7461-4f67-8c77-e0876a5da94d', 'f369e0f8-61af-495b-aca2-a4bc1fed78ca', 1.0, 'RET. E COL. DE VASO SANITARIO', 179.0, NULL),
+  ('20065b91-91d1-4fb7-80dc-7df18f9407d2', '245c231f-6fad-4f42-b64f-14efb423fbec', 9.9, 'DESOBSTRUÇÃO DA TUBULAÇÃO CLOACAL COM MAQUINARIO ELETRO ROTATIVO', 199.0, NULL),
+  ('22610058-514e-46a9-9622-dc161479e67d', '20b2d5e4-43fc-4e38-aa58-051a2864b209', 1987.0, 'SUCÇAO RESIDUA DE FOSSA', 1.49, NULL),
+  ('2c21ab04-4a1f-41f1-94b5-361a41552ffe', '20b2d5e4-43fc-4e38-aa58-051a2864b209', 14.5, 'RASPAGEM COM MAQUIN. E HIDROJATEAMENTO', 139.0, NULL),
+  ('2d643106-86e2-4f9f-a4fa-0a51e88cd330', '8f7a9720-b824-43bd-9dcd-8d28a74a005d', 1.0, 'SUCÇÃO RE. FOSSA SEPTICA JUNTO A LAAVEGEM + HIDROJATEAMENTO TUB CLOACAL', 1100.0, NULL),
+  ('35f0d988-3697-49d8-b84e-27e1bbebff5a', 'd5747bf8-995e-4808-852a-858e27f88e1c', 15.0, 'RASPAGEM', 139.0, NULL),
+  ('36443b21-05c9-4fb8-8f8d-cb6f076aaeee', '92bac2aa-4903-4090-91d2-225527ba1e47', 1.0, 'HIDROJATEAMENTO TUB. ALTA (TAXA)', 350.0, NULL),
+  ('38e19530-5492-4daa-bb60-9effc45c190c', '03b37ed8-36ec-43d1-bcd0-4a83cf9b30ec', 5.5, 'RASPAGEM', 148.0, NULL),
+  ('397d597c-d64e-46f1-b448-d5d37f6e8d0d', '64b26ec8-efa1-4e1c-a80e-14970b874931', 8.0, 'RASPAGEM NA TUBULAÇÃO C/ MAQUINARIO ELETRO ROTATIVO', 169.0, NULL),
+  ('3b5e4ecb-b402-4f29-8f8c-2c52360a5cc1', 'f64cfff2-2755-4127-bcc3-db4f1bdc33bf', 12.0, 'RASPAGEM NA TUBULAÇÃO C/ MAQUINARO', 159.0, NULL),
+  ('3cb66f90-7dab-45f9-958d-db791edab212', 'adc1bda7-5af0-44fe-babf-d13502caab67', 1.0, 'SUCÇÃO RES. CAIXA DE PASSAGEM C/ CAMIHÃO COMBINADO', 4300.0, NULL),
+  ('3d71dbc4-6cab-4fec-bfc6-c340eca9ea16', '11fc15d0-2805-4e33-826b-2d65051b8eaa', 13.1, 'DESOBISTRUÇÃO DA REDE SANITARIA COM APARELHO ELETRO ROTATIL', 189.0, NULL),
+  ('401be8ca-20c8-42bf-a535-55541d3192d5', '53773749-d434-4a23-acc9-02034ada67cb', 16.0, 'HIDROJATEAMENTO DE TUBULAÇÃO', 80.0, NULL),
+  ('415461b7-65e9-4dc6-9b9c-4acf68e18234', '3174c20e-1072-4fdc-a534-2f9ea9266eea', 1.0, 'HIDROJATEAMENTO DA TUBULAÇÃO CLOACAL', 500.0, NULL),
+  ('5591988d-3d2d-47cb-a97c-0355a69db6c6', '8b2cd435-c42c-4466-8377-899ba9c6f658', 18.0, 'HIDROJATEAMENTO EM TUBULAÇÃO CLOACAL', 380.0, NULL),
+  ('57736216-122f-4f33-8d4b-da98e6430c3b', 'f32bfea3-8d4f-49a2-87e4-b404649f5a4c', 12.0, 'RASPAGEM', 198.0, NULL),
+  ('5a221a4a-d89e-4ce3-ad9d-020955636260', 'd8e38d4b-56c4-41ee-ad8d-a9dd93ac907a', 10.0, 'HIDROJATEAMENTO NA TUBULAÇÃO', 148.0, NULL),
+  ('5b612505-73d4-4ef1-b6d0-0099da0e9f72', 'd8e38d4b-56c4-41ee-ad8d-a9dd93ac907a', 420.0, 'SUCÇÃO RES FOSSA SEPTICA ', 2.99, NULL),
+  ('6243b2d0-2f11-4e7e-9d3d-b67388d27ffe', 'c3faec72-74bf-4c6d-8ded-48316e2d5773', 10.0, 'DESOBSTUÇÃO DE TUBULAÇÃO DE RALO SACADA', 220.0, NULL),
+  ('6283a59b-1cee-4f2b-b842-a170917cb8d7', 'f369e0f8-61af-495b-aca2-a4bc1fed78ca', 6.5, 'DESOBSTRUÇÃO DE RALO SANITARIO C/ EQUI. ELETRO ROTATIVO', 169.0, NULL),
+  ('6465e450-1a8f-4bc2-b11d-8bd9ddcc5ba4', 'c9e5d33d-ae02-4d18-ae88-97930c85355b', 1.0, 'DIF DO HIDROJATO', 588.0, NULL),
+  ('6818460f-ba81-40bb-ae1b-aabf9efa4b64', '36b02e00-c6cc-4113-a49b-425fa8a661bd', 16.5, 'HIDROJATEAMENTO', 149.0, NULL),
+  ('6902ef68-7306-4737-9395-0283d38c5207', 'adc1bda7-5af0-44fe-babf-d13502caab67', 0.0, 'HIDROJATEAMENTO DA REDE CLOACAL', 0.0, NULL),
+  ('6b7e24f3-3669-49dd-8e9d-0ceb74eddb2c', 'b5113c8b-5d8f-4ef8-9057-e606a6cec184', 12.5, 'HIDROJATEAMENTO', 55.0, NULL),
+  ('6ea1f015-debc-4078-959d-c66b2ae3c742', 'b2c2d8b8-d5b9-4b08-8442-94a08044e787', 6.7, 'DESOBSTRUÇAO REDE SANITARIA ', 225.0, NULL),
+  ('738b036b-f34e-4da4-82f5-16f18ddfca9f', 'aed3b288-cc57-45be-aa27-19197b542c56', 12.0, 'RASPAGEM', 225.0, NULL),
+  ('77312dca-32a8-488d-a55d-f45a1609087a', '4988edbd-0939-41eb-81a5-cfc04546e1c2', 1.0, 'SUCÇÃO ', 3700.0, NULL),
+  ('7e63a594-9410-49ad-a76b-8aab74675dcf', '4ff6aac3-3f15-461b-8969-0f06c145e28a', 22.4, 'HIDROJATEAMENTO NA REDE CLOACAL', 119.0, NULL),
+  ('7ebce695-b5bf-4a8d-8ad8-fe5d57cad1d1', 'ccdda9a0-85cd-499f-8148-c916d3c0ecc7', 8.0, 'RASPAGEM', 229.0, NULL),
+  ('82182379-7a6b-482d-b965-e4eab62063fb', 'c3faec72-74bf-4c6d-8ded-48316e2d5773', 0.0, 'DESOSBSTRUÇÃO DE 2º RALO CORTESIA', 0.0, NULL),
+  ('84c86d98-12a1-4212-b816-9a39e21a3bce', '362b255c-37a9-4165-8657-993a56dfd478', 1.0, 'SUCÇÃO RES FOSSA SEPTICA + FILTRO AEROBICO + HIDROJATEAMENTO TUB CLOACAL DA REDE ', 5000.0, NULL),
+  ('856e1450-975b-444b-9d17-01022a0a44f7', '7615c503-cd68-4113-9fe6-d50a5196e17b', 6.0, 'RASPAGEM', 249.0, NULL),
+  ('8796296d-a20b-4f04-8484-65204ec1749c', 'd6d13ccc-bf3e-4e46-9060-c97b95079514', 6899.0, 'Limpa Fossa - Litros', 1.49, NULL),
+  ('8e1e6887-3b3b-459f-91f1-17494304851b', '285b512a-fcfc-4aa4-bd89-32454e8adaec', 1.0, 'RASPAGEM DA TUBULAÇÃO COM MAQUINARIO ELETRO ROTATIVO', 3320.0, NULL),
+  ('8e658d36-2f13-4e90-a9b9-0ec9d1e33335', 'a957f8c4-ef81-4e96-930a-9858bf5b834a', 322.0, 'SUCÇÃO', 2.29, NULL),
+  ('8fd66584-f09b-48d4-8a64-e10c3ac461f2', '99296546-35e5-4b00-be2d-efbd98c0eb6a', 17.0, 'HIDROJATEAMENTO NA TUBULAÇÃO', 112.0, NULL),
+  ('906dc0cc-7534-4a32-a76a-4632bd264702', '53773749-d434-4a23-acc9-02034ada67cb', 1.0, 'SUCÇÃO DE RESIDUO DE FOSSA SEPTICA', 1000.0, NULL),
+  ('9097d3ca-a8ea-45fa-84ed-f7cb9c83bd2f', 'ff36a3ce-8ccf-403d-bfb0-e0d9ef96b26f', 1.0, 'SUCÇÃO RES CAIXA DE PASSAGEM + HIDROJATEAMENTOTUB CLOACAL', 2500.0, NULL),
+  ('9243500d-3429-4c34-9349-619f3412040a', 'aa7fa320-eb4a-4cec-93e8-2373cba2b5d5', 1.0, 'SUCÇÃO RES FOSSA SEPTICA + FILTRO AEROBICO', 1300.0, NULL),
+  ('93095e6b-0c60-4e7d-96b4-a030e1126b53', '2c38db2b-6f33-4208-953b-ea6147a3f843', 28.0, 'HIDROJATEAMENTO TUB CLOACAL', 189.0, NULL),
+  ('954c5623-d530-4435-998f-1a18fd6e624a', '0facc75b-598d-4ee2-a166-9d47908a243e', 42.0, 'HIDROJATEAMENTO DE TUB', 169.0, NULL),
+  ('96df0a41-2a9d-4bcf-bc8e-8472889cabf4', 'a673eff6-5dac-4811-a15f-c91d1e5803f6', 7.8, 'DESOBSTRUÇÃO PIA C/ EQUIP. ELETRO ROTATIVO', 199.0, NULL),
+  ('9a2071ad-5675-428c-adb2-ac8f5ba777cb', '05e1f648-9a67-4dfc-b7ac-cccd08d4adba', 1.0, 'HIDROJATEAMENTO TUB SANITARIA', 700.0, NULL),
+  ('9c48f689-4800-420f-bef5-63e4477c7150', '13dad11b-3994-4f01-9ebf-323764e3e574', 1.0, 'Desentupidora de Esgoto - Metro Linear', 2796.7, NULL),
+  ('9db62358-ce14-45eb-8fe9-6747deee4d21', '59760c1b-6229-4e6d-bcf4-817f6f59fe16', 3321.0, 'SUCÇÃO RES FOSSA SEPTICA', 1.53, NULL),
+  ('9e19fc22-88af-406e-bf3e-1608e0629019', '848aa9f3-1584-43aa-86fc-22ecffef3e08', 11.7, 'DESOBSTRUÇÃO DA REDE CLOACAL C/ MAQ. ELETRO ROTATVO ', 237.0, NULL),
+  ('a0655390-0273-4858-a45c-3e96f2428891', '0facc75b-598d-4ee2-a166-9d47908a243e', 1249.0, 'SUCÇÃO RES REDE LOACAL E CAIXA DE PASSAGEM ', 4.99, NULL),
+  ('a29ee28d-63d8-4e74-bc9a-a1c881fda064', 'f7c9be2f-72ad-4446-8783-9f824ac624bd', 7.5, 'RASPAGEM', 229.0, NULL),
+  ('a56217db-1cd5-4f4a-8fea-f4afb55d12df', '658c9110-ae6a-46cd-a85f-0a941f66a97f', 4874.0, 'SUCÇÃO CAIXA CENTRAL', 2.25, NULL),
+  ('a8e763c1-9c33-4b5b-b0cb-c54ce87859c5', 'dac8795e-2358-4c70-aba2-8987fe64653b', 1.0, 'SUCÇÃO', 3700.0, NULL),
+  ('b47a26b1-5dc0-4132-84f6-54088a740378', 'cb272a51-6471-4bee-b618-0987c08d3c07', 1.0, 'LIMPEZA CAIXA DE GORDURA', 1300.0, NULL),
+  ('b8104712-2c3d-4b70-b54e-287c9669e7b6', 'c9e5d33d-ae02-4d18-ae88-97930c85355b', 10.5, 'HIDROJATEAMENTO COM CAMINHÃO', 309.0, NULL),
+  ('bf94a697-1309-455c-8924-72eefeae8a80', 'a106984b-36a3-44ad-8496-c8723644fcfa', 2.0, 'RET COL DE VASO', 199.0, NULL),
+  ('c6b07f14-76dc-46c8-a7ca-2a7f36f954c1', '05d4bfe8-e599-4178-b1e5-1cf80cde98c7', 1.0, 'ENTRADA ', 500.0, NULL),
+  ('c983d045-6279-4551-b4cf-f3014d630174', 'a090c87c-0051-4670-9c52-c69aa8288004', 8.7, 'DESOBSTRUÇÃO RALO BANHEIRO C/ MAQUINARIO ELETRO ROTATIVO', 179.0, NULL),
+  ('c9ebc0ab-9856-4392-92ce-df9ad67ba855', 'f8f2276c-c0c6-4846-897a-415634a8e77d', 14.8, 'HIDROJATEAMENTO TUB CLOACAL DA REDE SANITARIA ', 227.0, NULL),
+  ('ca6e374a-0849-4b56-9429-e4185caf1c54', 'bdbee006-aaf6-47c1-80ff-0b11dbc61c10', 1471.0, 'SUCÇÃO RES DE FOSSA E FILTRO ', 1.89, NULL),
+  ('d08e1b86-916a-44c9-bb54-2ee5408533c0', '3260f167-77da-4a92-914d-18ddc581d012', 19.5, 'HIDROJATEAMENTO', 90.0, NULL),
+  ('d122e08f-de43-496a-b942-e0579152f12e', '36b02e00-c6cc-4113-a49b-425fa8a661bd', 420.0, 'SUC', 1.59, NULL),
+  ('db4d8648-9179-4d91-b87b-2fc615d1bc72', '6569a7d0-dd8e-4593-86bb-e54744582944', 1.0, 'LIMPEZA DA CAIXA COM CAMIHÃO COMBINADO', 800.0, NULL),
+  ('dc54c03d-14d7-416e-8ad5-2b8fa4425568', '035eb8a0-46ce-46c6-8d2b-e007f8fbbef8', 14.5, 'RASPAGEM', 229.0, NULL),
+  ('decaf0f2-c716-489a-860b-9f43dc335572', '6bdcf1b1-9bff-4cb6-afd8-20f84dd54379', 6241.0, 'SUC', 1.69, NULL),
+  ('dfb769c7-b5a4-4cb6-a093-22a91f8eafeb', '658c9110-ae6a-46cd-a85f-0a941f66a97f', 29.0, 'HIDROJATEAMENTO CLOACAL', 199.0, NULL),
+  ('e183b0f5-bc65-4bea-9edf-93ccbc8cd2ef', '157ef971-36a8-417e-90a6-2070b5845c26', 1.0, 'LIMPEZA DE FOSSA', 1200.0, NULL),
+  ('ec4ab867-5926-4601-972c-662a9802a3d0', '032dc4f4-2fbe-4b72-8715-aafb2d84e2c5', 11.0, 'HIDROJATEAMENTO NA TUBULAÇÃO (CARRO)', 99.0, NULL),
+  ('ecd79156-69e9-4a41-ae4e-1c0ec082c4b7', '3260f167-77da-4a92-914d-18ddc581d012', 1874.0, 'SUCÇÃO', 3.25, NULL),
+  ('ed617209-9840-44a6-9482-dc44a8c19596', 'f32bfea3-8d4f-49a2-87e4-b404649f5a4c', 1.0, 'RET COL DE VASO', 180.0, NULL),
+  ('ee3c5415-f1ff-4761-a8d6-ca7410642fab', '92bac2aa-4903-4090-91d2-225527ba1e47', 22.0, 'HIDROJATEAMENTO + RASPAGEM NA TUBULAÇÃO', 189.0, NULL),
+  ('efdf94cd-4422-489c-8ded-9fd4309842a9', 'b33d15ad-1a82-4bbc-a2dd-906958335275', 9.5, 'DESOBSTRUÇÃO REDE SANITARIA C/ APARELHO ELETRO ROTATIVO', 399.0, NULL),
+  ('f1812491-20e6-4d02-a259-1620d69ec581', '8d8adfb4-b5de-4576-992c-73e22eb10f28', 1.0, 'HIDROJATEAMENTE NA TUBULAÇÃO + LIMPEZA DE DUAS TAXAS CAIXAS PLUVIAIS ', 1000.0, NULL),
+  ('f1b5da2f-5a3f-4ff2-81c2-029817574a46', 'afef1419-124a-4f78-a788-7158c8b4f4a8', 1.0, 'RASPEGEM', 300.0, NULL),
+  ('f66e0513-1f9d-4fc6-9d13-c5e9b202f818', 'a957f8c4-ef81-4e96-930a-9858bf5b834a', 13.0, 'HIDROJATEMENTO', 128.0, NULL),
+  ('f89b00dd-ddaa-47ff-ac7b-6003e4c3157a', '34500f44-c984-4ab3-accf-457bc3df27c1', 10.0, 'RASPAGEM TUB C/ MAQUINARIO', 169.0, NULL),
+  ('fcbc7972-6f2c-40c8-b2e3-e05b0581fc49', 'b0eb4719-9d30-40b5-9b4e-7d4c05254a2c', 7.0, 'DESOBSTRUÇÃO DE RALO DE BANH. C/ EQUIP. ELETRO ROTATIVO', 139.0, NULL),
+  ('fccd22bb-7768-4219-8576-b47b7336024d', '4973d9f4-dc13-4e34-aa33-a85fb7ac1da0', 1221.0, 'SUCÇÃO RES, FOSSA SEPTICA JUNTO A LAVAGEM C/ CAMIHÃO COMBINADO', 1.8, NULL)
+ON CONFLICT DO NOTHING;
+
+
+-- ── Millenium → Saídas (31 registros) ──
+INSERT INTO public.expenses (id, tenant_id, description, category, amount, type, status, due_date, paid_date, recurrence_day, notes, supplier_id, client_id, created_at)
+VALUES
+  ('04e7c784-b653-47ad-b7e4-ff25180af7c2', mill_id, 'SALDO GOOGLE MILLENIUN', 'Marketing', 500.0, 'avulso', 'pago', '2026-06-06', '2026-06-06', NULL, NULL, 'f7436c02-04ad-4253-8e88-e064459fa6b4', NULL, '2026-06-06 20:19:17.454147+00'),
+  ('0ec385bb-1c06-41f2-8187-26fd7fe20014', mill_id, 'SALDO GOOGLE MILLENIUM', 'Marketing', 1000.0, 'avulso', 'pago', '2026-06-04', '2026-06-04', NULL, NULL, 'f7436c02-04ad-4253-8e88-e064459fa6b4', NULL, '2026-06-04 18:32:01.303639+00'),
+  ('1b66bad7-fa94-44ef-838f-58e48209866e', mill_id, 'DISEL', 'Frota', 200.0, 'avulso', 'pago', '2026-06-04', '2026-06-05', NULL, NULL, NULL, NULL, '2026-06-05 12:56:55.311448+00'),
+  ('1c056be7-010c-4a61-a663-78ba23bd5d74', mill_id, 'SALDO GOOGLE PRAJA', 'Marketing', 500.0, 'avulso', 'pago', '2026-06-06', '2026-06-06', NULL, NULL, 'f7436c02-04ad-4253-8e88-e064459fa6b4', NULL, '2026-06-06 20:19:40.023251+00'),
+  ('237c0a26-c92b-4076-9e6d-8477607adbc7', mill_id, 'SALDO GOOGLE MILLENIUM', 'Marketing', 800.0, 'avulso', 'pago', '2026-06-05', '2026-06-06', NULL, NULL, 'f7436c02-04ad-4253-8e88-e064459fa6b4', NULL, '2026-06-06 15:03:34.267761+00'),
+  ('31ecde1c-bbd3-49d8-bc4e-71d92fc3e321', mill_id, 'ALIMENTAÇÃO', 'Pessoal', 100.0, 'avulso', 'pago', '2026-06-05', '2026-06-06', NULL, NULL, NULL, NULL, '2026-06-06 15:05:58.448303+00'),
+  ('33fbef86-7f12-459a-b691-f9c1337c49f8', mill_id, 'SALDO GOOGLE PRAJÁ', 'Marketing', 500.0, 'avulso', 'pago', '2026-06-07', '2026-06-07', NULL, NULL, 'f7436c02-04ad-4253-8e88-e064459fa6b4', NULL, '2026-06-07 16:12:22.384679+00'),
+  ('36f7a6f8-c70c-4553-8ffd-899a90266f96', mill_id, 'SALDO GOOGLE', 'Marketing', 500.0, 'avulso', 'pago', '2026-06-02', '2026-06-02', NULL, NULL, 'f7436c02-04ad-4253-8e88-e064459fa6b4', NULL, '2026-06-02 23:40:53.037601+00'),
+  ('3fe10292-be87-46b6-ad19-27b2ac30c6b9', mill_id, 'ALIMENTAÇÃO (AÇOUGUE)', 'Pessoal', 300.0, 'avulso', 'pago', '2026-06-02', '2026-06-02', NULL, 'AÇOUGUE', NULL, NULL, '2026-06-02 23:42:42.392117+00'),
+  ('408d90a8-023f-4700-ab74-3a6f27a201e2', mill_id, 'SALDO GOOGLE', 'Marketing', 500.0, 'avulso', 'pago', '2026-06-01', '2026-06-01', NULL, 'MILLENIUN', NULL, NULL, '2026-06-01 16:42:03.894999+00'),
+  ('43282477-320d-4d4f-a8f3-2138c5686807', mill_id, 'SALDO GOOGLE PRAJÁ', 'Marketing', 1000.0, 'avulso', 'pago', '2026-06-05', '2026-06-06', NULL, NULL, 'f7436c02-04ad-4253-8e88-e064459fa6b4', NULL, '2026-06-06 15:04:11.691783+00'),
+  ('4513a3af-59d9-42f3-b0d4-f6c609a77222', mill_id, 'CAMINHÃO TERCEIRIZADO', 'Outros', 1200.0, 'avulso', 'pago', '2026-06-04', '2026-06-06', NULL, NULL, NULL, NULL, '2026-06-06 15:51:50.08989+00'),
+  ('4b47b248-7313-46f3-9e1d-37409e0d33b6', mill_id, 'SALDO GOOGLE', 'Marketing', 500.0, 'avulso', 'pago', '2026-06-01', '2026-06-01', NULL, 'PRA JÁ', NULL, NULL, '2026-06-01 16:42:28.143555+00'),
+  ('52a37d3f-407b-4108-ba80-ccb184c476b1', mill_id, 'PAGTO ROBERT (TERCEIRO)', 'Outros', 3667.0, 'avulso', 'pago', '2026-06-03', '2026-06-05', NULL, NULL, NULL, NULL, '2026-06-05 12:44:32.113227+00'),
+  ('55eae53f-8263-4f43-a551-88612a8e6105', mill_id, 'SALDO GOOLGE PRAJA', 'Marketing', 1000.0, 'avulso', 'pago', '2026-06-04', '2026-06-05', NULL, NULL, 'f7436c02-04ad-4253-8e88-e064459fa6b4', NULL, '2026-06-05 12:56:13.846161+00'),
+  ('5c129267-5abc-42b6-9387-deb4c51e645b', mill_id, 'SALDO GOOGLE PRAJA', 'Marketing', 500.0, 'avulso', 'pago', '2026-06-03', '2026-06-05', NULL, NULL, 'f7436c02-04ad-4253-8e88-e064459fa6b4', NULL, '2026-06-05 12:16:13.201194+00'),
+  ('5e4ed406-380d-4b5c-8301-4c0482ea10b5', mill_id, 'ALIMENTAÇÃO (ALMOÇO)', 'Pessoal', 88.0, 'avulso', 'pago', '2026-06-04', '2026-06-05', NULL, NULL, NULL, NULL, '2026-06-05 12:57:45.661105+00'),
+  ('6df51eaf-f2d6-4c08-895f-baf59b0c394a', mill_id, 'SALDO MILLENIUM', 'Marketing', 1000.0, 'avulso', 'pago', '2026-06-04', '2026-06-05', NULL, NULL, 'f7436c02-04ad-4253-8e88-e064459fa6b4', NULL, '2026-06-05 12:56:32.913293+00'),
+  ('70f3e1a7-25c0-4334-b54d-e04c35426557', mill_id, 'SALDO MILLENIUM', 'Marketing', 500.0, 'avulso', 'pago', '2026-06-03', '2026-06-05', NULL, NULL, 'f7436c02-04ad-4253-8e88-e064459fa6b4', NULL, '2026-06-05 12:16:33.924778+00'),
+  ('7452e355-f77d-4fb1-abf5-8fb49969751e', mill_id, 'SALDO GOOGLE', 'Marketing', 500.0, 'avulso', 'pago', '2026-06-02', '2026-06-02', NULL, NULL, 'f7436c02-04ad-4253-8e88-e064459fa6b4', NULL, '2026-06-02 23:40:31.697536+00'),
+  ('87a55c8d-5100-48f8-ae52-956b8d70f393', mill_id, 'ALIMENTAÇÃO (JANTA)', 'Pessoal', 140.0, 'avulso', 'pago', '2026-06-02', '2026-06-02', NULL, NULL, NULL, NULL, '2026-06-02 23:42:06.649716+00'),
+  ('9331efef-bd2c-40cc-aa2f-5fc8c55cc77a', mill_id, 'COMBUSTIVEL', 'Frota', 74.98, 'avulso', 'pago', '2026-06-06', '2026-06-06', NULL, NULL, NULL, NULL, '2026-06-06 20:18:55.119119+00'),
+  ('9548a6bf-97d6-474f-a616-bd1ad32ced3a', mill_id, 'COMBUSTIVEL', 'Frota', 32.0, 'avulso', 'pago', '2026-06-01', '2026-06-01', NULL, NULL, NULL, NULL, '2026-06-01 16:42:48.605067+00'),
+  ('9f4ab6eb-f12c-4683-af0b-b7e1ed9b135b', mill_id, 'SALDO GOOGLE PRAJÁ', 'Marketing', 1000.0, 'avulso', 'pago', '2026-06-04', '2026-06-04', NULL, NULL, 'f7436c02-04ad-4253-8e88-e064459fa6b4', NULL, '2026-06-04 18:32:30.624719+00'),
+  ('b0a885fb-e58e-4f8b-be60-d12f2809eeb7', mill_id, 'MANUTENÇÃO DE EQUIPAMENTOS', 'Frota', 226.5, 'avulso', 'pendente', '2026-06-04', NULL, NULL, 'TROCA DE PONTEIRA + ATENDIMENTO 24H', '5a584aff-a6cf-4bdf-9aef-796a32117b99', NULL, '2026-06-06 15:10:54.591911+00'),
+  ('b1d5d7a8-97cb-413e-a9c0-25321a2551c6', mill_id, 'FARMACIA', 'Pessoal', 43.0, 'avulso', 'pago', '2026-06-02', '2026-06-02', NULL, NULL, NULL, NULL, '2026-06-02 23:43:04.286398+00'),
+  ('b4f4d943-bff9-4347-9359-2e07bd15ec79', mill_id, 'ALIMENTAÇÃO', 'Operacional', 68.0, 'avulso', 'pago', '2026-06-01', '2026-06-01', NULL, NULL, NULL, NULL, '2026-06-01 16:44:44.439229+00'),
+  ('b8a1bfd0-a68e-4b9e-aa31-347d11ea73b1', mill_id, 'COMBUSTIVEL', 'Frota', 135.0, 'avulso', 'pago', '2026-06-03', '2026-06-05', NULL, NULL, NULL, NULL, '2026-06-05 12:15:49.848594+00'),
+  ('ba077bbb-cf82-4315-9063-093b8f951a5f', mill_id, 'COMBUSTIVEL CAMINHÃO', 'Frota', 471.0, 'avulso', 'pago', '2026-06-02', '2026-06-02', NULL, NULL, NULL, NULL, '2026-06-02 23:41:32.685692+00'),
+  ('d399ed2b-267f-4e6c-8e55-70f718ebcac0', mill_id, 'COMBUSTIVEL', 'Frota', 130.0, 'avulso', 'pago', '2026-06-05', '2026-06-06', NULL, NULL, 'f7436c02-04ad-4253-8e88-e064459fa6b4', NULL, '2026-06-06 15:04:34.633333+00'),
+  ('d8da2702-bb2b-407d-82a4-0ebb3b84e9e9', mill_id, 'LAVAGEM ', 'Frota', 335.0, 'avulso', 'pago', '2026-06-06', '2026-06-06', NULL, NULL, NULL, NULL, '2026-06-06 20:18:32.71871+00')
+ON CONFLICT DO NOTHING;
+
+
+-- ── Atualiza sequências de numeração ──────────────────────────
+-- Garante que novos OS/CH/CLI gerados pelo sistema não colidam
+-- com os números importados.
+
+INSERT INTO public.tenant_sequences (tenant_id, sequence_name, current_value)
+VALUES
+  (lider_id, 'os',     (SELECT COALESCE(MAX(CAST(REGEXP_REPLACE(os_number, '[^0-9]', '', 'g') AS integer)), 0) FROM public.service_orders WHERE tenant_id = lider_id)),
+  (lider_id, 'call',   (SELECT COALESCE(MAX(CAST(REGEXP_REPLACE(call_number, '[^0-9]', '', 'g') AS integer)), 0) FROM public.calls WHERE tenant_id = lider_id AND call_number IS NOT NULL)),
+  (lider_id, 'client', (SELECT COALESCE(MAX(CAST(REGEXP_REPLACE(code, '[^0-9]', '', 'g') AS integer)), 0) FROM public.clients WHERE tenant_id = lider_id AND code IS NOT NULL)),
+  (mill_id,  'os',     (SELECT COALESCE(MAX(CAST(REGEXP_REPLACE(os_number, '[^0-9]', '', 'g') AS integer)), 0) FROM public.service_orders WHERE tenant_id = mill_id)),
+  (mill_id,  'call',   (SELECT COALESCE(MAX(CAST(REGEXP_REPLACE(call_number, '[^0-9]', '', 'g') AS integer)), 0) FROM public.calls WHERE tenant_id = mill_id AND call_number IS NOT NULL)),
+  (mill_id,  'client', (SELECT COALESCE(MAX(CAST(REGEXP_REPLACE(code, '[^0-9]', '', 'g') AS integer)), 0) FROM public.clients WHERE tenant_id = mill_id AND code IS NOT NULL))
+ON CONFLICT (tenant_id, sequence_name) DO UPDATE
+  SET current_value = EXCLUDED.current_value;
+
+RAISE NOTICE '✅ Migração concluída com sucesso!';
+END $$;
+
