@@ -69,7 +69,7 @@ export async function getNotifications() {
       .order('scheduled_time', { ascending: true }),
     supabase
       .from('service_orders')
-      .select('id, total_value, remaining_amount, remaining_due_date, client:clients(name), payment_status')
+      .select('id, call_id, total_value, remaining_amount, remaining_due_date, client:clients(name), payment_status')
       .in('payment_status', ['pendente', 'pago_parcial'])
       .lte('remaining_due_date', today),
     supabase
@@ -84,4 +84,16 @@ export async function getNotifications() {
     pendingPayments: pendingPaymentsRes.data ?? [],
     pendingExpenses: pendingExpensesRes.data ?? [],
   }
+}
+
+/** Todos os valores a receber (pendentes e parciais), sem filtro de vencimento */
+export async function getPendingReceivables() {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('service_orders')
+    .select('id, call_id, date, total_value, amount_paid, remaining_amount, remaining_due_date, payment_status, client:clients(name)')
+    .in('payment_status', ['pendente', 'pago_parcial'])
+    .order('date', { ascending: false })
+  if (error) throw error
+  return data ?? []
 }

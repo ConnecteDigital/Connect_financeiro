@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { PhoneCall, CheckCircle, DollarSign, TrendingUp, TrendingDown, AlertCircle, Clock, MapPin, ChevronRight, Plus } from 'lucide-react'
 import { format, startOfMonth, endOfMonth } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { getDashboardStatsRange, getNotifications } from '@/lib/db/dashboard'
+import { getDashboardStatsRange, getNotifications, getPendingReceivables } from '@/lib/db/dashboard'
 import DateRangePicker, { DateRange } from '@/components/DateRangePicker'
 import Link from 'next/link'
 import { useTenant } from '@/lib/tenant-context'
@@ -63,7 +63,16 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [notifications, setNotifications] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [showReceivables, setShowReceivables] = useState(false)
+  const [receivables, setReceivables] = useState<any[] | null>(null)
   const { tenant } = useTenant()
+
+  function openReceivables() {
+    setShowReceivables(true)
+    if (receivables === null) {
+      getPendingReceivables().then(setReceivables).catch(() => setReceivables([]))
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -117,17 +126,18 @@ export default function DashboardPage() {
           {/* Mini metrics row */}
           <div className="grid grid-cols-3 gap-2 mt-2">
             {[
-              { label: 'Líquido', value: stats?.net_revenue ?? 0, positive: (stats?.net_revenue ?? 0) >= 0 },
-              { label: 'A Receber', value: stats?.pending_receivables ?? 0, positive: true },
-              { label: 'Saídas', value: stats?.total_expenses ?? 0, positive: false },
+              { label: 'Líquido', value: stats?.net_revenue ?? 0, onClick: undefined as (() => void) | undefined },
+              { label: 'A Receber', value: stats?.pending_receivables ?? 0, onClick: openReceivables },
+              { label: 'Saídas', value: stats?.total_expenses ?? 0, onClick: undefined },
             ].map((m, i) => (
-              <div key={i} className="rounded-2xl px-3 py-2.5"
+              <button key={i} type="button" onClick={m.onClick} disabled={!m.onClick}
+                className="rounded-2xl px-3 py-2.5 text-left"
                 style={{ background: 'rgba(0,0,0,0.15)' }}>
                 <p className="text-white/60 text-[10px] font-medium uppercase tracking-wide">{m.label}</p>
                 <p className="text-white font-bold text-sm mt-0.5 tabular">
                   {loading ? '—' : `R$ ${fmt(m.value)}`}
                 </p>
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -151,15 +161,17 @@ export default function DashboardPage() {
           {
             icon: AlertCircle, label: 'A Receber', color: 'text-amber-600',
             value: loading ? null : `R$ ${fmt(stats?.pending_receivables ?? 0)}`,
-            sub: 'em aberto', bg: '#fffbeb', iconBg: 'rgba(217,119,6,0.12)',
+            sub: 'toque para ver', bg: '#fffbeb', iconBg: 'rgba(217,119,6,0.12)',
+            onClick: openReceivables,
           },
           {
             icon: TrendingDown, label: 'Despesas', color: 'text-red-500',
             value: loading ? null : `R$ ${fmt(stats?.total_expenses ?? 0)}`,
             sub: 'este período', bg: '#fff1f2', iconBg: 'rgba(239,68,68,0.10)',
           },
-        ].map((card, i) => (
-          <div key={i} className="rounded-2xl p-4 flex flex-col gap-2"
+        ].map((card: any, i) => (
+          <button key={i} type="button" onClick={card.onClick} disabled={!card.onClick}
+            className="rounded-2xl p-4 flex flex-col gap-2 text-left"
             style={{ background: card.bg, boxShadow: 'var(--shadow-sm)' }}>
             <div className="w-8 h-8 rounded-xl flex items-center justify-center"
               style={{ background: card.iconBg }}>
@@ -172,9 +184,67 @@ export default function DashboardPage() {
               </p>
               <p className="text-[11px] text-zinc-400 mt-0.5">{card.sub ?? ''}</p>
             </div>
-          </div>
+          </button>
         ))}
       </div>
+
+      {/* ── Modal: detalhe de valores a receber ───────────────── */}
+      {showReceivables && (
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowReceivables(false)} />
+          <div className="relative w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl overflow-hidden"
+            style={{ maxHeight: '80dvh' }}>
+            <div className="flex items-center justify-between px-5 pt-5 pb-3">
+              <div>
+                <h3 className="font-bold text-slate-800">Valores a Receber</h3>
+                <p className="text-xs text-slate-400 mt-0.5">Pagamentos pendentes e parciais</p>
+              </div>
+              <button onClick={() => setShowReceivables(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+                ✕
+              </button>
+            </div>
+            <div className="overflow-y-auto divide-y divide-slate-100" style={{ maxHeight: 'calc(80dvh - 80px)' }}>
+              {receivables === null ? (
+                [...Array(3)].map((_, i) => (
+                  <div key={i} className="px-5 py-4 space-y-2">
+                    <div className="skeleton h-4 w-32" />
+                    <div className="skeleton h-3 w-20" />
+                  </div>
+                ))
+              ) : receivables.length === 0 ? (
+                <p className="text-slate-400 text-sm text-center py-10">Nenhum pagamento pendente 🎉</p>
+              ) : (
+                receivables.map((n: any) => (
+                  <Link key={n.id} href={`/dashboard/chamados/${n.call_id}`}
+                    onClick={() => setShowReceivables(false)}
+                    className="flex items-center gap-3 px-5 py-3.5 active:bg-slate-50 transition">
+                    <div className="w-9 h-9 rounded-full bg-amber-50 flex items-center justify-center flex-shrink-0">
+                      <AlertCircle className="w-4 h-4 text-amber-500" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-slate-800 truncate">
+                        {n.client?.name ?? 'Cliente'}
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        {n.payment_status === 'pago_parcial' ? 'Pago parcialmente' : 'Pendente'}
+                        {n.remaining_due_date && ` · Venc. ${new Date(n.remaining_due_date + 'T12:00:00').toLocaleDateString('pt-BR')}`}
+                      </p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-sm font-bold text-amber-600 tabular">
+                        R$ {fmt(n.remaining_amount || n.total_value || 0)}
+                      </p>
+                      <ChevronRight className="w-4 h-4 text-slate-300 ml-auto" />
+                    </div>
+                  </Link>
+                ))
+              )}
+              <div className="h-[env(safe-area-inset-bottom,16px)]" />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Notifications ─────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">

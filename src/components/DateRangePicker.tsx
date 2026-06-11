@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Calendar, ChevronDown, X } from 'lucide-react'
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -121,8 +122,6 @@ export default function DateRangePicker({ value, onChange }: Props) {
     setOpen(false)
   }
 
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640
-
   return (
     <>
       <button
@@ -135,10 +134,10 @@ export default function DateRangePicker({ value, onChange }: Props) {
         <ChevronDown className={`w-3.5 h-3.5 opacity-60 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
-      {open && (
+      {open && createPortal(
         <>
           {/* Mobile: full-screen bottom sheet */}
-          <div className="sm:hidden fixed inset-0 z-[60]">
+          <div className="sm:hidden fixed inset-0 z-[70]">
             <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setOpen(false)} />
             <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl overflow-hidden"
               style={{ maxHeight: '85dvh' }}>
@@ -189,7 +188,7 @@ export default function DateRangePicker({ value, onChange }: Props) {
 
           {/* Desktop: dropdown */}
           <div id="drp-dropdown"
-            className="hidden sm:block fixed z-50 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden"
+            className="hidden sm:block fixed z-[70] bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden"
             style={{ top: dropPos.top, right: dropPos.right, width: 288, maxHeight: '85vh', overflowY: 'auto' }}>
             <div className="p-2 border-b border-slate-100">
               {presets.map(p => {
@@ -224,7 +223,8 @@ export default function DateRangePicker({ value, onChange }: Props) {
               </button>
             </div>
           </div>
-        </>
+        </>,
+        document.body
       )}
     </>
   )

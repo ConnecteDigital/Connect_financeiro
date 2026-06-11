@@ -207,8 +207,9 @@ export default function NovoChamadoPage() {
     try {
       // Auto-criar cliente se não existe cadastrado
       // (no chamado aprovado, leva também os dados completos preenchidos)
+      // Cliente só é cadastrado no sistema quando o chamado é aprovado
       let finalClientId = clientId
-      if (!clientId && contactName.trim()) {
+      if (!clientId && contactName.trim() && isApproved) {
         const created = await createClient_({
           name: contactName.trim(),
           phone: contactPhone || null,
@@ -397,7 +398,7 @@ export default function NovoChamadoPage() {
             </button>
           </div>
         )}
-        {!clientId && contactName.trim().length >= 2 && clientSuggestions.length === 0 && (
+        {isApproved && !clientId && contactName.trim().length >= 2 && clientSuggestions.length === 0 && (
           <div className="border border-orange-100 bg-orange-50/50 rounded-lg p-4 space-y-3">
             <p className="text-xs font-semibold text-orange-600">
               Cliente novo — será cadastrado automaticamente:
@@ -419,21 +420,23 @@ export default function NovoChamadoPage() {
           </div>
         )}
 
-        {/* Cidade e bairro do chamado */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Cidade</label>
-            <input type="text" value={callCity} onChange={e => setCallCity(e.target.value)}
-              placeholder="Ex: Porto Alegre"
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+        {/* Cidade e bairro — no agendado o endereço já é pedido nos detalhes do agendamento */}
+        {!isScheduled && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Cidade</label>
+              <input type="text" value={callCity} onChange={e => setCallCity(e.target.value)}
+                placeholder="Ex: Porto Alegre"
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Bairro</label>
+              <input type="text" value={callNeighborhood} onChange={e => setCallNeighborhood(e.target.value)}
+                placeholder="Ex: Centro"
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Bairro</label>
-            <input type="text" value={callNeighborhood} onChange={e => setCallNeighborhood(e.target.value)}
-              placeholder="Ex: Centro"
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
-          </div>
-        </div>
+        )}
 
         {/* Campos de agendamento */}
         {isScheduled && (
@@ -495,8 +498,8 @@ export default function NovoChamadoPage() {
                   </div>
                 )}
 
-                {/* Valores — aparecem logo após selecionar */}
-                {catLines.map(l => (
+                {/* Valores — só no chamado aprovado, logo após selecionar */}
+                {isApproved && catLines.map(l => (
                   <div key={l.sub ?? cat} className="bg-white border border-orange-100 rounded-xl p-3 space-y-3">
                     {l.sub && <p className="text-xs font-bold text-orange-500 uppercase tracking-wide">{l.sub}</p>}
                     <div className="grid grid-cols-2 gap-3">

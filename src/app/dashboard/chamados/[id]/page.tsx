@@ -171,31 +171,31 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
           </div>
         </div>
 
-        {/* Action buttons — scrollable on mobile */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+        {/* Action buttons — wrap, compact on mobile */}
+        <div className="flex items-center gap-2 flex-wrap">
           {call.status === 'agendado' && (
             <Link href={`/dashboard/chamados/${id}/romaneio`}
-              className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition flex-shrink-0">
-              <FileText className="w-4 h-4" />
-              <span className="whitespace-nowrap">Enviar Romaneio</span>
+              className="flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg transition">
+              <FileText className="w-3.5 h-3.5" />
+              Romaneio
             </Link>
           )}
-          {so && (
+          {so && call.status !== 'agendado' && (
             <Link href={`/dashboard/chamados/${id}/imprimir`}
-              className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold px-4 py-2.5 rounded-lg transition flex-shrink-0">
-              <Printer className="w-4 h-4" />
-              <span className="whitespace-nowrap">Compartilhar OS</span>
+              className="flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg transition">
+              <Printer className="w-3.5 h-3.5" />
+              Compartilhar OS
             </Link>
           )}
           <Link href={`/dashboard/chamados/${id}/editar`}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition flex-shrink-0">
-            <Edit className="w-4 h-4" />
-            <span className="whitespace-nowrap">Editar Chamado</span>
+            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg transition">
+            <Edit className="w-3.5 h-3.5" />
+            Editar
           </Link>
           <button onClick={handleDeleteCall} disabled={deleting}
-            className="flex items-center gap-2 bg-red-50 hover:bg-red-100 disabled:opacity-50 text-red-600 text-sm font-semibold px-4 py-2.5 rounded-lg transition border border-red-200 flex-shrink-0">
-            <Trash2 className="w-4 h-4" />
-            <span className="whitespace-nowrap">{deleting ? 'Excluindo...' : 'Excluir'}</span>
+            className="flex items-center gap-1.5 bg-red-50 hover:bg-red-100 disabled:opacity-50 text-red-600 text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg transition border border-red-200">
+            <Trash2 className="w-3.5 h-3.5" />
+            {deleting ? 'Excluindo...' : 'Excluir'}
           </button>
         </div>
       </div>

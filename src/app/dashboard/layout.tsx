@@ -79,7 +79,7 @@ function BottomNav({ onMoreClick, moreOpen, visible }: { onMoreClick: () => void
       {/* Safe-area spacer */}
       <div style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
         {/* Floating pill */}
-        <div className="mx-3 mb-3 rounded-2xl overflow-hidden"
+        <div className="mx-3 mb-3 rounded-2xl"
           style={{
             background: 'rgba(255,255,255,0.90)',
             backdropFilter: 'blur(24px) saturate(180%)',
@@ -283,8 +283,10 @@ function MobileHeader({ visible }: { visible: boolean }) {
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
         borderBottom: '1px solid rgba(0,0,0,0.06)',
-        position: 'sticky',
+        position: 'fixed',
         top: 0,
+        left: 0,
+        right: 0,
         zIndex: 30,
         transform: visible ? 'translateY(0)' : 'translateY(-100%)',
       }}>
@@ -391,7 +393,7 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
 
         <main
           ref={mainRef}
-          className="flex-1 overflow-y-auto"
+          className="flex-1 overflow-y-auto pt-[calc(64px_+_env(safe-area-inset-top,0px))] lg:pt-0"
           style={{
             paddingBottom: 'calc(var(--bottom-nav-height) + var(--safe-bottom) + 16px)',
           }}>

@@ -50,13 +50,13 @@ function ImprimirContent({ id }: { id: string }) {
         <button
           onClick={() => window.print()}
           className="flex items-center gap-2.5 text-white font-semibold px-8 py-4 rounded-2xl shadow-2xl transition active:scale-95"
-          style={{ backgroundColor: primaryColor, boxShadow: `0 8px 24px ${primaryColor}60` }}>
+          style={{ backgroundColor: '#16a34a', boxShadow: '0 8px 24px rgba(22,163,74,0.45)' }}>
           <Share2 className="w-5 h-5" />
           Compartilhar PDF
         </button>
       </div>
 
-      <div className="print:m-0 bg-white p-6 pb-28 print:pb-6 font-sans text-[13px] text-black max-w-[800px] mx-auto min-h-screen">
+      <div className="os-sheet print:m-0 bg-white p-6 pb-28 print:pb-0 font-sans text-[13px] text-black max-w-[800px] mx-auto min-h-screen">
         {/* Cabeçalho */}
         <div className="border-2 border-black mb-0">
           <div className="flex">
@@ -208,7 +208,7 @@ function ImprimirContent({ id }: { id: string }) {
               )) : (
                 <tr><td colSpan={4} className="p-2 text-center text-gray-400">Nenhum item</td></tr>
               )}
-              {Array.from({ length: Math.max(0, 3 - items.length) }).map((_, i) => (
+              {Array.from({ length: Math.max(0, 2 - items.length) }).map((_, i) => (
                 <tr key={`empty-${i}`} className="border-b border-gray-200">
                   <td className="p-2 border-r border-black">&nbsp;</td>
                   <td className="p-2 border-r border-black">&nbsp;</td>
@@ -323,9 +323,32 @@ function ImprimirContent({ id }: { id: string }) {
 
       <style>{`
         @media print {
-          @page { margin: 10mm; size: A4; }
-          body { background: white !important; }
+          @page { margin: 7mm; size: A4; }
+          html, body { background: white !important; height: auto !important; overflow: visible !important; }
           .print\\:hidden { display: none !important; }
+          /* Comprime tudo para caber em 1 folha */
+          .os-sheet {
+            font-size: 10px !important;
+            padding: 0 !important;
+            max-width: 100% !important;
+            min-height: 0 !important;
+          }
+          .os-sheet * { page-break-inside: avoid; }
+          .os-sheet .p-2 { padding: 3px 5px !important; }
+          .os-sheet .p-3 { padding: 5px 6px !important; }
+          .os-sheet .px-3 { padding-left: 6px !important; padding-right: 6px !important; }
+          .os-sheet .py-1 { padding-top: 2px !important; padding-bottom: 2px !important; }
+          .os-sheet .py-1\\.5 { padding-top: 2px !important; padding-bottom: 2px !important; }
+          .os-sheet .py-2 { padding-top: 3px !important; padding-bottom: 3px !important; }
+          .os-sheet .mb-6 { margin-bottom: 14px !important; }
+          .os-sheet table { font-size: 10px !important; }
+          .os-sheet .text-3xl { font-size: 20px !important; }
+          .os-sheet .text-\\[13px\\] { font-size: 11px !important; }
+          .os-sheet .text-\\[14px\\] { font-size: 12px !important; }
+          .os-sheet .text-\\[11px\\] { font-size: 9px !important; }
+          .os-sheet .text-\\[12px\\] { font-size: 10px !important; }
+          .os-sheet .text-\\[10px\\] { font-size: 8px !important; }
+          .os-sheet .min-h-\\[80px\\] { min-height: 56px !important; }
         }
       `}</style>
     </>
