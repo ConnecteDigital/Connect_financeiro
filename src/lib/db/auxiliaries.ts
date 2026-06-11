@@ -8,12 +8,12 @@ export async function getAuxiliaries() {
   return data ?? []
 }
 
-export async function createAuxiliary(name: string, percentage: number) {
+export async function createAuxiliary(name: string, percentage: number, type: 'tecnico' | 'dono' = 'tecnico') {
   const supabase = createClient()
   const tenant_id = await getMyTenantId()
   const { data, error } = await supabase
     .from('auxiliaries')
-    .insert({ name, percentage, tenant_id })
+    .insert({ name, percentage, type, tenant_id })
     .select()
     .single()
   if (error) throw error

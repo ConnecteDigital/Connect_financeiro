@@ -1,16 +1,18 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { ArrowLeft, Save, Loader2, CalendarDays, Camera, Paperclip, FileText, X } from 'lucide-react'
+import { ArrowLeft, Save, Loader2, CalendarDays, Camera, Paperclip, FileText, X, Plus, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createCall } from '@/lib/db/calls'
-import { createServiceOrder } from '@/lib/db/service-orders'
+import { createServiceOrder, createServiceOrderAuxiliaries } from '@/lib/db/service-orders'
+import { createExpense } from '@/lib/db/expenses'
 import { getClients, createClient_ } from '@/lib/db/clients'
 import { getTeams } from '@/lib/db/teams'
 import { getAuxiliaries } from '@/lib/db/auxiliaries'
 import { SERVICE_CATEGORIES, SERVICE_CONFIG } from '@/lib/service-config'
 import { useCallOrigins } from '@/lib/use-call-origins'
+import { useTenant } from '@/lib/tenant-context'
 import { createClient } from '@/lib/supabase/client'
 
 type ServiceType = 'proprio' | 'terceirizado_saida' | 'terceirizado_entrada'
@@ -22,6 +24,13 @@ interface ServiceLine {
   quantity: number
   unitPrice: number
   notes: string
+}
+
+interface SelectedAuxiliary {
+  auxiliary_id: string
+  name: string
+  type: string
+  percentage: number
 }
 
 const CALL_STATUSES = [
@@ -40,6 +49,8 @@ interface PendingFile { id: string; file: File; preview?: string }
 
 export default function NovoChamadoPage() {
   const router = useRouter()
+  const { tenant } = useTenant()
+  const commissionsEnabled = tenant?.enable_commissions ?? false
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [clients, setClients] = useState<any[]>([])
@@ -60,9 +71,7 @@ export default function NovoChamadoPage() {
   const [contactPhone, setContactPhone] = useState('')
   const [callCity, setCallCity] = useState('')
   const [callNeighborhood, setCallNeighborhood] = useState('')
-  // Cadastro de cliente inline (chamado aprovado)
   const [newClient, setNewClient] = useState(emptyNewClient)
-  // Campos de agendamento
   const [scheduledDate, setScheduledDate] = useState(new Date().toISOString().split('T')[0])
   const [scheduledTime, setScheduledTime] = useState('')
   const [callAddress, setCallAddress] = useState('')
@@ -70,7 +79,7 @@ export default function NovoChamadoPage() {
   const isApproved = callStatus === 'aprovado'
   const isScheduled = callStatus === 'agendado'
 
-  // Serviços — seção única
+  // Serviços
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [serviceLines, setServiceLines] = useState<ServiceLine[]>([])
 
@@ -78,7 +87,14 @@ export default function NovoChamadoPage() {
   const [serviceType, setServiceType] = useState<ServiceType>('proprio')
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('pendente')
   const [partnerPct, setPartnerPct] = useState(50)
+
+  // Single auxiliary (commissions disabled)
   const [auxiliaryId, setAuxiliaryId] = useState('')
+
+  // Multiple auxiliaries (commissions enabled)
+  const [selectedAuxiliaries, setSelectedAuxiliaries] = useState<SelectedAuxiliary[]>([])
+  const [addingAuxId, setAddingAuxId] = useState('')
+
   const [discount, setDiscount] = useState(0)
   const [taxes, setTaxes] = useState(0)
   const [equipmentRentalValue, setEquipmentRentalValue] = useState(0)
@@ -102,7 +118,6 @@ export default function NovoChamadoPage() {
   const [remainingDueDate, setRemainingDueDate] = useState('')
   const [conditions, setConditions] = useState('')
   const [observations, setObservations] = useState('')
-  // Custos serviço próprio
   const [materialCost, setMaterialCost] = useState(0)
   const [ownFuelCost, setOwnFuelCost] = useState(0)
   const [ownOtherCost, setOwnOtherCost] = useState(0)
@@ -118,16 +133,48 @@ export default function NovoChamadoPage() {
       .catch(console.error)
   }, [])
 
-  // ── Serviços ──
+  // ── Value calculations ──
   const lineTotal = (l: ServiceLine) => l.quantity * l.unitPrice
   const subtotal = serviceLines.reduce((sum, l) => sum + lineTotal(l), 0)
   const bruto = subtotal + equipmentRentalValue - discount + taxes
   const isOutsourced = serviceType !== 'proprio'
   const liquidoParceria = isOutsourced ? bruto * partnerPct / 100 : bruto
+
+  // Single aux (commissions disabled)
   const selectedAux = auxiliaries.find(a => a.id === auxiliaryId)
   const auxValue = selectedAux ? bruto * Number(selectedAux.percentage) / 100 : 0
-  const liquidoFinal = liquidoParceria - auxValue
 
+  // Multi aux (commissions enabled)
+  const totalAuxValue = selectedAuxiliaries.reduce((s, a) => s + bruto * a.percentage / 100, 0)
+
+  const liquidoFinal = commissionsEnabled
+    ? liquidoParceria - totalAuxValue
+    : liquidoParceria - auxValue
+
+  const availableAuxToAdd = auxiliaries.filter(a => !selectedAuxiliaries.some(s => s.auxiliary_id === a.id))
+
+  function addAuxiliary() {
+    if (!addingAuxId) return
+    const aux = auxiliaries.find(a => a.id === addingAuxId)
+    if (!aux) return
+    setSelectedAuxiliaries(prev => [...prev, {
+      auxiliary_id: aux.id,
+      name: aux.name,
+      type: aux.type ?? 'tecnico',
+      percentage: Number(aux.percentage),
+    }])
+    setAddingAuxId('')
+  }
+
+  function removeAuxiliary(auxId: string) {
+    setSelectedAuxiliaries(prev => prev.filter(a => a.auxiliary_id !== auxId))
+  }
+
+  function updateAuxPercentage(auxId: string, pct: number) {
+    setSelectedAuxiliaries(prev => prev.map(a => a.auxiliary_id === auxId ? { ...a, percentage: pct } : a))
+  }
+
+  // ── Services ──
   function toggleCategory(name: string) {
     const cfg = SERVICE_CONFIG[name]
     if (selectedCategories.includes(name)) {
@@ -153,13 +200,11 @@ export default function NovoChamadoPage() {
   const updateLine = (category: string, sub: string | null, patch: Partial<ServiceLine>) =>
     setServiceLines(prev => prev.map(l => l.category === category && l.sub === sub ? { ...l, ...patch } : l))
 
-  // Texto do tipo de serviço gravado no chamado, ex: "Desobstrução (Vaso, Esgoto), Limpeza (Fossa)"
   const serviceCategoryText = selectedCategories.map(cat => {
     const subs = serviceLines.filter(l => l.category === cat && l.sub).map(l => l.sub)
     return subs.length ? `${cat} (${subs.join(', ')})` : cat
   }).join(', ')
 
-  // Sugestões de clientes cadastrados (chamado aprovado)
   const clientSuggestions = isApproved && !clientId && contactName.trim().length >= 2
     ? clients.filter(c => c.name.toLowerCase().includes(contactName.trim().toLowerCase())).slice(0, 5)
     : []
@@ -205,9 +250,6 @@ export default function NovoChamadoPage() {
     setSaving(true)
     setError('')
     try {
-      // Auto-criar cliente se não existe cadastrado
-      // (no chamado aprovado, leva também os dados completos preenchidos)
-      // Cliente só é cadastrado no sistema quando o chamado é aprovado
       let finalClientId = clientId
       if (!clientId && contactName.trim() && isApproved) {
         const created = await createClient_({
@@ -239,13 +281,22 @@ export default function NovoChamadoPage() {
 
       if (isApproved) {
         await uploadPendingFiles(call.id)
+
+        // Determine auxiliary_id / auxiliary_value for legacy column
+        const primaryAuxId = commissionsEnabled
+          ? (selectedAuxiliaries[0]?.auxiliary_id ?? null)
+          : (auxiliaryId || null)
+        const primaryAuxValue = commissionsEnabled
+          ? (selectedAuxiliaries[0] ? bruto * selectedAuxiliaries[0].percentage / 100 : 0)
+          : auxValue
+
         const orderData = {
           call_id: call.id,
           date: callDate,
           client_id: finalClientId || null,
           team_id: teamId || null,
-          auxiliary_id: auxiliaryId || null,
-          auxiliary_value: auxValue,
+          auxiliary_id: primaryAuxId,
+          auxiliary_value: primaryAuxValue,
           driver: driver || null,
           nf_number: nfNumber || null,
           vehicle: vehicle || null,
@@ -286,10 +337,60 @@ export default function NovoChamadoPage() {
           sub_options: l.sub,
           notes: l.notes || null,
         }))
-        await createServiceOrder(orderData, validItems)
+        const order = await createServiceOrder(orderData, validItems)
+
+        // Save multiple auxiliaries when commissions enabled
+        if (commissionsEnabled && selectedAuxiliaries.length > 0) {
+          await createServiceOrderAuxiliaries(
+            order.id,
+            selectedAuxiliaries.map(a => ({
+              auxiliary_id: a.auxiliary_id,
+              percentage: a.percentage,
+              amount: bruto * a.percentage / 100,
+            }))
+          )
+        }
+
+        // Auto-generate expenses when commissions enabled
+        if (commissionsEnabled) {
+          const expenseDate = callDate
+
+          // Commission expense for each auxiliary (tecnico + dono)
+          for (const aux of selectedAuxiliaries) {
+            const amount = bruto * aux.percentage / 100
+            if (amount > 0) {
+              await createExpense({
+                description: `Comissão — ${aux.name}`,
+                category: 'Pessoal',
+                amount,
+                type: 'avulso',
+                status: 'pendente',
+                due_date: expenseDate,
+                notes: `Auto: comissão de ${aux.percentage}% sobre R$ ${bruto.toFixed(2)} (OS automática)`,
+                source_service_order_id: order.id,
+              })
+            }
+          }
+
+          // Outsourced partner cost (what we pay to partner)
+          if (serviceType === 'terceirizado_saida' && bruto > 0) {
+            const partnerCost = bruto * (100 - partnerPct) / 100
+            if (partnerCost > 0) {
+              await createExpense({
+                description: 'Custo Terceirizado',
+                category: 'Operacional',
+                amount: partnerCost,
+                type: 'avulso',
+                status: 'pendente',
+                due_date: expenseDate,
+                notes: `Auto: ${100 - partnerPct}% do bruto R$ ${bruto.toFixed(2)} pago ao parceiro`,
+                source_service_order_id: order.id,
+              })
+            }
+          }
+        }
       }
 
-      // Agendado vai para a página do chamado, onde fica o botão de enviar o romaneio
       if (isScheduled) {
         router.push(`/dashboard/chamados/${call.id}`)
       } else {
@@ -302,6 +403,8 @@ export default function NovoChamadoPage() {
       setSaving(false)
     }
   }
+
+  const inputCls = 'w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400'
 
   return (
     <form onSubmit={handleSubmit} className="max-w-4xl mx-auto space-y-6">
@@ -348,8 +451,7 @@ export default function NovoChamadoPage() {
         {/* Data do chamado */}
         <div className="sm:max-w-xs">
           <label className="block text-sm font-medium text-slate-700 mb-1.5">Data do Chamado *</label>
-          <input type="date" required value={callDate} onChange={e => setCallDate(e.target.value)}
-            className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+          <input type="date" required value={callDate} onChange={e => setCallDate(e.target.value)} className={inputCls} />
         </div>
 
         {/* Contato + telefone */}
@@ -362,7 +464,7 @@ export default function NovoChamadoPage() {
             <input type="text" value={contactName}
               onChange={e => { setContactName(e.target.value); if (clientId) setClientId('') }}
               placeholder="Ex: João Silva"
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              className={inputCls} />
             {clientSuggestions.length > 0 && (
               <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden">
                 <p className="px-3 py-1.5 text-xs text-slate-400 bg-slate-50 border-b border-slate-100">Cliente já cadastrado? Clique para vincular:</p>
@@ -380,12 +482,10 @@ export default function NovoChamadoPage() {
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Telefone</label>
             <input type="tel" value={contactPhone} onChange={e => setContactPhone(e.target.value)}
-              placeholder="(51) 99999-9999"
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              placeholder="(51) 99999-9999" className={inputCls} />
           </div>
         </div>
 
-        {/* Cliente vinculado ou cadastro inline (chamado aprovado) */}
         {isApproved && linkedClient && (
           <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-2.5">
             <p className="text-sm text-emerald-700">
@@ -400,9 +500,7 @@ export default function NovoChamadoPage() {
         )}
         {isApproved && !clientId && contactName.trim().length >= 2 && clientSuggestions.length === 0 && (
           <div className="border border-orange-100 bg-orange-50/50 rounded-lg p-4 space-y-3">
-            <p className="text-xs font-semibold text-orange-600">
-              Cliente novo — será cadastrado automaticamente:
-            </p>
+            <p className="text-xs font-semibold text-orange-600">Cliente novo — será cadastrado automaticamente:</p>
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
                 <label className="block text-xs font-medium text-slate-600 mb-1">Endereço (Rua, número)</label>
@@ -420,25 +518,19 @@ export default function NovoChamadoPage() {
           </div>
         )}
 
-        {/* Cidade e bairro — no agendado o endereço já é pedido nos detalhes do agendamento */}
         {!isScheduled && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Cidade</label>
-              <input type="text" value={callCity} onChange={e => setCallCity(e.target.value)}
-                placeholder="Ex: Porto Alegre"
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              <input type="text" value={callCity} onChange={e => setCallCity(e.target.value)} placeholder="Ex: Porto Alegre" className={inputCls} />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Bairro</label>
-              <input type="text" value={callNeighborhood} onChange={e => setCallNeighborhood(e.target.value)}
-                placeholder="Ex: Centro"
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              <input type="text" value={callNeighborhood} onChange={e => setCallNeighborhood(e.target.value)} placeholder="Ex: Centro" className={inputCls} />
             </div>
           </div>
         )}
 
-        {/* Campos de agendamento */}
         {isScheduled && (
           <div className="border border-orange-100 bg-orange-50/50 rounded-lg p-4 space-y-3">
             <p className="text-sm font-semibold text-orange-600 flex items-center gap-1.5">
@@ -497,8 +589,6 @@ export default function NovoChamadoPage() {
                     })}
                   </div>
                 )}
-
-                {/* Valores — só no chamado aprovado, logo após selecionar */}
                 {isApproved && catLines.map(l => (
                   <div key={l.sub ?? cat} className="bg-white border border-orange-100 rounded-xl p-3 space-y-3">
                     {l.sub && <p className="text-xs font-bold text-orange-500 uppercase tracking-wide">{l.sub}</p>}
@@ -507,24 +597,22 @@ export default function NovoChamadoPage() {
                         <label className="block text-xs font-medium text-slate-600 mb-1">{cfg?.qtyLabel ?? 'Quantidade'}</label>
                         <input type="number" min="0" step="0.01" value={l.quantity || ''}
                           onChange={e => updateLine(l.category, l.sub, { quantity: Number(e.target.value) })}
-                          className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                          className={inputCls} />
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-slate-600 mb-1">{cfg?.priceLabel ?? 'Valor (R$)'}</label>
                         <input type="number" min="0" step="0.01" value={l.unitPrice || ''}
                           onChange={e => updateLine(l.category, l.sub, { unitPrice: Number(e.target.value) })}
-                          className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                          className={inputCls} />
                       </div>
                     </div>
                     {l.quantity > 0 && l.unitPrice > 0 && (
-                      <p className="text-sm font-bold text-orange-600">
-                        Total: R$ {lineTotal(l).toFixed(2)}
-                      </p>
+                      <p className="text-sm font-bold text-orange-600">Total: R$ {lineTotal(l).toFixed(2)}</p>
                     )}
                     <input type="text" value={l.notes}
                       onChange={e => updateLine(l.category, l.sub, { notes: e.target.value })}
                       placeholder="Descrição do serviço..."
-                      className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                      className={inputCls} />
                   </div>
                 ))}
               </div>
@@ -548,41 +636,108 @@ export default function NovoChamadoPage() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Equipe</label>
-                <select value={teamId} onChange={e => setTeamId(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
+                <select value={teamId} onChange={e => setTeamId(e.target.value)} className={inputCls}>
                   <option value="">Selecione...</option>
                   {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                 </select>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Auxiliar</label>
-                <select value={auxiliaryId} onChange={e => setAuxiliaryId(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
-                  <option value="">Sem auxiliar</option>
-                  {auxiliaries.map(a => <option key={a.id} value={a.id}>{a.name} ({Number(a.percentage)}%)</option>)}
-                </select>
-              </div>
+
+              {/* Single auxiliary (commissions disabled) */}
+              {!commissionsEnabled && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Auxiliar</label>
+                  <select value={auxiliaryId} onChange={e => setAuxiliaryId(e.target.value)} className={inputCls}>
+                    <option value="">Sem auxiliar</option>
+                    {auxiliaries.map(a => <option key={a.id} value={a.id}>{a.name} ({Number(a.percentage)}%)</option>)}
+                  </select>
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Motorista</label>
-                <input type="text" value={driver} onChange={e => setDriver(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                <input type="text" value={driver} onChange={e => setDriver(e.target.value)} className={inputCls} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Nº da NF</label>
-                <input type="text" value={nfNumber} onChange={e => setNfNumber(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                <input type="text" value={nfNumber} onChange={e => setNfNumber(e.target.value)} className={inputCls} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Veículo</label>
-                <input type="text" value={vehicle} onChange={e => setVehicle(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                <input type="text" value={vehicle} onChange={e => setVehicle(e.target.value)} className={inputCls} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Vencimento</label>
-                <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={inputCls} />
               </div>
             </div>
+
+            {/* Multiple auxiliaries (commissions enabled) */}
+            {commissionsEnabled && (
+              <div className="space-y-3">
+                <label className="block text-sm font-medium text-slate-700">Auxiliares / Comissões</label>
+
+                {selectedAuxiliaries.length > 0 && (
+                  <div className="space-y-2">
+                    {selectedAuxiliaries.map(a => {
+                      const amount = bruto * a.percentage / 100
+                      return (
+                        <div key={a.auxiliary_id} className="flex items-center gap-3 p-3 rounded-lg bg-orange-50 border border-orange-100">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-slate-800">{a.name}</span>
+                              <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+                                style={a.type === 'dono'
+                                  ? { background: 'rgba(139,92,246,0.15)', color: '#7c3aed' }
+                                  : { background: 'rgba(249,115,22,0.15)', color: '#f97316' }
+                                }>
+                                {a.type === 'dono' ? 'Dono' : 'Técnico'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input type="number" min="0" max="100" step="0.1"
+                              value={a.percentage}
+                              onChange={e => updateAuxPercentage(a.auxiliary_id, Number(e.target.value))}
+                              className="w-16 px-2 py-1 border border-slate-200 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
+                            <span className="text-xs text-slate-500">%</span>
+                            <span className="text-sm font-semibold text-orange-600 w-24 text-right">
+                              R$ {amount.toFixed(2)}
+                            </span>
+                            <button type="button" onClick={() => removeAuxiliary(a.auxiliary_id)}
+                              className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {availableAuxToAdd.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <select value={addingAuxId} onChange={e => setAddingAuxId(e.target.value)}
+                      className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
+                      <option value="">Selecionar auxiliar...</option>
+                      {availableAuxToAdd.map(a => (
+                        <option key={a.id} value={a.id}>
+                          {a.name} — {a.type === 'dono' ? 'Dono' : 'Técnico'} ({Number(a.percentage)}%)
+                        </option>
+                      ))}
+                    </select>
+                    <button type="button" onClick={addAuxiliary} disabled={!addingAuxId}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-40 text-white text-sm font-medium rounded-lg transition">
+                      <Plus className="w-4 h-4" />
+                      Adicionar
+                    </button>
+                  </div>
+                )}
+
+                {selectedAuxiliaries.length === 0 && (
+                  <p className="text-xs text-slate-400">Nenhum auxiliar adicionado</p>
+                )}
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Forma de Pagamento</label>
@@ -622,8 +777,7 @@ export default function NovoChamadoPage() {
                   ].map(f => (
                     <div key={f.label}>
                       <label className="block text-sm font-medium text-slate-700 mb-1.5">{f.label}</label>
-                      <input type="number" min="0" step="0.01" value={f.val || ''} onChange={e => f.set(Number(e.target.value))}
-                        className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                      <input type="number" min="0" step="0.01" value={f.val || ''} onChange={e => f.set(Number(e.target.value))} className={inputCls} />
                     </div>
                   ))}
                 </div>
@@ -653,6 +807,11 @@ export default function NovoChamadoPage() {
                     {' → '}líquido ({partnerPct}%): <span className="font-bold text-emerald-600">R$ {liquidoParceria.toFixed(2)}</span>
                   </p>
                 </div>
+                {commissionsEnabled && serviceType === 'terceirizado_saida' && (
+                  <p className="text-xs text-orange-600 mt-2">
+                    Uma saída de R$ {(bruto * (100 - partnerPct) / 100).toFixed(2)} será gerada automaticamente para o custo do parceiro.
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -686,17 +845,39 @@ export default function NovoChamadoPage() {
                 <span className="font-semibold text-emerald-600">R$ {liquidoParceria.toFixed(2)}</span>
               </div>
             )}
-            {selectedAux && (
+
+            {/* Single aux (commissions disabled) */}
+            {!commissionsEnabled && selectedAux && (
               <div className="flex justify-between text-sm">
                 <span className="text-slate-600">Auxiliar {selectedAux.name} ({Number(selectedAux.percentage)}%)</span>
                 <span className="font-semibold text-red-500">− R$ {auxValue.toFixed(2)}</span>
               </div>
             )}
-            {(isOutsourced || selectedAux) && (
+
+            {/* Multi aux (commissions enabled) */}
+            {commissionsEnabled && selectedAuxiliaries.map(a => {
+              const amt = bruto * a.percentage / 100
+              return (
+                <div key={a.auxiliary_id} className="flex justify-between text-sm">
+                  <span className="text-slate-600">
+                    {a.type === 'dono' ? 'Dono' : 'Técnico'} {a.name} ({a.percentage}%)
+                  </span>
+                  <span className="font-semibold text-red-500">− R$ {amt.toFixed(2)}</span>
+                </div>
+              )
+            })}
+
+            {(isOutsourced || (commissionsEnabled ? selectedAuxiliaries.length > 0 : selectedAux)) && (
               <div className="flex justify-between text-base font-bold border-t border-slate-100 pt-2">
                 <span className="text-slate-800">Valor Líquido</span>
                 <span className="text-emerald-600">R$ {liquidoFinal.toFixed(2)}</span>
               </div>
+            )}
+
+            {commissionsEnabled && selectedAuxiliaries.length > 0 && (
+              <p className="text-xs text-orange-500 mt-1">
+                {selectedAuxiliaries.length} saída{selectedAuxiliaries.length > 1 ? 's' : ''} de comissão serão geradas automaticamente.
+              </p>
             )}
           </div>
 
@@ -736,8 +917,7 @@ export default function NovoChamadoPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Condições de Pagamento</label>
-              <input type="text" value={conditions} onChange={e => setConditions(e.target.value)}
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              <input type="text" value={conditions} onChange={e => setConditions(e.target.value)} className={inputCls} />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Observações da OS</label>
@@ -765,18 +945,15 @@ export default function NovoChamadoPage() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor Pago (R$)</label>
-                  <input type="number" min="0" step="0.01" value={amountPaid || ''} onChange={e => setAmountPaid(Number(e.target.value))}
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                  <input type="number" min="0" step="0.01" value={amountPaid || ''} onChange={e => setAmountPaid(Number(e.target.value))} className={inputCls} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor Restante (R$)</label>
-                  <input type="number" min="0" step="0.01" value={remainingAmount || ''} onChange={e => setRemainingAmount(Number(e.target.value))}
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                  <input type="number" min="0" step="0.01" value={remainingAmount || ''} onChange={e => setRemainingAmount(Number(e.target.value))} className={inputCls} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Data do Restante</label>
-                  <input type="date" value={remainingDueDate} onChange={e => setRemainingDueDate(e.target.value)}
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                  <input type="date" value={remainingDueDate} onChange={e => setRemainingDueDate(e.target.value)} className={inputCls} />
                 </div>
               </div>
             )}

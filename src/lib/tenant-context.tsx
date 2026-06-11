@@ -10,6 +10,7 @@ export interface Tenant {
   logo_url: string | null
   primary_color: string
   call_origins: string[]
+  enable_commissions: boolean
 }
 
 interface TenantContextValue {
@@ -27,7 +28,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     const supabase = createClient()
     supabase
       .from('tenants')
-      .select('id, slug, name, logo_url, primary_color, call_origins')
+      .select('id, slug, name, logo_url, primary_color, call_origins, enable_commissions')
       .single()
       .then(({ data }) => {
         setTenant(data)

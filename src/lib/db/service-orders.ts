@@ -28,6 +28,22 @@ export async function createServiceOrder(
   return order
 }
 
+export async function createServiceOrderAuxiliaries(
+  serviceOrderId: string,
+  auxiliaries: Array<{ auxiliary_id: string; percentage: number; amount: number }>
+) {
+  if (auxiliaries.length === 0) return
+  const supabase = createClient()
+  const rows = auxiliaries.map(a => ({
+    service_order_id: serviceOrderId,
+    auxiliary_id: a.auxiliary_id,
+    percentage: a.percentage,
+    amount: a.amount,
+  }))
+  const { error } = await supabase.from('service_order_auxiliaries').insert(rows)
+  if (error) throw error
+}
+
 export async function updateServiceOrder(id: string, values: Record<string, unknown>) {
   const supabase = createClient()
   const { data, error } = await supabase

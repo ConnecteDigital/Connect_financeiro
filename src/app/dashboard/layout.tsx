@@ -23,7 +23,7 @@ const moreNav = [
   { href: '/dashboard/relatorios',   label: 'Relatórios',   icon: BarChart3 },
   { href: '/dashboard/clientes',     label: 'Clientes',     icon: Users },
   { href: '/dashboard/fornecedores', label: 'Fornecedores', icon: Building2 },
-  { href: '/dashboard/auxiliares',   label: 'Auxiliares',   icon: UserCog },
+  { href: '/dashboard/auxiliares',   label: 'Comissões',    icon: UserCog },
   { href: '/dashboard/configuracoes',label: 'Configurações',icon: Settings },
 ]
 
