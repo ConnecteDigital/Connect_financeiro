@@ -149,10 +149,10 @@ export default function SaidasPage() {
                 </p>
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
                   {e.supplier?.name && (
-                    <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: '#eff6ff', color: '#1d4ed8' }}>{e.supplier.name}</span>
+                    <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(59,130,246,0.12)', color: '#3b82f6' }}>{e.supplier.name}</span>
                   )}
                   {e.client?.name && (
-                    <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: '#faf5ff', color: '#6d28d9' }}>{e.client.name}</span>
+                    <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(139,92,246,0.12)', color: '#8b5cf6' }}>{e.client.name}</span>
                   )}
                   <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
                     {new Date(e.due_date + 'T12:00:00').toLocaleDateString('pt-BR')}
@@ -167,8 +167,8 @@ export default function SaidasPage() {
                   <button onClick={() => toggleStatus(e.id, e.status)}
                     className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium transition"
                     style={e.status === 'pago'
-                      ? { background: '#dcfce7', color: '#16a34a' }
-                      : { background: '#fef3c7', color: '#d97706' }
+                      ? { background: 'rgba(22,163,74,0.15)', color: '#16a34a' }
+                      : { background: 'rgba(217,119,6,0.15)', color: '#d97706' }
                     }>
                     {e.status === 'pago' ? <><CheckCircle className="w-3 h-3" /> Pago</> : <><Clock className="w-3 h-3" /> Pendente</>}
                   </button>

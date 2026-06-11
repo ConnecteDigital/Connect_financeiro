@@ -336,7 +336,7 @@ export default function DashboardPage() {
             </div>
             <div className="px-5 pb-6 space-y-1">
               {[
-                { label: 'Receita bruta', value: stats?.gross_revenue ?? 0, color: '#1d1d1f' },
+                { label: 'Receita bruta', value: stats?.gross_revenue ?? 0, color: 'var(--text-primary)' },
                 { label: 'Custos terceirizados', value: -(stats?.outsource_costs ?? 0), color: '#ef4444' },
                 { label: 'Despesas do período', value: -(stats?.total_expenses ?? 0), color: '#ef4444' },
               ].map(r => (
@@ -511,12 +511,12 @@ export default function DashboardPage() {
         </Link>
         <Link href="/dashboard/saidas/novo"
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition"
-          style={{ background: '#f5f5f7', color: 'var(--text-primary)' }}>
+          style={{ background: 'var(--surface-secondary)', color: 'var(--text-primary)' }}>
           <TrendingDown className="w-4 h-4" /> Lançar Saída
         </Link>
         <Link href="/dashboard/relatorios"
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition"
-          style={{ background: '#f5f5f7', color: 'var(--text-primary)' }}>
+          style={{ background: 'var(--surface-secondary)', color: 'var(--text-primary)' }}>
           <TrendingUp className="w-4 h-4" /> Relatórios
         </Link>
       </div>
