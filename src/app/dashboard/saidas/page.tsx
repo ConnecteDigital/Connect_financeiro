@@ -1,9 +1,9 @@
-﻿'use client'
+'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Search, CheckCircle, Clock, AlertCircle, TrendingDown, Repeat } from 'lucide-react'
+import { Plus, Search, CheckCircle, Clock, AlertCircle, TrendingDown, Repeat, Trash2, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
-import { getExpenses, updateExpense } from '@/lib/db/expenses'
+import { getExpenses, updateExpense, deleteExpense } from '@/lib/db/expenses'
 
 export default function SaidasPage() {
   const [search, setSearch] = useState('')
@@ -17,11 +17,8 @@ export default function SaidasPage() {
     try {
       const data = await getExpenses({ type: typeFilter, status: statusFilter, search })
       setExpenses(data)
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setLoading(false)
-    }
+    } catch (e) { console.error(e) }
+    finally { setLoading(false) }
   }, [typeFilter, statusFilter, search])
 
   useEffect(() => { load() }, [load])
@@ -35,147 +32,161 @@ export default function SaidasPage() {
     load()
   }
 
+  async function handleDelete(id: string, description: string) {
+    if (!confirm(`Apagar a saída "${description}"? Essa ação não pode ser desfeita.`)) return
+    try {
+      await deleteExpense(id)
+      load()
+    } catch (e) {
+      console.error(e)
+      alert('Erro ao apagar saída.')
+    }
+  }
+
   const fmt = (v: number) => `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
   const totalPago = expenses.filter(e => e.status === 'pago').reduce((s, e) => s + Number(e.amount), 0)
   const totalPendente = expenses.filter(e => e.status === 'pendente').reduce((s, e) => s + Number(e.amount), 0)
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">Saídas</h1>
-          <p className="text-slate-500 text-sm mt-0.5">Controle de despesas fixas e variáveis</p>
+    <div className="space-y-4 max-w-7xl mx-auto">
+
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="hidden sm:block">
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Saídas</h1>
+          <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>Controle de despesas fixas e variáveis</p>
         </div>
-        <Link href="/dashboard/saidas/novo"
-          className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition">
-          <Plus className="w-4 h-4" />
-          Lançar Saída
+        <Link href="/dashboard/saidas/novo" className="btn-primary ml-auto">
+          <Plus className="w-4 h-4" /> Lançar Saída
         </Link>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
-        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
-          <div className="flex items-center gap-2 text-slate-500 text-xs font-medium uppercase mb-2">
-            <TrendingDown className="w-3.5 h-3.5" /> Total
+      {/* Summary cards */}
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: 'Total', value: fmt(totalPago + totalPendente), color: 'var(--text-primary)', bg: 'var(--surface)', icon: TrendingDown, iconColor: 'var(--text-secondary)' },
+          { label: 'Pago', value: fmt(totalPago), color: '#16a34a', bg: '#f0fdf4', icon: CheckCircle, iconColor: '#16a34a' },
+          { label: 'Pendente', value: fmt(totalPendente), color: '#d97706', bg: '#fffbeb', icon: AlertCircle, iconColor: '#d97706' },
+        ].map((c, i) => (
+          <div key={i} className="rounded-2xl p-3 sm:p-4" style={{ background: c.bg, boxShadow: 'var(--shadow-sm)' }}>
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <c.icon className="w-3.5 h-3.5" style={{ color: c.iconColor }} />
+              <span className="text-xs font-medium uppercase" style={{ color: 'var(--text-tertiary)' }}>{c.label}</span>
+            </div>
+            <p className="font-bold text-sm sm:text-base tabular" style={{ color: c.color }}>{loading ? '—' : c.value}</p>
           </div>
-          <p className="text-xl font-bold text-slate-800">{fmt(totalPago + totalPendente)}</p>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--text-tertiary)' }} />
+          <input type="text" placeholder="Buscar despesa..." value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="input-field pl-9 py-2.5 text-sm" />
         </div>
-        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
-          <div className="flex items-center gap-2 text-emerald-600 text-xs font-medium uppercase mb-2">
-            <CheckCircle className="w-3.5 h-3.5" /> Pago
-          </div>
-          <p className="text-xl font-bold text-emerald-600">{fmt(totalPago)}</p>
+        <div className="flex gap-1 rounded-xl p-1" style={{ background: '#ebebed' }}>
+          {(['todos', 'fixo', 'avulso'] as const).map(t => (
+            <button key={t} onClick={() => setTypeFilter(t)}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium transition"
+              style={typeFilter === t ? { background: '#fff', color: 'var(--text-primary)', boxShadow: 'var(--shadow-sm)' } : { color: 'var(--text-secondary)' }}>
+              {t === 'todos' ? 'Todos' : t === 'fixo' ? 'Fixos' : 'Avulsos'}
+            </button>
+          ))}
         </div>
-        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
-          <div className="flex items-center gap-2 text-amber-600 text-xs font-medium uppercase mb-2">
-            <AlertCircle className="w-3.5 h-3.5" /> Pendente
-          </div>
-          <p className="text-xl font-bold text-amber-600">{fmt(totalPendente)}</p>
+        <div className="flex gap-1 rounded-xl p-1" style={{ background: '#ebebed' }}>
+          {(['todos', 'pago', 'pendente'] as const).map(s => (
+            <button key={s} onClick={() => setStatusFilter(s)}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium transition"
+              style={statusFilter === s ? { background: '#fff', color: 'var(--text-primary)', boxShadow: 'var(--shadow-sm)' } : { color: 'var(--text-secondary)' }}>
+              {s === 'todos' ? 'Todos' : s === 'pago' ? 'Pago' : 'Pendente'}
+            </button>
+          ))}
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input type="text" placeholder="Buscar despesa..." value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
-          </div>
-          <div className="flex gap-1 bg-slate-100 rounded-lg p-1">
-            {(['todos', 'fixo', 'avulso'] as const).map(t => (
-              <button key={t} onClick={() => setTypeFilter(t)}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${typeFilter === t ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                {t === 'todos' ? 'Todos' : t === 'fixo' ? 'Fixos' : 'Avulsos'}
-              </button>
-            ))}
-          </div>
-          <div className="flex gap-1 bg-slate-100 rounded-lg p-1">
-            {(['todos', 'pago', 'pendente'] as const).map(s => (
-              <button key={s} onClick={() => setStatusFilter(s)}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${statusFilter === s ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                {s === 'todos' ? 'Todos' : s === 'pago' ? 'Pago' : 'Pendente'}
-              </button>
-            ))}
-          </div>
+      {/* List */}
+      {loading ? (
+        <div className="space-y-2">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="rounded-2xl p-4 flex items-center gap-3" style={{ background: 'var(--surface)' }}>
+              <div className="skeleton w-10 h-10 rounded-full flex-shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="skeleton h-4 w-40 rounded-lg" />
+                <div className="skeleton h-3 w-24 rounded-lg" />
+              </div>
+              <div className="skeleton h-5 w-20 rounded-lg" />
+            </div>
+          ))}
         </div>
-      </div>
+      ) : expenses.length === 0 ? (
+        <div className="rounded-2xl p-12 text-center" style={{ background: 'var(--surface)' }}>
+          <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>Nenhuma saída encontrada</p>
+        </div>
+      ) : (
+        /* Mobile: cards / Desktop: also cards (consistent) */
+        <div className="space-y-2">
+          {expenses.map(e => (
+            <div key={e.id}
+              className="rounded-2xl p-4 flex items-start gap-3 transition"
+              style={{ background: 'var(--surface)', boxShadow: 'var(--shadow-sm)' }}>
 
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-100">
-                <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-3">Descrição</th>
-                <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-3">Fornecedor / Cliente</th>
-                <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-3">Tipo</th>
-                <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-3">Vencimento</th>
-                <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-3">Valor</th>
-                <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide px-4 py-3">Status</th>
-                <th className="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {loading ? (
-                [...Array(5)].map((_, i) => (
-                  <tr key={i}><td colSpan={7} className="px-4 py-3">
-                    <div className="h-4 bg-slate-100 rounded animate-pulse" />
-                  </td></tr>
-                ))
-              ) : expenses.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-12 text-center text-slate-400 text-sm">
-                  Nenhuma saída encontrada
-                </td></tr>
-              ) : expenses.map(e => (
-                <tr key={e.id} className="hover:bg-slate-50 transition">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      {e.type === 'fixo' && <Repeat className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />}
-                      <span className="text-sm font-medium text-slate-800">{e.description}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-col gap-0.5">
-                      {e.supplier?.name && (
-                        <span className="text-xs text-blue-700 bg-blue-50 px-2 py-0.5 rounded w-fit">{e.supplier.name}</span>
-                      )}
-                      {e.client?.name && (
-                        <span className="text-xs text-purple-700 bg-purple-50 px-2 py-0.5 rounded w-fit">{e.client.name}</span>
-                      )}
-                      {!e.supplier?.name && !e.client?.name && (
-                        <span className="text-xs text-slate-400">—</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${e.type === 'fixo' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'}`}>
-                      {e.type === 'fixo' ? 'Fixo' : 'Avulso'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-slate-600">
+              {/* Icon */}
+              <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+                style={{ background: e.type === 'fixo' ? 'rgba(139,92,246,0.1)' : 'rgba(0,0,0,0.05)' }}>
+                {e.type === 'fixo'
+                  ? <Repeat className="w-4 h-4" style={{ color: '#7c3aed' }} />
+                  : <TrendingDown className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
+                }
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm truncate" style={{ color: 'var(--text-primary)' }}>
+                  {e.description}
+                </p>
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  {e.supplier?.name && (
+                    <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: '#eff6ff', color: '#1d4ed8' }}>{e.supplier.name}</span>
+                  )}
+                  {e.client?.name && (
+                    <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: '#faf5ff', color: '#6d28d9' }}>{e.client.name}</span>
+                  )}
+                  <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
                     {new Date(e.due_date + 'T12:00:00').toLocaleDateString('pt-BR')}
-                  </td>
-                  <td className="px-4 py-3 text-sm font-semibold text-slate-800">{fmt(e.amount)}</td>
-                  <td className="px-4 py-3">
-                    <button onClick={() => toggleStatus(e.id, e.status)}
-                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition cursor-pointer ${
-                        e.status === 'pago'
-                          ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
-                          : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
-                      }`}>
-                      {e.status === 'pago' ? <><CheckCircle className="w-3 h-3" /> Pago</> : <><Clock className="w-3 h-3" /> Pendente</>}
-                    </button>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Link href={`/dashboard/saidas/${e.id}/editar`} className="text-xs text-slate-400 hover:text-slate-600 transition">Editar</Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </span>
+                </div>
+              </div>
+
+              {/* Right side */}
+              <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                <p className="font-bold text-sm tabular" style={{ color: 'var(--text-primary)' }}>{fmt(e.amount)}</p>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => toggleStatus(e.id, e.status)}
+                    className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium transition"
+                    style={e.status === 'pago'
+                      ? { background: '#dcfce7', color: '#16a34a' }
+                      : { background: '#fef3c7', color: '#d97706' }
+                    }>
+                    {e.status === 'pago' ? <><CheckCircle className="w-3 h-3" /> Pago</> : <><Clock className="w-3 h-3" /> Pendente</>}
+                  </button>
+                  <Link href={`/dashboard/saidas/${e.id}/editar`}
+                    className="w-7 h-7 rounded-full flex items-center justify-center transition"
+                    style={{ background: '#f5f5f7' }}>
+                    <ChevronRight className="w-3.5 h-3.5" style={{ color: 'var(--text-tertiary)' }} />
+                  </Link>
+                  <button onClick={() => handleDelete(e.id, e.description)}
+                    className="w-7 h-7 rounded-full flex items-center justify-center transition"
+                    style={{ background: '#fff1f2' }}>
+                    <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
-      </div>
+      )}
     </div>
   )
 }
-

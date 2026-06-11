@@ -83,11 +83,11 @@ export default function ChamadosPage() {
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
         {filters.map(f => (
           <button key={f.value} onClick={() => setStatusFilter(f.value)}
-            className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-semibold border transition ${
-              statusFilter === f.value
-                ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
-                : 'bg-white text-zinc-600 border-zinc-200 hover:border-orange-300'
-            }`}>
+            className="flex-shrink-0 px-4 py-2 rounded-full text-xs font-semibold border transition"
+            style={statusFilter === f.value
+              ? { background: 'var(--primary)', color: '#fff', borderColor: 'var(--primary)' }
+              : { background: '#fff', color: '#52525b', borderColor: '#e4e4e7' }
+            }>
             {f.label}
           </button>
         ))}
@@ -96,8 +96,15 @@ export default function ChamadosPage() {
       {/* Cards */}
       {loading ? (
         <div className="space-y-3">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="bg-white rounded-2xl border border-zinc-100 p-4 animate-pulse h-20" />
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="bg-white rounded-2xl border border-zinc-100 p-4 flex items-start gap-3">
+              <div className="skeleton w-10 h-10 rounded-full flex-shrink-0" />
+              <div className="flex-1 space-y-2 pt-1">
+                <div className="skeleton h-4 w-40 rounded-lg" />
+                <div className="skeleton h-3 w-24 rounded-lg" />
+                <div className="skeleton h-3 w-16 rounded-lg" />
+              </div>
+            </div>
           ))}
         </div>
       ) : calls.length === 0 ? (

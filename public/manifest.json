@@ -1,0 +1,26 @@
+{
+  "name": "Connect Financeiro",
+  "short_name": "Connect",
+  "description": "Sistema de gestão financeira e administrativa",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f5f5f7",
+  "theme_color": "#f97316",
+  "icons": [
+    {
+      "src": "/logo-connect.jpeg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo-connect.jpeg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["business", "finance"],
+  "lang": "pt-BR"
+}

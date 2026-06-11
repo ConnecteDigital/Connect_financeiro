@@ -6,21 +6,29 @@ import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, PhoneCall, Users, TrendingDown,
-  BarChart3, Settings, LogOut, Menu, X, Building2
+  BarChart3, Settings, LogOut, X, Building2,
+  Plus, MoreHorizontal, UserCog, Truck,
 } from 'lucide-react'
 import { ConnectDigitalLogo } from '@/components/logos'
 import { useTenant } from '@/lib/tenant-context'
 import { TenantProvider } from '@/lib/tenant-context'
+import OnboardingWizard from '@/components/OnboardingWizard'
 
-const navItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/dashboard/chamados', label: 'Chamados', icon: PhoneCall },
-  { href: '/dashboard/clientes', label: 'Clientes', icon: Users },
-  { href: '/dashboard/saidas', label: 'Saídas', icon: TrendingDown },
-  { href: '/dashboard/fornecedores', label: 'Fornecedores', icon: Building2 },
-  { href: '/dashboard/relatorios', label: 'Relatórios', icon: BarChart3 },
-  { href: '/dashboard/configuracoes', label: 'Configurações', icon: Settings },
+const mainNav = [
+  { href: '/dashboard',              label: 'Início',      icon: LayoutDashboard },
+  { href: '/dashboard/chamados',     label: 'Chamados',    icon: PhoneCall },
+  { href: '/dashboard/saidas',       label: 'Saídas',      icon: TrendingDown },
+  { href: '/dashboard/relatorios',   label: 'Relatórios',  icon: BarChart3 },
 ]
+
+const moreNav = [
+  { href: '/dashboard/clientes',     label: 'Clientes',    icon: Users },
+  { href: '/dashboard/fornecedores', label: 'Fornecedores',icon: Building2 },
+  { href: '/dashboard/auxiliares',   label: 'Auxiliares',  icon: UserCog },
+  { href: '/dashboard/configuracoes',label: 'Configurações',icon: Settings },
+]
+
+const allNav = [...mainNav, ...moreNav]
 
 async function handleLogout() {
   const { createClient } = await import('@/lib/supabase/client')
@@ -29,126 +37,334 @@ async function handleLogout() {
   window.location.href = '/'
 }
 
-function TenantLogo({ size = 40, className = '' }: { size?: number; className?: string }) {
+function TenantAvatar({ size = 36 }: { size?: number }) {
   const { tenant } = useTenant()
-  if (!tenant?.logo_url) return null
+  if (tenant?.logo_url) {
+    return (
+      <Image
+        src={tenant.logo_url}
+        alt={tenant.name}
+        width={size}
+        height={size}
+        className="rounded-xl object-contain flex-shrink-0"
+        style={{ width: size, height: size }}
+      />
+    )
+  }
   return (
-    <Image
-      src={tenant.logo_url}
-      alt={tenant.name}
-      width={size}
-      height={size}
-      className={`object-contain ${className}`}
-      style={{ width: size, height: size }}
-    />
+    <div
+      className="rounded-xl flex items-center justify-center text-white font-bold flex-shrink-0"
+      style={{ width: size, height: size, fontSize: size * 0.4, background: 'var(--primary)' }}
+    >
+      {tenant?.name?.[0]?.toUpperCase() ?? 'C'}
+    </div>
   )
 }
 
-function SidebarContent({ onClose }: { onClose?: () => void }) {
+/* ── Mobile bottom nav ───────────────────────────────────────── */
+function BottomNav({ onMoreClick, moreOpen }: { onMoreClick: () => void; moreOpen: boolean }) {
   const pathname = usePathname()
-  const { tenant } = useTenant()
+
+  function isActive(href: string) {
+    return href === '/dashboard'
+      ? pathname === '/dashboard'
+      : pathname.startsWith(href)
+  }
+
+  return (
+    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bottom-nav"
+      style={{
+        background: 'rgba(255,255,255,0.92)',
+        backdropFilter: 'blur(24px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+        borderTop: '1px solid rgba(0,0,0,0.07)',
+        boxShadow: '0 -4px 20px rgba(0,0,0,0.06)',
+      }}>
+      <div className="flex items-end justify-around px-2 pt-2 pb-1">
+        {mainNav.map(({ href, label, icon: Icon }) => {
+          const active = isActive(href)
+          return (
+            <Link key={href} href={href}
+              className="flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all min-w-0"
+              style={{ color: active ? 'var(--primary)' : '#8e8e93' }}>
+              <div className={`w-10 h-7 flex items-center justify-center rounded-xl transition-all ${active ? 'bg-orange-50' : ''}`}
+                style={active ? { background: 'rgba(var(--primary-rgb),0.1)' } : {}}>
+                <Icon className="w-5 h-5" strokeWidth={active ? 2.2 : 1.8} />
+              </div>
+              <span className="text-[10px] font-medium leading-none truncate">{label}</span>
+            </Link>
+          )
+        })}
+
+        {/* FAB central — novo chamado */}
+        <Link href="/dashboard/chamados/novo"
+          className="flex flex-col items-center gap-0.5 px-3 py-1 -mt-4 relative"
+          style={{ color: 'var(--primary)' }}>
+          <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg"
+            style={{
+              background: 'var(--primary)',
+              boxShadow: 'var(--shadow-primary)',
+            }}>
+            <Plus className="w-7 h-7" strokeWidth={2.5} />
+          </div>
+          <span className="text-[10px] font-medium leading-none mt-0.5" style={{ color: 'var(--primary)' }}>Novo</span>
+        </Link>
+
+        {/* Mais */}
+        <button
+          onClick={onMoreClick}
+          className="flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all min-w-0"
+          style={{ color: moreOpen ? 'var(--primary)' : '#8e8e93' }}>
+          <div className={`w-10 h-7 flex items-center justify-center rounded-xl transition-all`}
+            style={moreOpen ? { background: 'rgba(var(--primary-rgb),0.1)' } : {}}>
+            <MoreHorizontal className="w-5 h-5" strokeWidth={moreOpen ? 2.2 : 1.8} />
+          </div>
+          <span className="text-[10px] font-medium leading-none">Mais</span>
+        </button>
+      </div>
+    </nav>
+  )
+}
+
+/* ── "Mais" drawer (slide up) ───────────────────────────────── */
+function MoreDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const pathname = usePathname()
 
   return (
     <>
-      <div className="px-4 py-4 border-b border-zinc-800">
-        <div className="flex items-center gap-3">
-          <TenantLogo size={40} className="rounded-xl flex-shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="text-white font-bold text-sm leading-none truncate">
-              {tenant?.name ?? 'Carregando...'}
-            </p>
-            <p className="text-orange-400 text-xs mt-0.5 font-medium">Financeiro</p>
-          </div>
-          {onClose && (
-            <button onClick={onClose} className="lg:hidden text-zinc-500 hover:text-white transition">
-              <X className="w-4 h-4" />
-            </button>
-          )}
+      {open && (
+        <div className="lg:hidden fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
+          onClick={onClose} />
+      )}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 transition-transform duration-300 ease-out"
+        style={{
+          transform: open ? 'translateY(0)' : 'translateY(110%)',
+          background: 'rgba(255,255,255,0.97)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          borderRadius: '24px 24px 0 0',
+          boxShadow: '0 -8px 40px rgba(0,0,0,0.12)',
+          paddingBottom: 'calc(16px + env(safe-area-inset-bottom, 0px))',
+        }}>
+        <div className="w-10 h-1 bg-zinc-200 rounded-full mx-auto mt-3 mb-4" />
+        <div className="px-4 pb-2 grid grid-cols-4 gap-3">
+          {moreNav.map(({ href, label, icon: Icon }) => {
+            const active = pathname.startsWith(href)
+            return (
+              <Link key={href} href={href} onClick={onClose}
+                className="flex flex-col items-center gap-2 p-3 rounded-2xl transition-all"
+                style={{
+                  background: active ? 'rgba(var(--primary-rgb),0.08)' : '#f5f5f7',
+                  color: active ? 'var(--primary)' : '#3a3a3c',
+                }}>
+                <Icon className="w-6 h-6" strokeWidth={1.8} />
+                <span className="text-[11px] font-medium text-center leading-tight">{label}</span>
+              </Link>
+            )
+          })}
         </div>
-        <div className="mt-3 flex items-center gap-1.5">
-          <div className="h-px flex-1 bg-zinc-800" />
-          <p className="text-zinc-600 text-xs">Connect Digital</p>
-          <div className="h-px flex-1 bg-zinc-800" />
+        <div className="px-4 mt-2 border-t border-zinc-100 pt-3">
+          <button onClick={handleLogout}
+            className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl text-sm font-medium text-red-500 bg-red-50 transition active:scale-95">
+            <LogOut className="w-5 h-5" />
+            Sair da conta
+          </button>
+        </div>
+      </div>
+    </>
+  )
+}
+
+/* ── Desktop sidebar ─────────────────────────────────────────── */
+function Sidebar() {
+  const pathname = usePathname()
+  const { tenant } = useTenant()
+
+  function isActive(href: string) {
+    return href === '/dashboard'
+      ? pathname === '/dashboard'
+      : pathname.startsWith(href)
+  }
+
+  return (
+    <aside className="hidden lg:flex flex-col w-64 flex-shrink-0"
+      style={{
+        background: '#18181b',
+        borderRight: '1px solid rgba(255,255,255,0.06)',
+      }}>
+
+      {/* Brand */}
+      <div className="px-5 pt-6 pb-4">
+        <div className="flex items-center gap-3">
+          <TenantAvatar size={42} />
+          <div className="flex-1 min-w-0">
+            <p className="text-white font-semibold text-sm leading-tight truncate">
+              {tenant?.name ?? '…'}
+            </p>
+            <p className="text-xs mt-0.5 font-medium" style={{ color: 'var(--primary)' }}>Financeiro</p>
+          </div>
         </div>
       </div>
 
-      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {navItems.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
+      {/* Nav */}
+      <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
+        {allNav.map(({ href, label, icon: Icon }) => {
+          const active = isActive(href)
           return (
-            <Link key={href} href={href} onClick={onClose}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                active
-                  ? 'bg-orange-500 text-white'
-                  : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
-              }`}>
-              <Icon className="w-4 h-4 flex-shrink-0" />
+            <Link key={href} href={href}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all"
+              style={{
+                background: active ? 'var(--primary)' : 'transparent',
+                color: active ? '#fff' : '#a1a1aa',
+              }}>
+              <Icon className="w-4 h-4 flex-shrink-0" strokeWidth={active ? 2.2 : 1.8} />
               <span>{label}</span>
             </Link>
           )
         })}
       </nav>
 
-      <div className="px-4 py-3 border-t border-zinc-800">
-        <div className="flex items-center gap-2 mb-3">
-          <ConnectDigitalLogo size={22} />
+      {/* Footer */}
+      <div className="px-4 py-4 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+        <div className="flex items-center gap-2.5 mb-3 px-1">
+          <ConnectDigitalLogo size={20} />
           <div>
-            <p className="text-zinc-500 text-xs leading-none">Desenvolvido por</p>
-            <p className="text-zinc-300 text-xs font-semibold mt-0.5">Connect Digital</p>
+            <p className="text-zinc-600 text-[10px] leading-none">Desenvolvido por</p>
+            <p className="text-zinc-400 text-xs font-semibold mt-0.5">Connect Digital</p>
           </div>
         </div>
         <button onClick={handleLogout}
-          className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm font-medium text-zinc-500 hover:bg-zinc-800 hover:text-white transition">
+          className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-sm font-medium text-zinc-500 hover:bg-zinc-800 hover:text-white transition">
           <LogOut className="w-4 h-4" />
-          <span>Sair</span>
+          Sair
         </button>
       </div>
-    </>
+    </aside>
   )
 }
 
-function DashboardInner({ children }: { children: React.ReactNode }) {
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+/* ── Mobile top header ───────────────────────────────────────── */
+function MobileHeader() {
   const { tenant } = useTenant()
+  const pathname = usePathname()
+
+  const currentPage = allNav.find(n =>
+    n.href === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(n.href)
+  )
 
   return (
-    <div className="flex h-screen bg-zinc-50 overflow-hidden">
-      {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/60 z-20 lg:hidden backdrop-blur-sm"
-          onClick={() => setSidebarOpen(false)} />
-      )}
+    <header className="lg:hidden flex items-center justify-between px-4 pt-safe"
+      style={{
+        paddingTop: 'calc(12px + env(safe-area-inset-top, 0px))',
+        paddingBottom: '12px',
+        background: 'rgba(245,245,247,0.92)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        borderBottom: '1px solid rgba(0,0,0,0.06)',
+        position: 'sticky',
+        top: 0,
+        zIndex: 30,
+      }}>
+      <div className="flex items-center gap-2.5">
+        <TenantAvatar size={32} />
+        <div>
+          <p className="text-xs font-medium leading-none" style={{ color: 'var(--text-secondary)' }}>
+            {tenant?.name}
+          </p>
+          <p className="text-base font-bold leading-tight" style={{ color: 'var(--text-primary)' }}>
+            {currentPage?.label ?? 'Dashboard'}
+          </p>
+        </div>
+      </div>
+      <Link href="/dashboard/configuracoes"
+        className="w-9 h-9 rounded-full flex items-center justify-center transition"
+        style={{ background: 'rgba(0,0,0,0.06)' }}>
+        <Settings className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
+      </Link>
+    </header>
+  )
+}
 
-      <aside className={`
-        fixed lg:static inset-y-0 left-0 z-30
-        flex flex-col w-64 bg-zinc-900
-        transform transition-transform duration-300 ease-in-out
-        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-      `}>
-        <SidebarContent onClose={() => setSidebarOpen(false)} />
-      </aside>
+/* ── Inner layout (uses tenant context) ─────────────────────── */
+function DashboardInner({ children }: { children: React.ReactNode }) {
+  const [moreOpen, setMoreOpen] = useState(false)
+  const [showOnboarding, setShowOnboarding] = useState(false)
+  const { tenant } = useTenant()
+  const pathname = usePathname()
+
+  // Show onboarding only on first visit
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !localStorage.getItem('connect_onboarding_done')) {
+      setShowOnboarding(true)
+    }
+  }, [])
+
+  // Apply tenant primary color as CSS variable
+  useEffect(() => {
+    if (tenant?.primary_color) {
+      document.documentElement.style.setProperty('--primary', tenant.primary_color)
+      // Compute RGB components for rgba() usage
+      const hex = tenant.primary_color.replace('#', '')
+      const r = parseInt(hex.substring(0, 2), 16)
+      const g = parseInt(hex.substring(2, 4), 16)
+      const b = parseInt(hex.substring(4, 6), 16)
+      document.documentElement.style.setProperty('--primary-rgb', `${r}, ${g}, ${b}`)
+      const darkHex = darkenHex(tenant.primary_color, 0.15)
+      document.documentElement.style.setProperty('--primary-dark', darkHex)
+      const lightHex = lightenHex(tenant.primary_color, 0.94)
+      document.documentElement.style.setProperty('--primary-light', lightHex)
+    }
+  }, [tenant?.primary_color])
+
+  // Close more drawer on route change
+  useEffect(() => { setMoreOpen(false) }, [pathname])
+
+  return (
+    <div className="flex h-screen overflow-hidden" style={{ background: 'var(--background)' }}>
+      <Sidebar />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="lg:hidden flex items-center gap-3 px-4 py-3 bg-zinc-900 border-b border-zinc-800">
-          <button onClick={() => setSidebarOpen(true)} className="text-zinc-400 hover:text-white transition">
-            <Menu className="w-5 h-5" />
-          </button>
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            <TenantLogo size={28} className="rounded-lg flex-shrink-0" />
-            <div className="min-w-0">
-              <p className="text-white font-bold text-sm leading-none truncate">{tenant?.name}</p>
-              <p className="text-orange-400 text-xs">Connect Digital</p>
-            </div>
-          </div>
-        </header>
+        <MobileHeader />
 
-        <main className="flex-1 overflow-y-auto">
-          <div className="p-4 lg:p-6 max-w-7xl mx-auto">
+        <main className="flex-1 overflow-y-auto"
+          style={{
+            paddingBottom: 'calc(var(--bottom-nav-height) + var(--safe-bottom) + 8px)',
+          }}>
+          <div className="page-enter p-4 lg:p-6 max-w-7xl mx-auto lg:pb-6">
             {children}
           </div>
         </main>
       </div>
+
+      <BottomNav onMoreClick={() => setMoreOpen(o => !o)} moreOpen={moreOpen} />
+      <MoreDrawer open={moreOpen} onClose={() => setMoreOpen(false)} />
+
+      {showOnboarding && tenant && (
+        <OnboardingWizard
+          tenantId={tenant.id}
+          initialName={tenant.name}
+          onComplete={() => setShowOnboarding(false)}
+        />
+      )}
     </div>
   )
+}
+
+/* ── Color helpers ───────────────────────────────────────────── */
+function darkenHex(hex: string, amount: number) {
+  const n = parseInt(hex.replace('#', ''), 16)
+  const r = Math.max(0, (n >> 16) - Math.round(255 * amount))
+  const g = Math.max(0, ((n >> 8) & 0xff) - Math.round(255 * amount))
+  const b = Math.max(0, (n & 0xff) - Math.round(255 * amount))
+  return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`
+}
+
+function lightenHex(hex: string, amount: number) {
+  const n = parseInt(hex.replace('#', ''), 16)
+  const r = Math.min(255, Math.round(((n >> 16) + (255 - (n >> 16))) * amount + (n >> 16) * (1 - amount)))
+  const g = Math.min(255, Math.round((((n >> 8) & 0xff) + (255 - ((n >> 8) & 0xff))) * amount + ((n >> 8) & 0xff) * (1 - amount)))
+  const b = Math.min(255, Math.round(((n & 0xff) + (255 - (n & 0xff))) * amount + (n & 0xff) * (1 - amount)))
+  return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {

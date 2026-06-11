@@ -1,20 +1,18 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { PhoneCall, CheckCircle, DollarSign, TrendingUp, TrendingDown, AlertCircle, Clock, MapPin } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { PhoneCall, CheckCircle, DollarSign, TrendingUp, TrendingDown, AlertCircle, Clock, MapPin, ChevronRight, Plus } from 'lucide-react'
 import { format, startOfMonth, endOfMonth } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { getDashboardStatsRange, getNotifications } from '@/lib/db/dashboard'
 import DateRangePicker, { DateRange } from '@/components/DateRangePicker'
-import QuickActionsFAB from '@/components/QuickActionsFAB'
 import Link from 'next/link'
+import { useTenant } from '@/lib/tenant-context'
 
 interface Stats {
   total_calls: number; approved_calls: number; gross_revenue: number
   net_revenue: number; pending_receivables: number; total_expenses: number
 }
-
-type Notifications = any
 
 const today = new Date()
 const defaultRange: DateRange = {
@@ -22,163 +20,316 @@ const defaultRange: DateRange = {
   end: format(endOfMonth(today), 'yyyy-MM-dd'),
   label: format(today, "MMMM 'de' yyyy", { locale: ptBR }),
 }
-const fmt = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+
+function fmt(v: number) {
+  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+function AnimatedNumber({ value, prefix = 'R$ ' }: { value: number; prefix?: string }) {
+  const [display, setDisplay] = useState(0)
+  const ref = useRef<number>(0)
+
+  useEffect(() => {
+    const start = ref.current
+    const end = value
+    const duration = 600
+    const startTime = performance.now()
+
+    function step(now: number) {
+      const elapsed = now - startTime
+      const progress = Math.min(elapsed / duration, 1)
+      const eased = 1 - Math.pow(1 - progress, 3)
+      const current = start + (end - start) * eased
+      setDisplay(current)
+      if (progress < 1) requestAnimationFrame(step)
+      else ref.current = end
+    }
+    requestAnimationFrame(step)
+  }, [value])
+
+  return (
+    <span className="tabular">
+      {prefix}{fmt(display)}
+    </span>
+  )
+}
+
+function SkeletonCard() {
+  return <div className="skeleton h-5 w-24 rounded-lg" />
+}
 
 export default function DashboardPage() {
   const [range, setRange] = useState<DateRange>(defaultRange)
   const [stats, setStats] = useState<Stats | null>(null)
-  const [notifications, setNotifications] = useState<Notifications | null>(null)
+  const [notifications, setNotifications] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const { tenant } = useTenant()
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [s, n] = await Promise.all([getDashboardStatsRange(range.start, range.end), getNotifications()])
-      setStats(s); setNotifications(n)
+      const [s, n] = await Promise.all([
+        getDashboardStatsRange(range.start, range.end),
+        getNotifications(),
+      ])
+      setStats(s)
+      setNotifications(n)
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
   }, [range])
 
   useEffect(() => { load() }, [load])
 
-  const cards = stats ? [
-    { icon: PhoneCall,    label: 'Chamados',    value: String(stats.total_calls),      sub: `${stats.approved_calls} aprovados`,  color: 'text-zinc-800' },
-    { icon: CheckCircle,  label: 'Aprovacao',   value: stats.total_calls > 0 ? `${Math.round((stats.approved_calls/stats.total_calls)*100)}%` : '0%', sub: `${stats.total_calls-stats.approved_calls} nao aprov.`, color: 'text-emerald-600' },
-    { icon: DollarSign,   label: 'Rec. Bruta',  value: fmt(stats.gross_revenue),       sub: 'receita total',  color: 'text-orange-500' },
-    { icon: TrendingUp,   label: 'Rec. Liquida',value: fmt(stats.net_revenue),         sub: 'apos custos',    color: stats.net_revenue >= 0 ? 'text-emerald-600' : 'text-red-500' },
-    { icon: AlertCircle,  label: 'A Receber',   value: fmt(stats.pending_receivables), sub: 'em aberto',      color: 'text-amber-600' },
-    { icon: TrendingDown, label: 'Saidas',      value: fmt(stats.total_expenses),      sub: 'despesas',       color: 'text-red-500' },
-  ] : []
+  const approvalRate = stats && stats.total_calls > 0
+    ? Math.round((stats.approved_calls / stats.total_calls) * 100)
+    : 0
 
   return (
-    <div className="space-y-5 max-w-7xl mx-auto pb-24 lg:pb-6">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-zinc-900">Dashboard</h1>
-          <p className="text-zinc-500 text-sm hidden sm:block">Visao geral financeiro e operacional</p>
-        </div>
-        <DateRangePicker value={range} onChange={setRange} />
-      </div>
+    <div className="space-y-4 max-w-2xl mx-auto lg:max-w-7xl">
 
-      {/* Stats cards - swipe horizontal on mobile */}
-      <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-3 lg:grid-cols-6 no-scrollbar">
-        {loading ? (
-          [...Array(6)].map((_, i) => (
-            <div key={i} className="flex-shrink-0 w-36 sm:w-auto bg-white rounded-2xl border border-zinc-100 p-4 animate-pulse h-24" />
-          ))
-        ) : cards.map((card, i) => (
-          <div key={i} className="flex-shrink-0 w-36 sm:w-auto bg-white rounded-2xl border border-zinc-100 p-4 shadow-sm">
-            <div className="flex items-center justify-between mb-1.5">
-              <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wide leading-none">{card.label}</p>
-              <card.icon className={`w-3.5 h-3.5 ${card.color}`} />
+      {/* ── Hero revenue card ─────────────────────────────────── */}
+      <div className="rounded-3xl overflow-hidden relative"
+        style={{
+          background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%)',
+          boxShadow: 'var(--shadow-primary)',
+        }}>
+        {/* Decorative circles */}
+        <div className="absolute -top-8 -right-8 w-40 h-40 rounded-full opacity-10"
+          style={{ background: 'white' }} />
+        <div className="absolute -bottom-4 -left-4 w-24 h-24 rounded-full opacity-10"
+          style={{ background: 'white' }} />
+
+        <div className="relative p-5">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <p className="text-white/70 text-xs font-medium uppercase tracking-widest mb-1">Receita Bruta</p>
+              <div className="text-3xl font-bold text-white leading-none">
+                {loading ? (
+                  <div className="skeleton h-8 w-40 rounded-xl opacity-30" />
+                ) : (
+                  <AnimatedNumber value={stats?.gross_revenue ?? 0} />
+                )}
+              </div>
             </div>
-            <p className={`text-lg font-bold leading-tight ${card.color}`}>{card.value}</p>
-            <p className="text-xs text-zinc-400 mt-0.5">{card.sub}</p>
+            <DateRangePicker value={range} onChange={setRange} />
           </div>
-        ))}
-      </div>
 
-      {/* Notifications - dark theme */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        {[
-          {
-            icon: Clock, title: 'Agendados Hoje', count: notifications?.scheduled?.length ?? 0,
-            accent: 'text-orange-400', badge: 'bg-orange-500',
-            items: notifications?.scheduled ?? [],
-            render: (n: any) => (
-              <a key={n.id} href={`/dashboard/chamados/${n.id}/editar`}
-                className="block px-4 py-2.5 hover:bg-zinc-800 transition">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-sm font-semibold text-white truncate">{n.contact_name || n.client?.name || 'Cliente'}</p>
-                      {n.scheduled_time && (
-                        <span className="flex items-center gap-1 bg-orange-500/20 text-orange-400 text-xs font-bold px-1.5 py-0.5 rounded">
-                          <Clock className="w-2.5 h-2.5" />{String(n.scheduled_time).slice(0,5)}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 mt-1 flex-wrap">
-                      {n.service_category && (
-                        <span className="text-xs text-zinc-400 bg-zinc-800 px-1.5 py-0.5 rounded truncate max-w-[140px]">{n.service_category}</span>
-                      )}
-                      {n.call_address && (
-                        <span className="flex items-center gap-1 text-xs text-zinc-500 truncate max-w-[160px]">
-                          <MapPin className="w-2.5 h-2.5 flex-shrink-0" />{n.call_address}
-                        </span>
-                      )}
-                      {!n.service_category && !n.call_address && !n.scheduled_time && (
-                        <span className="text-xs text-zinc-600">Sem detalhes adicionais</span>
-                      )}
-                    </div>
-                  </div>
-                  <span className="text-xs text-orange-500 font-medium flex-shrink-0 mt-0.5">Editar</span>
-                </div>
-              </a>
-            ),
-            empty: 'Nenhum agendamento hoje',
-          },
-          {
-            icon: AlertCircle, title: 'Pagamentos Pendentes', count: notifications?.pendingPayments?.length ?? 0,
-            accent: 'text-amber-400', badge: 'bg-amber-500',
-            items: notifications?.pendingPayments ?? [],
-            render: (n: any) => (
-              <div key={n.id} className="px-4 py-3">
-                <p className="text-sm font-semibold text-white">{n.client?.name ?? 'Cliente'}</p>
-                <p className="text-xs text-amber-400 mt-0.5">
-                  Falta: {fmt(n.remaining_amount || n.total_value || 0)}
-                  {n.remaining_due_date && ` - venc. ${new Date(n.remaining_due_date).toLocaleDateString('pt-BR')}`}
+          {/* Mini metrics row */}
+          <div className="grid grid-cols-3 gap-2 mt-2">
+            {[
+              { label: 'Líquido', value: stats?.net_revenue ?? 0, positive: (stats?.net_revenue ?? 0) >= 0 },
+              { label: 'A Receber', value: stats?.pending_receivables ?? 0, positive: true },
+              { label: 'Saídas', value: stats?.total_expenses ?? 0, positive: false },
+            ].map((m, i) => (
+              <div key={i} className="rounded-2xl px-3 py-2.5"
+                style={{ background: 'rgba(0,0,0,0.15)' }}>
+                <p className="text-white/60 text-[10px] font-medium uppercase tracking-wide">{m.label}</p>
+                <p className="text-white font-bold text-sm mt-0.5 tabular">
+                  {loading ? '—' : `R$ ${fmt(m.value)}`}
                 </p>
               </div>
-            ),
-            empty: 'Nenhum pendente',
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Call stats chips ──────────────────────────────────── */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[
+          {
+            icon: PhoneCall, label: 'Chamados', color: 'text-zinc-700',
+            value: loading ? null : String(stats?.total_calls ?? 0),
+            sub: loading ? null : `${stats?.approved_calls ?? 0} aprovados`,
+            bg: '#f5f5f7', iconBg: 'rgba(0,0,0,0.06)',
           },
           {
-            icon: TrendingDown, title: 'Contas a Pagar', count: notifications?.pendingExpenses?.length ?? 0,
-            accent: 'text-red-400', badge: 'bg-red-500',
-            items: notifications?.pendingExpenses ?? [],
-            render: (n: any) => (
-              <div key={n.id} className="px-4 py-3">
-                <p className="text-sm font-semibold text-white">{n.description}</p>
-                <p className="text-xs text-red-400 mt-0.5">{fmt(n.amount)} - venc. {new Date(n.due_date).toLocaleDateString('pt-BR')}</p>
-              </div>
-            ),
-            empty: 'Nenhuma conta pendente',
+            icon: CheckCircle, label: 'Aprovação', color: 'text-emerald-600',
+            value: loading ? null : `${approvalRate}%`,
+            sub: loading ? null : 'taxa de conversão',
+            bg: '#f0fdf4', iconBg: 'rgba(22,163,74,0.12)',
           },
-        ].map((section, i) => (
-          <div key={i} className="bg-zinc-900 rounded-2xl overflow-hidden">
-            <div className="flex items-center gap-2 px-4 py-3 border-b border-zinc-800">
-              <section.icon className={`w-4 h-4 ${section.accent}`} />
-              <h3 className="font-semibold text-sm text-white">{section.title}</h3>
-              <span className={`ml-auto ${section.badge} text-white text-xs font-bold px-2 py-0.5 rounded-full`}>
-                {section.count}
-              </span>
+          {
+            icon: AlertCircle, label: 'A Receber', color: 'text-amber-600',
+            value: loading ? null : `R$ ${fmt(stats?.pending_receivables ?? 0)}`,
+            sub: 'em aberto', bg: '#fffbeb', iconBg: 'rgba(217,119,6,0.12)',
+          },
+          {
+            icon: TrendingDown, label: 'Despesas', color: 'text-red-500',
+            value: loading ? null : `R$ ${fmt(stats?.total_expenses ?? 0)}`,
+            sub: 'este período', bg: '#fff1f2', iconBg: 'rgba(239,68,68,0.10)',
+          },
+        ].map((card, i) => (
+          <div key={i} className="rounded-2xl p-4 flex flex-col gap-2"
+            style={{ background: card.bg, boxShadow: 'var(--shadow-sm)' }}>
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center"
+              style={{ background: card.iconBg }}>
+              <card.icon className={`w-4 h-4 ${card.color}`} />
             </div>
-            <div className="divide-y divide-zinc-800">
-              {section.items.length === 0
-                ? <p className="text-zinc-500 text-sm px-4 py-5 text-center">{section.empty}</p>
-                : section.items.map((n: any) => section.render(n))
-              }
+            <div>
+              <p className="text-xs text-zinc-500 font-medium">{card.label}</p>
+              <p className={`font-bold text-base leading-tight tabular ${card.color}`}>
+                {card.value ?? <SkeletonCard />}
+              </p>
+              <p className="text-[11px] text-zinc-400 mt-0.5">{card.sub ?? ''}</p>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Quick actions - desktop only */}
-      <div className="hidden lg:block bg-white rounded-2xl border border-zinc-100 shadow-sm p-5">
-        <h3 className="font-semibold text-zinc-800 mb-4">Acoes Rapidas</h3>
-        <div className="flex flex-wrap gap-3">
-          <Link href="/dashboard/chamados/novo" className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium px-4 py-2 rounded-xl transition">
-            <PhoneCall className="w-4 h-4" /> Novo Chamado
-          </Link>
-          <Link href="/dashboard/clientes/novo" className="flex items-center gap-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-sm font-medium px-4 py-2 rounded-xl transition">Novo Cliente</Link>
-          <Link href="/dashboard/saidas/novo" className="flex items-center gap-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-sm font-medium px-4 py-2 rounded-xl transition">Lancar Saida</Link>
-          <Link href="/dashboard/relatorios" className="flex items-center gap-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-sm font-medium px-4 py-2 rounded-xl transition">Ver Relatorios</Link>
-        </div>
+      {/* ── Notifications ─────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        {/* Agendados hoje */}
+        <NotifSection
+          icon={Clock}
+          title="Agendados Hoje"
+          accentColor="#f97316"
+          items={notifications?.scheduled ?? []}
+          loading={loading}
+          empty="Nenhum agendamento hoje"
+          renderItem={(n: any) => (
+            <Link key={n.id} href={`/dashboard/chamados/${n.id}/editar`}
+              className="flex items-start gap-3 px-4 py-3 hover:bg-zinc-800/50 transition active:bg-zinc-800">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
+                style={{ background: 'rgba(249,115,22,0.15)' }}>
+                <Clock className="w-3.5 h-3.5 text-orange-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white truncate">
+                  {n.contact_name || n.client?.name || 'Cliente'}
+                </p>
+                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                  {n.scheduled_time && (
+                    <span className="text-xs text-orange-400 font-medium">{String(n.scheduled_time).slice(0, 5)}</span>
+                  )}
+                  {n.service_category && (
+                    <span className="text-xs text-zinc-500 truncate">{n.service_category}</span>
+                  )}
+                </div>
+                {n.call_address && (
+                  <p className="flex items-center gap-1 text-xs text-zinc-600 mt-0.5 truncate">
+                    <MapPin className="w-3 h-3 flex-shrink-0" />{n.call_address}
+                  </p>
+                )}
+              </div>
+              <ChevronRight className="w-4 h-4 text-zinc-600 flex-shrink-0 mt-1" />
+            </Link>
+          )}
+        />
+
+        {/* Pagamentos pendentes */}
+        <NotifSection
+          icon={AlertCircle}
+          title="Pagamentos Pendentes"
+          accentColor="#d97706"
+          items={notifications?.pendingPayments ?? []}
+          loading={loading}
+          empty="Nenhum pendente"
+          renderItem={(n: any) => (
+            <Link key={n.id} href={`/dashboard/chamados/${n.call_id}`}
+              className="flex items-start gap-3 px-4 py-3 hover:bg-zinc-800/50 transition active:bg-zinc-800">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
+                style={{ background: 'rgba(217,119,6,0.15)' }}>
+                <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white truncate">
+                  {n.client?.name ?? 'Cliente'}
+                </p>
+                <p className="text-xs text-amber-400 font-medium mt-0.5 tabular">
+                  R$ {fmt(n.remaining_amount || n.total_value || 0)}
+                </p>
+                {n.remaining_due_date && (
+                  <p className="text-xs text-zinc-600 mt-0.5">
+                    Venc. {new Date(n.remaining_due_date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                  </p>
+                )}
+              </div>
+              <ChevronRight className="w-4 h-4 text-zinc-600 flex-shrink-0 mt-1" />
+            </Link>
+          )}
+        />
+
+        {/* Contas a pagar */}
+        <NotifSection
+          icon={TrendingDown}
+          title="Contas a Pagar"
+          accentColor="#ef4444"
+          items={notifications?.pendingExpenses ?? []}
+          loading={loading}
+          empty="Nenhuma conta pendente"
+          renderItem={(n: any) => (
+            <Link key={n.id} href={`/dashboard/saidas/${n.id}/editar`}
+              className="flex items-start gap-3 px-4 py-3 hover:bg-zinc-800/50 transition active:bg-zinc-800">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
+                style={{ background: 'rgba(239,68,68,0.15)' }}>
+                <TrendingDown className="w-3.5 h-3.5 text-red-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white truncate">{n.description}</p>
+                <p className="text-xs text-red-400 font-medium mt-0.5 tabular">R$ {fmt(n.amount)}</p>
+                <p className="text-xs text-zinc-600 mt-0.5">
+                  Venc. {new Date(n.due_date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                </p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-zinc-600 flex-shrink-0 mt-1" />
+            </Link>
+          )}
+        />
       </div>
 
-      <QuickActionsFAB />
+      {/* ── Quick actions (desktop only — mobile uses bottom FAB) ── */}
+      <div className="hidden lg:flex items-center gap-3 flex-wrap">
+        <Link href="/dashboard/chamados/novo"
+          className="btn-primary">
+          <Plus className="w-4 h-4" /> Novo Chamado
+        </Link>
+        <Link href="/dashboard/saidas/novo"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition"
+          style={{ background: '#f5f5f7', color: 'var(--text-primary)' }}>
+          <TrendingDown className="w-4 h-4" /> Lançar Saída
+        </Link>
+        <Link href="/dashboard/relatorios"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition"
+          style={{ background: '#f5f5f7', color: 'var(--text-primary)' }}>
+          <TrendingUp className="w-4 h-4" /> Relatórios
+        </Link>
+      </div>
+    </div>
+  )
+}
+
+function NotifSection({
+  icon: Icon, title, accentColor, items, loading, empty, renderItem,
+}: {
+  icon: any; title: string; accentColor: string
+  items: any[]; loading: boolean; empty: string
+  renderItem: (item: any) => React.ReactNode
+}) {
+  return (
+    <div className="rounded-2xl overflow-hidden" style={{ background: '#18181b' }}>
+      <div className="flex items-center gap-2.5 px-4 py-3 border-b"
+        style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+        <Icon className="w-4 h-4" style={{ color: accentColor }} />
+        <h3 className="font-semibold text-sm text-white flex-1">{title}</h3>
+        <span className="text-white text-xs font-bold px-2 py-0.5 rounded-full"
+          style={{ background: accentColor }}>
+          {loading ? '·' : items.length}
+        </span>
+      </div>
+      <div className="divide-y divide-white/5">
+        {loading ? (
+          [...Array(2)].map((_, i) => (
+            <div key={i} className="px-4 py-3 space-y-2">
+              <div className="skeleton h-4 w-32 opacity-20" />
+              <div className="skeleton h-3 w-20 opacity-10" />
+            </div>
+          ))
+        ) : items.length === 0 ? (
+          <p className="text-zinc-600 text-sm px-4 py-6 text-center">{empty}</p>
+        ) : (
+          items.map(renderItem)
+        )}
+      </div>
     </div>
   )
 }

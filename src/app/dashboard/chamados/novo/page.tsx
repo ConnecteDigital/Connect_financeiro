@@ -1,7 +1,7 @@
 ﻿'use client'
 
-import { useState, useEffect } from 'react'
-import { ArrowLeft, Plus, Trash2, Save, Loader2 } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { ArrowLeft, Plus, Trash2, Save, Loader2, Camera, Paperclip, FileText, X } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createCall } from '@/lib/db/calls'
@@ -10,11 +10,14 @@ import { getClients, createClient_ } from '@/lib/db/clients'
 import { getTeams } from '@/lib/db/teams'
 import { getServiceTypes } from '@/lib/db/service-types'
 import { useCallOrigins } from '@/lib/use-call-origins'
+import { createClient } from '@/lib/supabase/client'
 
 type ServiceType = 'proprio' | 'terceirizado_saida' | 'terceirizado_entrada'
 type PaymentStatus = 'pago' | 'pago_parcial' | 'pendente'
 type BillingSystem = 'metro_linear' | 'metro_cubico' | 'litros' | 'carga' | 'valor_fechado' | 'metro_quadrado'
 interface Item { id: string; quantity: number; description: string; unit_price: number }
+
+interface PendingFile { id: string; file: File; preview?: string }
 
 export default function NovoChamadoPage() {
   const router = useRouter()
@@ -24,6 +27,9 @@ export default function NovoChamadoPage() {
   const [teams, setTeams] = useState<any[]>([])
   const [serviceTypes, setServiceTypes] = useState<any[]>([])
   const { origins: callOrigins } = useCallOrigins()
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
 
   // Chamado básico
   const [callDate, setCallDate] = useState(new Date().toISOString().split('T')[0])
@@ -86,6 +92,33 @@ export default function NovoChamadoPage() {
   const updateItem = (id: string, field: keyof Item, value: string | number) =>
     setItems(prev => prev.map(i => i.id === id ? { ...i, [field]: value } : i))
 
+  function addFiles(fileList: FileList | null) {
+    if (!fileList) return
+    const newFiles: PendingFile[] = Array.from(fileList).map(file => {
+      const id = Date.now().toString() + Math.random()
+      const preview = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined
+      return { id, file, preview }
+    })
+    setPendingFiles(prev => [...prev, ...newFiles])
+  }
+
+  function removePendingFile(id: string) {
+    setPendingFiles(prev => {
+      const f = prev.find(f => f.id === id)
+      if (f?.preview) URL.revokeObjectURL(f.preview)
+      return prev.filter(f => f.id !== id)
+    })
+  }
+
+  async function uploadPendingFiles(callId: string) {
+    if (pendingFiles.length === 0) return
+    const supabase = createClient()
+    await Promise.all(pendingFiles.map(({ file }) => {
+      const path = `${callId}/${Date.now()}_${file.name}`
+      return supabase.storage.from('chamados-anexos').upload(path, file)
+    }))
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!contactName.trim() && !clientId) {
@@ -115,6 +148,7 @@ export default function NovoChamadoPage() {
       })
 
       if (isApproved) {
+        await uploadPendingFiles(call.id)
         const orderData = {
           call_id: call.id,
           date: callDate,
@@ -503,6 +537,48 @@ export default function NovoChamadoPage() {
                   <input type="date" value={remainingDueDate} onChange={e => setRemainingDueDate(e.target.value)}
                     className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
                 </div>
+              </div>
+            )}
+          </div>
+          {/* Fotos e documentos */}
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-4">
+            <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3">Fotos e Documentos</h2>
+            <p className="text-xs text-slate-500">Anexe fotos do local ou documentos relacionados ao serviço.</p>
+
+            <div className="flex gap-3">
+              <button type="button" onClick={() => cameraInputRef.current?.click()}
+                className="flex items-center gap-2 px-4 py-2.5 bg-orange-50 border border-orange-200 text-orange-600 rounded-xl text-sm font-medium hover:bg-orange-100 transition active:scale-95">
+                <Camera className="w-4 h-4" /> Tirar Foto
+              </button>
+              <button type="button" onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-2 px-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-sm font-medium hover:bg-slate-100 transition active:scale-95">
+                <Paperclip className="w-4 h-4" /> Anexar Arquivo
+              </button>
+              <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" multiple className="hidden"
+                onChange={e => addFiles(e.target.files)} />
+              <input ref={fileInputRef} type="file" multiple className="hidden"
+                onChange={e => addFiles(e.target.files)} />
+            </div>
+
+            {pendingFiles.length > 0 && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {pendingFiles.map(f => (
+                  <div key={f.id} className="relative group rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+                    {f.preview ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={f.preview} alt={f.file.name} className="w-full h-24 object-cover" />
+                    ) : (
+                      <div className="w-full h-24 flex flex-col items-center justify-center gap-1 text-slate-400">
+                        <FileText className="w-7 h-7" />
+                        <span className="text-xs text-center px-2 truncate w-full text-center">{f.file.name}</span>
+                      </div>
+                    )}
+                    <button type="button" onClick={() => removePendingFile(f.id)}
+                      className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
           </div>
