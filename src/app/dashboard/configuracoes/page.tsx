@@ -67,8 +67,19 @@ export default function ConfiguracoesPage() {
     setSavingCommissions(true)
     try {
       const supabase = createClient()
-      await supabase.from('tenants').update({ enable_commissions: next }).eq('id', tenant.id)
-      setEnableCommissions(next)
+      // .select().single() força erro se o RLS bloquear (update de 0 linhas)
+      const { data, error } = await supabase
+        .from('tenants')
+        .update({ enable_commissions: next })
+        .eq('id', tenant.id)
+        .select('enable_commissions')
+        .single()
+      if (error || !data) {
+        console.error('Falha ao salvar enable_commissions:', error)
+        alert('Não foi possível salvar. Verifique se a migration_v6.sql (policy de update do tenant) foi executada no Supabase.')
+        return
+      }
+      setEnableCommissions(data.enable_commissions)
     } finally {
       setSavingCommissions(false)
     }
@@ -92,7 +103,17 @@ export default function ConfiguracoesPage() {
     setSavingOrigins(true)
     try {
       const supabase = createClient()
-      await supabase.from('tenants').update({ call_origins: origins }).eq('id', tenant.id)
+      const { data, error } = await supabase
+        .from('tenants')
+        .update({ call_origins: origins })
+        .eq('id', tenant.id)
+        .select('call_origins')
+        .single()
+      if (error || !data) {
+        console.error('Falha ao salvar call_origins:', error)
+        alert('Não foi possível salvar as origens. Verifique se a migration_v6.sql foi executada no Supabase.')
+        return
+      }
       setOriginsSaved(true)
     } finally {
       setSavingOrigins(false)

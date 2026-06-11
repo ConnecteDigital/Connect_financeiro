@@ -84,12 +84,13 @@ export default function OnboardingWizard({ tenantId, initialName, onComplete }: 
         logo_url = data.publicUrl
       }
 
-      await supabase.from('tenants').update({
+      const { error } = await supabase.from('tenants').update({
         name: companyName,
         primary_color: primaryColor,
         call_origins: origins,
         ...(logo_url ? { logo_url } : {}),
-      }).eq('id', tenantId)
+      }).eq('id', tenantId).select('id').single()
+      if (error) throw error
 
       localStorage.setItem(STORAGE_KEY, '1')
       setStep(3)
