@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, PhoneCall, Users, TrendingDown,
-  BarChart3, Settings, LogOut, X, Building2,
-  Plus, MoreHorizontal, UserCog, Truck,
+  BarChart3, Settings, LogOut, Building2,
+  Plus, MoreHorizontal, UserCog,
 } from 'lucide-react'
 import { ConnectDigitalLogo } from '@/components/logos'
 import { useTenant } from '@/lib/tenant-context'
@@ -15,16 +15,16 @@ import { TenantProvider } from '@/lib/tenant-context'
 import OnboardingWizard from '@/components/OnboardingWizard'
 
 const mainNav = [
-  { href: '/dashboard',              label: 'Início',      icon: LayoutDashboard },
-  { href: '/dashboard/chamados',     label: 'Chamados',    icon: PhoneCall },
-  { href: '/dashboard/saidas',       label: 'Saídas',      icon: TrendingDown },
-  { href: '/dashboard/relatorios',   label: 'Relatórios',  icon: BarChart3 },
+  { href: '/dashboard',          label: 'Início',   icon: LayoutDashboard },
+  { href: '/dashboard/chamados', label: 'Chamados', icon: PhoneCall },
+  { href: '/dashboard/saidas',   label: 'Saídas',   icon: TrendingDown },
 ]
 
 const moreNav = [
-  { href: '/dashboard/clientes',     label: 'Clientes',    icon: Users },
-  { href: '/dashboard/fornecedores', label: 'Fornecedores',icon: Building2 },
-  { href: '/dashboard/auxiliares',   label: 'Auxiliares',  icon: UserCog },
+  { href: '/dashboard/relatorios',   label: 'Relatórios',   icon: BarChart3 },
+  { href: '/dashboard/clientes',     label: 'Clientes',     icon: Users },
+  { href: '/dashboard/fornecedores', label: 'Fornecedores', icon: Building2 },
+  { href: '/dashboard/auxiliares',   label: 'Auxiliares',   icon: UserCog },
   { href: '/dashboard/configuracoes',label: 'Configurações',icon: Settings },
 ]
 
@@ -62,7 +62,7 @@ function TenantAvatar({ size = 36 }: { size?: number }) {
 }
 
 /* ── Mobile bottom nav ───────────────────────────────────────── */
-function BottomNav({ onMoreClick, moreOpen }: { onMoreClick: () => void; moreOpen: boolean }) {
+function BottomNav({ onMoreClick, moreOpen, visible }: { onMoreClick: () => void; moreOpen: boolean; visible: boolean }) {
   const pathname = usePathname()
 
   function isActive(href: string) {
@@ -72,55 +72,77 @@ function BottomNav({ onMoreClick, moreOpen }: { onMoreClick: () => void; moreOpe
   }
 
   return (
-    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bottom-nav"
-      style={{
-        background: 'rgba(255,255,255,0.92)',
-        backdropFilter: 'blur(24px) saturate(180%)',
-        WebkitBackdropFilter: 'blur(24px) saturate(180%)',
-        borderTop: '1px solid rgba(0,0,0,0.07)',
-        boxShadow: '0 -4px 20px rgba(0,0,0,0.06)',
-      }}>
-      <div className="flex items-end justify-around px-2 pt-2 pb-1">
-        {mainNav.map(({ href, label, icon: Icon }) => {
-          const active = isActive(href)
-          return (
-            <Link key={href} href={href}
-              className="flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all min-w-0"
-              style={{ color: active ? 'var(--primary)' : '#8e8e93' }}>
-              <div className={`w-10 h-7 flex items-center justify-center rounded-xl transition-all ${active ? 'bg-orange-50' : ''}`}
-                style={active ? { background: 'rgba(var(--primary-rgb),0.1)' } : {}}>
-                <Icon className="w-5 h-5" strokeWidth={active ? 2.2 : 1.8} />
+    <nav
+      className="lg:hidden fixed bottom-0 left-0 right-0 z-40 transition-transform duration-300 ease-out"
+      style={{ transform: visible ? 'translateY(0)' : 'translateY(110%)' }}
+    >
+      {/* Safe-area spacer */}
+      <div style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+        {/* Floating pill */}
+        <div className="mx-3 mb-3 rounded-2xl overflow-hidden"
+          style={{
+            background: 'rgba(255,255,255,0.90)',
+            backdropFilter: 'blur(24px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.14), 0 0 0 0.5px rgba(0,0,0,0.07)',
+          }}>
+          <div className="flex items-end justify-around px-1 pt-2 pb-2">
+            {/* Left items */}
+            {mainNav.slice(0, 2).map(({ href, label, icon: Icon }) => {
+              const active = isActive(href)
+              return (
+                <Link key={href} href={href}
+                  className="flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all min-w-0"
+                  style={{ color: active ? 'var(--primary)' : '#8e8e93' }}>
+                  <div className="w-10 h-7 flex items-center justify-center rounded-xl transition-all"
+                    style={active ? { background: 'rgba(var(--primary-rgb),0.1)' } : {}}>
+                    <Icon className="w-5 h-5" strokeWidth={active ? 2.2 : 1.8} />
+                  </div>
+                  <span className="text-[10px] font-medium leading-none truncate">{label}</span>
+                </Link>
+              )
+            })}
+
+            {/* Center FAB */}
+            <Link href="/dashboard/chamados/novo"
+              className="flex flex-col items-center gap-0.5 px-2 py-1 -mt-5 relative"
+              style={{ color: 'var(--primary)' }}>
+              <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg"
+                style={{ background: 'var(--primary)', boxShadow: 'var(--shadow-primary)' }}>
+                <Plus className="w-7 h-7" strokeWidth={2.5} />
               </div>
-              <span className="text-[10px] font-medium leading-none truncate">{label}</span>
+              <span className="text-[10px] font-medium leading-none mt-0.5" style={{ color: 'var(--primary)' }}>Novo</span>
             </Link>
-          )
-        })}
 
-        {/* FAB central — novo chamado */}
-        <Link href="/dashboard/chamados/novo"
-          className="flex flex-col items-center gap-0.5 px-3 py-1 -mt-4 relative"
-          style={{ color: 'var(--primary)' }}>
-          <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg"
-            style={{
-              background: 'var(--primary)',
-              boxShadow: 'var(--shadow-primary)',
-            }}>
-            <Plus className="w-7 h-7" strokeWidth={2.5} />
-          </div>
-          <span className="text-[10px] font-medium leading-none mt-0.5" style={{ color: 'var(--primary)' }}>Novo</span>
-        </Link>
+            {/* Right: Saídas */}
+            {mainNav.slice(2).map(({ href, label, icon: Icon }) => {
+              const active = isActive(href)
+              return (
+                <Link key={href} href={href}
+                  className="flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all min-w-0"
+                  style={{ color: active ? 'var(--primary)' : '#8e8e93' }}>
+                  <div className="w-10 h-7 flex items-center justify-center rounded-xl transition-all"
+                    style={active ? { background: 'rgba(var(--primary-rgb),0.1)' } : {}}>
+                    <Icon className="w-5 h-5" strokeWidth={active ? 2.2 : 1.8} />
+                  </div>
+                  <span className="text-[10px] font-medium leading-none truncate">{label}</span>
+                </Link>
+              )
+            })}
 
-        {/* Mais */}
-        <button
-          onClick={onMoreClick}
-          className="flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all min-w-0"
-          style={{ color: moreOpen ? 'var(--primary)' : '#8e8e93' }}>
-          <div className={`w-10 h-7 flex items-center justify-center rounded-xl transition-all`}
-            style={moreOpen ? { background: 'rgba(var(--primary-rgb),0.1)' } : {}}>
-            <MoreHorizontal className="w-5 h-5" strokeWidth={moreOpen ? 2.2 : 1.8} />
+            {/* Mais */}
+            <button
+              onClick={onMoreClick}
+              className="flex flex-col items-center gap-0.5 px-3 py-1 rounded-xl transition-all min-w-0"
+              style={{ color: moreOpen ? 'var(--primary)' : '#8e8e93' }}>
+              <div className="w-10 h-7 flex items-center justify-center rounded-xl transition-all"
+                style={moreOpen ? { background: 'rgba(var(--primary-rgb),0.1)' } : {}}>
+                <MoreHorizontal className="w-5 h-5" strokeWidth={moreOpen ? 2.2 : 1.8} />
+              </div>
+              <span className="text-[10px] font-medium leading-none">Mais</span>
+            </button>
           </div>
-          <span className="text-[10px] font-medium leading-none">Mais</span>
-        </button>
+        </div>
       </div>
     </nav>
   )
@@ -144,7 +166,7 @@ function MoreDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
           WebkitBackdropFilter: 'blur(20px)',
           borderRadius: '24px 24px 0 0',
           boxShadow: '0 -8px 40px rgba(0,0,0,0.12)',
-          paddingBottom: 'calc(16px + env(safe-area-inset-bottom, 0px))',
+          paddingBottom: 'calc(20px + env(safe-area-inset-bottom, 0px))',
         }}>
         <div className="w-10 h-1 bg-zinc-200 rounded-full mx-auto mt-3 mb-4" />
         <div className="px-4 pb-2 grid grid-cols-4 gap-3">
@@ -244,7 +266,7 @@ function Sidebar() {
 }
 
 /* ── Mobile top header ───────────────────────────────────────── */
-function MobileHeader() {
+function MobileHeader({ visible }: { visible: boolean }) {
   const { tenant } = useTenant()
   const pathname = usePathname()
 
@@ -253,7 +275,7 @@ function MobileHeader() {
   )
 
   return (
-    <header className="lg:hidden flex items-center justify-between px-4 pt-safe"
+    <header className="lg:hidden flex items-center justify-between px-4 transition-transform duration-300 ease-out"
       style={{
         paddingTop: 'calc(12px + env(safe-area-inset-top, 0px))',
         paddingBottom: '12px',
@@ -264,6 +286,7 @@ function MobileHeader() {
         position: 'sticky',
         top: 0,
         zIndex: 30,
+        transform: visible ? 'translateY(0)' : 'translateY(-100%)',
       }}>
       <div className="flex items-center gap-2.5">
         <TenantAvatar size={32} />
@@ -289,8 +312,14 @@ function MobileHeader() {
 function DashboardInner({ children }: { children: React.ReactNode }) {
   const [moreOpen, setMoreOpen] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
+  const [navVisible, setNavVisible] = useState(true)
   const { tenant } = useTenant()
   const pathname = usePathname()
+  const mainRef = useRef<HTMLElement>(null)
+  const lastScrollY = useRef(0)
+  const scrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const isPrintPage = pathname.includes('/imprimir')
 
   // Show onboarding only on first visit
   useEffect(() => {
@@ -303,32 +332,68 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (tenant?.primary_color) {
       document.documentElement.style.setProperty('--primary', tenant.primary_color)
-      // Compute RGB components for rgba() usage
       const hex = tenant.primary_color.replace('#', '')
       const r = parseInt(hex.substring(0, 2), 16)
       const g = parseInt(hex.substring(2, 4), 16)
       const b = parseInt(hex.substring(4, 6), 16)
       document.documentElement.style.setProperty('--primary-rgb', `${r}, ${g}, ${b}`)
-      const darkHex = darkenHex(tenant.primary_color, 0.15)
-      document.documentElement.style.setProperty('--primary-dark', darkHex)
-      const lightHex = lightenHex(tenant.primary_color, 0.94)
-      document.documentElement.style.setProperty('--primary-light', lightHex)
+      document.documentElement.style.setProperty('--primary-dark', darkenHex(tenant.primary_color, 0.15))
+      document.documentElement.style.setProperty('--primary-light', lightenHex(tenant.primary_color, 0.94))
     }
   }, [tenant?.primary_color])
 
+  // Hide-on-scroll: attach listener to the main scroll container
+  useEffect(() => {
+    const el = mainRef.current
+    if (!el) return
+
+    function onScroll() {
+      const y = el!.scrollTop
+      const delta = y - lastScrollY.current
+
+      if (delta > 8) {
+        setNavVisible(false)
+      } else if (delta < -8 || y < 40) {
+        setNavVisible(true)
+      }
+
+      lastScrollY.current = y
+
+      // Always show nav when scroll stops
+      if (scrollTimer.current) clearTimeout(scrollTimer.current)
+      scrollTimer.current = setTimeout(() => setNavVisible(true), 1500)
+    }
+
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      el.removeEventListener('scroll', onScroll)
+      if (scrollTimer.current) clearTimeout(scrollTimer.current)
+    }
+  }, [])
+
   // Close more drawer on route change
   useEffect(() => { setMoreOpen(false) }, [pathname])
+
+  if (isPrintPage) {
+    return (
+      <div className="min-h-screen bg-white">
+        {children}
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: 'var(--background)' }}>
       <Sidebar />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <MobileHeader />
+        <MobileHeader visible={navVisible} />
 
-        <main className="flex-1 overflow-y-auto"
+        <main
+          ref={mainRef}
+          className="flex-1 overflow-y-auto"
           style={{
-            paddingBottom: 'calc(var(--bottom-nav-height) + var(--safe-bottom) + 8px)',
+            paddingBottom: 'calc(var(--bottom-nav-height) + var(--safe-bottom) + 16px)',
           }}>
           <div className="page-enter p-4 lg:p-6 max-w-7xl mx-auto lg:pb-6">
             {children}
@@ -336,7 +401,7 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
         </main>
       </div>
 
-      <BottomNav onMoreClick={() => setMoreOpen(o => !o)} moreOpen={moreOpen} />
+      <BottomNav onMoreClick={() => setMoreOpen(o => !o)} moreOpen={moreOpen} visible={navVisible} />
       <MoreDrawer open={moreOpen} onClose={() => setMoreOpen(false)} />
 
       {showOnboarding && tenant && (

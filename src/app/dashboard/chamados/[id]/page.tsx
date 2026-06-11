@@ -146,55 +146,56 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
   const cfg = statusConfig[call.status]
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-4xl mx-auto space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href="/dashboard/chamados" className="p-2 hover:bg-slate-100 rounded-lg transition text-slate-500">
+      <div className="flex flex-col gap-3">
+        <div className="flex items-start gap-3">
+          <Link href="/dashboard/chamados" className="p-2 hover:bg-slate-100 rounded-lg transition text-slate-500 flex-shrink-0 mt-0.5">
             <ArrowLeft className="w-5 h-5" />
           </Link>
-
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold text-slate-800">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl sm:text-2xl font-bold text-slate-800">
                 {call.client?.name ?? call.contact_name ?? 'Chamado sem identificação'}
               </h1>
-              <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${cfg?.bg} ${cfg?.color}`}>
+              <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold flex-shrink-0 ${cfg?.bg} ${cfg?.color}`}>
                 <StatusIcon className="w-3 h-3" />
                 {cfg?.label}
               </span>
             </div>
-            <p className="text-slate-500 text-sm mt-0.5">
+            <p className="text-slate-500 text-xs sm:text-sm mt-0.5">
               {call.call_number && <span className="font-mono font-semibold text-orange-500">{call.call_number}{' · '}</span>}
-              {new Date(call.date).toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+              {new Date(call.date).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' })}
               {' · '}{getOriginLabel(call.origin)}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+
+        {/* Action buttons — scrollable on mobile */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1">
           {call.status === 'agendado' && (
             <Link href={`/dashboard/chamados/${id}/romaneio`}
-              className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition">
+              className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition flex-shrink-0">
               <FileText className="w-4 h-4" />
-              Enviar Romaneio
+              <span className="whitespace-nowrap">Enviar Romaneio</span>
             </Link>
           )}
           {so && (
-            <Link href={`/dashboard/chamados/${id}/imprimir`} target="_blank"
-              className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold px-4 py-2.5 rounded-lg transition">
+            <Link href={`/dashboard/chamados/${id}/imprimir`}
+              className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold px-4 py-2.5 rounded-lg transition flex-shrink-0">
               <Printer className="w-4 h-4" />
-              Imprimir OS
+              <span className="whitespace-nowrap">Compartilhar OS</span>
             </Link>
           )}
           <Link href={`/dashboard/chamados/${id}/editar`}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition">
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition flex-shrink-0">
             <Edit className="w-4 h-4" />
-            Editar Chamado
+            <span className="whitespace-nowrap">Editar Chamado</span>
           </Link>
           <button onClick={handleDeleteCall} disabled={deleting}
-            className="flex items-center gap-2 bg-red-50 hover:bg-red-100 disabled:opacity-50 text-red-600 text-sm font-semibold px-4 py-2.5 rounded-lg transition border border-red-200">
+            className="flex items-center gap-2 bg-red-50 hover:bg-red-100 disabled:opacity-50 text-red-600 text-sm font-semibold px-4 py-2.5 rounded-lg transition border border-red-200 flex-shrink-0">
             <Trash2 className="w-4 h-4" />
-            {deleting ? 'Excluindo...' : 'Excluir'}
+            <span className="whitespace-nowrap">{deleting ? 'Excluindo...' : 'Excluir'}</span>
           </button>
         </div>
       </div>

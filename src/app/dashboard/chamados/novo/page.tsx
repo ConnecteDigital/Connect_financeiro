@@ -8,10 +8,9 @@ import { createCall } from '@/lib/db/calls'
 import { createServiceOrder } from '@/lib/db/service-orders'
 import { getClients, createClient_ } from '@/lib/db/clients'
 import { getTeams } from '@/lib/db/teams'
-import { getServiceTypes } from '@/lib/db/service-types'
 import { getAuxiliaries } from '@/lib/db/auxiliaries'
+import { SERVICE_CATEGORIES, SERVICE_CONFIG } from '@/lib/service-config'
 import { useCallOrigins } from '@/lib/use-call-origins'
-import { SERVICE_CONFIG } from '@/lib/service-config'
 import { createClient } from '@/lib/supabase/client'
 
 type ServiceType = 'proprio' | 'terceirizado_saida' | 'terceirizado_entrada'
@@ -35,7 +34,7 @@ const CALL_STATUSES = [
 
 const PAYMENT_METHODS = ['Dinheiro', 'Cartão', 'PIX', 'Boleto']
 
-const emptyNewClient = { cpf_cnpj: '', address: '', neighborhood: '', city: '', state: '', cep: '', email: '' }
+const emptyNewClient = { address: '', state: '' }
 
 interface PendingFile { id: string; file: File; preview?: string }
 
@@ -46,7 +45,6 @@ export default function NovoChamadoPage() {
   const [clients, setClients] = useState<any[]>([])
   const [teams, setTeams] = useState<any[]>([])
   const [auxiliaries, setAuxiliaries] = useState<any[]>([])
-  const [categoryNames, setCategoryNames] = useState<string[]>([])
   const { origins: callOrigins } = useCallOrigins()
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -111,11 +109,10 @@ export default function NovoChamadoPage() {
   const [otherServiceValue, setOtherServiceValue] = useState(0)
 
   useEffect(() => {
-    Promise.all([getClients(), getTeams(), getServiceTypes(), getAuxiliaries()])
-      .then(([c, t, st, aux]) => {
+    Promise.all([getClients(), getTeams(), getAuxiliaries()])
+      .then(([c, t, aux]) => {
         setClients(c)
         setTeams(t)
-        setCategoryNames(st.map((s: any) => s.name))
         setAuxiliaries(aux)
       })
       .catch(console.error)
@@ -215,15 +212,10 @@ export default function NovoChamadoPage() {
         const created = await createClient_({
           name: contactName.trim(),
           phone: contactPhone || null,
-          ...(isApproved ? {
-            cpf_cnpj: newClient.cpf_cnpj || null,
-            address: newClient.address || null,
-            neighborhood: newClient.neighborhood || callNeighborhood || null,
-            city: newClient.city || callCity || null,
-            state: newClient.state || null,
-            cep: newClient.cep || null,
-            email: newClient.email || null,
-          } : {}),
+          address: newClient.address || null,
+          neighborhood: callNeighborhood || null,
+          city: callCity || null,
+          state: newClient.state || null,
         })
         finalClientId = created.id
       }
@@ -405,31 +397,16 @@ export default function NovoChamadoPage() {
             </button>
           </div>
         )}
-        {isApproved && !clientId && contactName.trim().length >= 2 && clientSuggestions.length === 0 && (
+        {!clientId && contactName.trim().length >= 2 && clientSuggestions.length === 0 && (
           <div className="border border-orange-100 bg-orange-50/50 rounded-lg p-4 space-y-3">
-            <p className="text-sm font-semibold text-orange-600">
-              Cliente novo — será cadastrado automaticamente. Complete os dados:
+            <p className="text-xs font-semibold text-orange-600">
+              Cliente novo — será cadastrado automaticamente:
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">CPF/CNPJ</label>
-                <input type="text" value={newClient.cpf_cnpj} onChange={e => setNewClient(p => ({ ...p, cpf_cnpj: e.target.value }))}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400" />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-medium text-slate-600 mb-1">Endereço</label>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-slate-600 mb-1">Endereço (Rua, número)</label>
                 <input type="text" value={newClient.address} onChange={e => setNewClient(p => ({ ...p, address: e.target.value }))}
                   placeholder="Rua, número"
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Bairro</label>
-                <input type="text" value={newClient.neighborhood} onChange={e => setNewClient(p => ({ ...p, neighborhood: e.target.value }))}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Cidade</label>
-                <input type="text" value={newClient.city} onChange={e => setNewClient(p => ({ ...p, city: e.target.value }))}
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400" />
               </div>
               <div>
@@ -438,34 +415,11 @@ export default function NovoChamadoPage() {
                   placeholder="RS"
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400" />
               </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">CEP</label>
-                <input type="text" value={newClient.cep} onChange={e => setNewClient(p => ({ ...p, cep: e.target.value }))}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400" />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-medium text-slate-600 mb-1">E-mail</label>
-                <input type="email" value={newClient.email} onChange={e => setNewClient(p => ({ ...p, email: e.target.value }))}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400" />
-              </div>
             </div>
           </div>
         )}
 
-        {/* Cliente cadastrado */}
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5">
-            Cliente cadastrado
-            <span className="text-slate-400 font-normal ml-1">(opcional)</span>
-          </label>
-          <select value={clientId} onChange={e => setClientId(e.target.value)}
-            className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
-            <option value="">— Não vincular —</option>
-            {clients.map(c => <option key={c.id} value={c.id}>{c.name}{c.city ? ` - ${c.city}` : ''}</option>)}
-          </select>
-        </div>
-
-        {/* Cidade e bairro — sempre disponíveis, mesmo sem aprovação ou visita */}
+        {/* Cidade e bairro do chamado */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Cidade</label>
@@ -509,13 +463,13 @@ export default function NovoChamadoPage() {
           </div>
         )}
 
-        {/* Tipo(s) de serviço — seção única */}
+        {/* Tipo(s) de serviço */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">Tipo(s) de Serviço</label>
           <div className="flex flex-wrap gap-2 mb-2">
-            {categoryNames.map(name => (
+            {SERVICE_CATEGORIES.map(name => (
               <button key={name} type="button" onClick={() => toggleCategory(name)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${selectedCategories.includes(name) ? 'bg-orange-500 border-orange-500 text-white' : 'border-slate-200 text-slate-600 hover:border-orange-300'}`}>
+                className={`px-3 py-2 rounded-xl text-sm font-medium border transition ${selectedCategories.includes(name) ? 'bg-orange-500 border-orange-500 text-white shadow-sm' : 'border-slate-200 text-slate-600 hover:border-orange-300 bg-white'}`}>
                 {name}
               </button>
             ))}
@@ -525,15 +479,15 @@ export default function NovoChamadoPage() {
             const cfg = SERVICE_CONFIG[cat]
             const catLines = serviceLines.filter(l => l.category === cat)
             return (
-              <div key={cat} className="border border-orange-100 bg-orange-50/40 rounded-lg p-3 mt-2 space-y-3">
-                <p className="text-sm font-semibold text-slate-700 uppercase tracking-wide">{cat}</p>
+              <div key={cat} className="border border-orange-200 bg-orange-50/40 rounded-xl p-4 mt-3 space-y-3">
+                <p className="text-sm font-bold text-orange-600">{cat}</p>
                 {cfg?.subOptions && (
                   <div className="flex flex-wrap gap-2">
                     {cfg.subOptions.map(sub => {
                       const active = catLines.some(l => l.sub === sub)
                       return (
                         <button key={sub} type="button" onClick={() => toggleSub(cat, sub)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${active ? 'bg-orange-500 border-orange-500 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-orange-300'}`}>
+                          className={`px-3 py-2 rounded-xl text-sm font-medium border transition ${active ? 'bg-orange-500 border-orange-500 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-orange-300'}`}>
                           {sub}
                         </button>
                       )
@@ -541,34 +495,33 @@ export default function NovoChamadoPage() {
                   </div>
                 )}
 
-                {/* Valores por serviço — só no chamado aprovado */}
-                {isApproved && catLines.map(l => (
-                  <div key={l.sub ?? cat} className="bg-white border border-slate-100 rounded-lg p-3 space-y-2">
-                    {l.sub && <p className="text-xs font-bold text-orange-600 uppercase">{l.sub}</p>}
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {/* Valores — aparecem logo após selecionar */}
+                {catLines.map(l => (
+                  <div key={l.sub ?? cat} className="bg-white border border-orange-100 rounded-xl p-3 space-y-3">
+                    {l.sub && <p className="text-xs font-bold text-orange-500 uppercase tracking-wide">{l.sub}</p>}
+                    <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs font-medium text-slate-600 mb-1">{cfg?.qtyLabel ?? 'Quantidade'}</label>
                         <input type="number" min="0" step="0.01" value={l.quantity || ''}
                           onChange={e => updateLine(l.category, l.sub, { quantity: Number(e.target.value) })}
-                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                          className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-slate-600 mb-1">{cfg?.priceLabel ?? 'Valor (R$)'}</label>
                         <input type="number" min="0" step="0.01" value={l.unitPrice || ''}
                           onChange={e => updateLine(l.category, l.sub, { unitPrice: Number(e.target.value) })}
-                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
-                      </div>
-                      <div className="col-span-2 sm:col-span-1">
-                        <label className="block text-xs font-medium text-slate-600 mb-1">Valor total</label>
-                        <p className="px-3 py-2 text-sm font-bold text-orange-600 bg-slate-50 border border-slate-100 rounded-lg">
-                          R$ {lineTotal(l).toFixed(2)}
-                        </p>
+                          className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
                       </div>
                     </div>
+                    {l.quantity > 0 && l.unitPrice > 0 && (
+                      <p className="text-sm font-bold text-orange-600">
+                        Total: R$ {lineTotal(l).toFixed(2)}
+                      </p>
+                    )}
                     <input type="text" value={l.notes}
                       onChange={e => updateLine(l.category, l.sub, { notes: e.target.value })}
-                      placeholder="Descrição deste serviço..."
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                      placeholder="Descrição do serviço..."
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
                   </div>
                 ))}
               </div>

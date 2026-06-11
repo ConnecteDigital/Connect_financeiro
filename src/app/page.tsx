@@ -32,7 +32,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex bg-zinc-950">
+    <div className="min-h-[100dvh] flex bg-zinc-950">
       {/* Left panel - branding (desktop only) */}
       <div className="hidden lg:flex flex-col justify-between w-[45%] bg-zinc-900 p-12 relative overflow-hidden">
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -86,9 +86,10 @@ export default function LoginPage() {
       </div>
 
       {/* Right panel - login */}
-      <div className="flex-1 flex flex-col items-center justify-center p-6 lg:p-12">
-        <div className="lg:hidden flex flex-col items-center gap-4 mb-10">
-          <ConnectDigitalLogo size={56} />
+      <div className="flex-1 flex flex-col overflow-y-auto">
+        <div className="flex-1 flex flex-col items-center justify-center p-6 py-10 lg:p-12 min-h-[100dvh] lg:min-h-0">
+        <div className="lg:hidden flex flex-col items-center gap-3 mb-8">
+          <ConnectDigitalLogo size={48} />
           <p className="text-white font-bold text-lg">Connect Digital</p>
           <p className="text-zinc-500 text-sm">Sistema Financeiro</p>
         </div>
@@ -138,6 +139,7 @@ export default function LoginPage() {
             <ConnectDigitalLogo size={18} />
             <p className="text-zinc-600 text-xs">Desenvolvido por Connect Digital</p>
           </div>
+        </div>
         </div>
       </div>
     </div>

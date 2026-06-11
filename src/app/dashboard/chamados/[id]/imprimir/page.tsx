@@ -5,7 +5,7 @@ import { use } from 'react'
 import Image from 'next/image'
 import { getCall } from '@/lib/db/calls'
 import { useTenant } from '@/lib/tenant-context'
-import { Printer } from 'lucide-react'
+import { Share2 } from 'lucide-react'
 
 const fmt = (v: number | string) =>
   `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
@@ -46,17 +46,17 @@ function ImprimirContent({ id }: { id: string }) {
 
   return (
     <>
-      <div className="print:hidden fixed top-4 right-4 z-50">
+      <div className="print:hidden fixed bottom-6 inset-x-0 flex justify-center z-50 px-4">
         <button
           onClick={() => window.print()}
-          className="flex items-center gap-2 text-white font-semibold px-5 py-2.5 rounded-xl shadow-lg transition"
-          style={{ backgroundColor: primaryColor }}>
-          <Printer className="w-4 h-4" />
-          Imprimir / Salvar PDF
+          className="flex items-center gap-2.5 text-white font-semibold px-8 py-4 rounded-2xl shadow-2xl transition active:scale-95"
+          style={{ backgroundColor: primaryColor, boxShadow: `0 8px 24px ${primaryColor}60` }}>
+          <Share2 className="w-5 h-5" />
+          Compartilhar PDF
         </button>
       </div>
 
-      <div className="print:m-0 min-h-screen bg-white p-6 font-sans text-[13px] text-black max-w-[800px] mx-auto">
+      <div className="print:m-0 bg-white p-6 pb-28 print:pb-6 font-sans text-[13px] text-black max-w-[800px] mx-auto min-h-screen">
         {/* Cabeçalho */}
         <div className="border-2 border-black mb-0">
           <div className="flex">

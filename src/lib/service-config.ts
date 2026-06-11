@@ -6,24 +6,24 @@ export interface ServiceCategoryConfig {
 }
 
 export const SERVICE_CONFIG: Record<string, ServiceCategoryConfig> = {
-  'Sucção': {
-    subOptions: ['Fossa'],
-    qtyLabel: 'Quantidade de litros',
-    priceLabel: 'Valor do litro (R$)',
-  },
-  'Desobstrução': {
+  'Desentupimento': {
     subOptions: ['Ralo', 'Pia', 'Vaso', 'Esgoto', 'Coluna'],
     qtyLabel: 'Quantidade de metros',
     priceLabel: 'Valor do metro (R$)',
   },
-  'Limpeza': {
-    subOptions: ['Fossa', 'Caixa de Gordura'],
-    qtyLabel: 'Quantidade',
-    priceLabel: 'Valor unitário (R$)',
-  },
   'Hidrojateamento': {
     qtyLabel: 'Metragem (m)',
     priceLabel: 'Valor do metro (R$)',
+  },
+  'Limpeza': {
+    subOptions: ['Caixa de Gordura', 'Fossa'],
+    qtyLabel: 'Quantidade',
+    priceLabel: 'Valor unitário (R$)',
+  },
+  'Sucção': {
+    subOptions: ['Fossa'],
+    qtyLabel: 'Quantidade de litros',
+    priceLabel: 'Valor do litro (R$)',
   },
   'Aplicação de CO2': {
     qtyLabel: 'Quantidade',
