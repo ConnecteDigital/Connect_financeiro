@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Users, Plus, Trash2, Save, Settings, Loader2, Wrench, UserCog, Power, Globe, X, Check, ToggleLeft, ToggleRight, Star } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Users, Plus, Trash2, Save, Settings, Loader2, Wrench, UserCog, Power, Globe, X, Check, ToggleLeft, ToggleRight, Star, Palette, Upload } from 'lucide-react'
 import { getTeams, createTeam, deleteTeam } from '@/lib/db/teams'
 import { getAllServiceTypes, createServiceType, toggleServiceType, deleteServiceType } from '@/lib/db/service-types'
 import { getAuxiliaries, createAuxiliary, updateAuxiliary, deleteAuxiliary } from '@/lib/db/auxiliaries'
@@ -11,6 +11,11 @@ import { useTenant } from '@/lib/tenant-context'
 const ORIGIN_PRESETS = [
   'Indicação', 'WhatsApp', 'Site', 'Instagram',
   'Facebook', 'Google', 'Terceirizado', 'Telefone',
+]
+
+const PRESET_COLORS = [
+  '#f97316', '#3b82f6', '#8b5cf6', '#10b981',
+  '#ef4444', '#f59e0b', '#06b6d4', '#ec4899',
 ]
 
 function AddAuxForm({ type, savingAux, onAdd }: {
@@ -87,6 +92,14 @@ export default function ConfiguracoesPage() {
   const [savingCompany, setSavingCompany] = useState(false)
   const [companySaved, setCompanySaved] = useState(false)
 
+  // Identidade visual
+  const [primaryColor, setPrimaryColor] = useState('#f97316')
+  const [logoPreview, setLogoPreview] = useState<string | null>(null)
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [savingBrand, setSavingBrand] = useState(false)
+  const [brandSaved, setBrandSaved] = useState(false)
+  const logoInputRef = useRef<HTMLInputElement>(null)
+
   useEffect(() => {
     if (!tenant) return
     if (tenant.call_origins) setOrigins(tenant.call_origins)
@@ -94,6 +107,8 @@ export default function ConfiguracoesPage() {
     setCompanyName(tenant.name ?? '')
     setCnpj(tenant.cnpj ?? '')
     setPhone(tenant.phone ?? '')
+    setPrimaryColor(tenant.primary_color ?? '#f97316')
+    setLogoPreview(tenant.logo_url ?? null)
   }, [tenant])
 
   useEffect(() => {
@@ -188,6 +203,62 @@ export default function ConfiguracoesPage() {
       setTimeout(() => setCompanySaved(false), 3000)
     } finally {
       setSavingCompany(false)
+    }
+  }
+
+  function pickLogo(files: FileList | null) {
+    const file = files?.[0]
+    if (!file) return
+    setLogoFile(file)
+    setLogoPreview(URL.createObjectURL(file))
+    setBrandSaved(false)
+  }
+
+  async function handleSaveBrand() {
+    if (!tenant) return
+    setSavingBrand(true)
+    try {
+      const supabase = createClient()
+      let logo_url: string | undefined
+
+      if (logoFile) {
+        const ext = logoFile.name.split('.').pop()
+        const path = `${tenant.id}/logo.${ext}`
+        const { error: upErr } = await supabase.storage
+          .from('tenant-logos')
+          .upload(path, logoFile, { upsert: true })
+        if (upErr) {
+          console.error('Falha no upload da logo:', upErr)
+          alert('Não foi possível enviar a logo. Tente novamente.')
+          return
+        }
+        const { data } = supabase.storage.from('tenant-logos').getPublicUrl(path)
+        // Cache-buster para a logo nova aparecer na hora
+        logo_url = `${data.publicUrl}?v=${Date.now()}`
+      }
+
+      const { data, error } = await supabase
+        .from('tenants')
+        .update({
+          primary_color: primaryColor,
+          ...(logo_url ? { logo_url } : {}),
+        })
+        .eq('id', tenant.id)
+        .select('primary_color, logo_url')
+        .single()
+      if (error || !data) {
+        console.error('Falha ao salvar identidade visual:', error)
+        alert('Não foi possível salvar. Tente novamente.')
+        return
+      }
+      updateTenant({ primary_color: data.primary_color, logo_url: data.logo_url })
+      setLogoFile(null)
+      setBrandSaved(true)
+      // Aplica a cor na hora, sem precisar recarregar
+      document.documentElement.style.setProperty('--primary', data.primary_color)
+      setTimeout(() => setBrandSaved(false), 3000)
+    } finally {
+      setSavingBrand(false)
     }
   }
 
@@ -600,6 +671,76 @@ export default function ConfiguracoesPage() {
           <button onClick={handleSaveCompany} disabled={savingCompany} className="btn-primary text-sm px-5 py-2.5">
             {savingCompany ? <Loader2 className="w-4 h-4 animate-spin" /> : companySaved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
             {companySaved ? 'Salvo!' : 'Salvar'}
+          </button>
+        </div>
+      </div>
+
+      {/* Identidade Visual */}
+      <div className="rounded-xl border p-6 space-y-4"
+        style={{ background: 'var(--surface)', borderColor: 'var(--border)', boxShadow: 'var(--shadow-sm)' }}>
+        <div className="flex items-center gap-2 border-b pb-3" style={{ borderColor: 'var(--border)' }}>
+          <Palette className="w-5 h-5" style={{ color: 'var(--primary)' }} />
+          <h2 className="font-semibold" style={{ color: 'var(--text-primary)' }}>Identidade Visual</h2>
+        </div>
+        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+          Logo e cor que aparecem no sistema, nas Ordens de Serviço e nos Romaneios.
+        </p>
+
+        {/* Logo */}
+        <div className="flex items-center gap-4">
+          <button type="button" onClick={() => logoInputRef.current?.click()}
+            className="w-24 h-24 rounded-2xl border-2 border-dashed flex items-center justify-center overflow-hidden transition flex-shrink-0"
+            style={{ borderColor: 'var(--border-strong)', background: 'var(--surface-secondary)' }}>
+            {logoPreview ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={logoPreview} alt="Logo" className="w-full h-full object-contain p-1" />
+            ) : (
+              <Upload className="w-6 h-6" style={{ color: 'var(--text-tertiary)' }} />
+            )}
+          </button>
+          <div>
+            <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Logo da empresa</p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)' }}>PNG ou JPG, de preferência com fundo transparente</p>
+            <button type="button" onClick={() => logoInputRef.current?.click()}
+              className="mt-2 text-xs font-semibold px-3 py-1.5 rounded-lg transition"
+              style={{ background: 'rgba(var(--primary-rgb),0.1)', color: 'var(--primary)' }}>
+              {logoPreview ? 'Trocar logo' : 'Enviar logo'}
+            </button>
+          </div>
+          <input ref={logoInputRef} type="file" accept="image/*" className="hidden"
+            onChange={e => pickLogo(e.target.files)} />
+        </div>
+
+        {/* Cor */}
+        <div>
+          <p className="text-sm font-medium mb-2" style={{ color: 'var(--text-primary)' }}>Cor do sistema</p>
+          <div className="flex flex-wrap items-center gap-2">
+            {PRESET_COLORS.map(c => (
+              <button key={c} type="button"
+                onClick={() => { setPrimaryColor(c); setBrandSaved(false) }}
+                className="w-9 h-9 rounded-full transition flex items-center justify-center"
+                style={{
+                  background: c,
+                  boxShadow: primaryColor === c ? `0 0 0 3px var(--surface), 0 0 0 5px ${c}` : 'none',
+                }}>
+                {primaryColor === c && <Check className="w-4 h-4 text-white" strokeWidth={3} />}
+              </button>
+            ))}
+            {/* Cor personalizada */}
+            <label className="w-9 h-9 rounded-full cursor-pointer border-2 border-dashed flex items-center justify-center overflow-hidden relative"
+              style={{ borderColor: 'var(--border-strong)' }}>
+              <input type="color" value={primaryColor}
+                onChange={e => { setPrimaryColor(e.target.value); setBrandSaved(false) }}
+                className="absolute inset-0 opacity-0 cursor-pointer" />
+              <Palette className="w-4 h-4" style={{ color: 'var(--text-tertiary)' }} />
+            </label>
+          </div>
+        </div>
+
+        <div className="flex justify-end">
+          <button onClick={handleSaveBrand} disabled={savingBrand} className="btn-primary text-sm px-5 py-2.5">
+            {savingBrand ? <Loader2 className="w-4 h-4 animate-spin" /> : brandSaved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+            {brandSaved ? 'Salvo!' : 'Salvar Identidade'}
           </button>
         </div>
       </div>

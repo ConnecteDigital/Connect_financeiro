@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { use } from 'react'
 import { getCall } from '@/lib/db/calls'
 import { useTenant } from '@/lib/tenant-context'
-import { Share2 } from 'lucide-react'
+import { Share2, Printer, Loader2 } from 'lucide-react'
 
 const fmt = (v: number | string) =>
   `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
@@ -13,10 +13,59 @@ function ImprimirContent({ id }: { id: string }) {
   const { tenant } = useTenant()
   const [call, setCall] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [sharing, setSharing] = useState(false)
+  const sheetRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     getCall(id).then(setCall).catch(console.error).finally(() => setLoading(false))
   }, [id])
+
+  async function handleShare() {
+    if (!sheetRef.current || sharing) return
+    setSharing(true)
+    const el = sheetRef.current
+    const prevPadding = el.style.paddingBottom
+    el.style.paddingBottom = '24px'
+    try {
+      const html2canvas = (await import('html2canvas')).default
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        logging: false,
+      })
+      const blob: Blob | null = await new Promise(res => canvas.toBlob(res, 'image/png'))
+      if (!blob) throw new Error('Falha ao gerar imagem')
+
+      const osNumber = call?.service_orders?.[0]?.os_number ?? 'OS'
+      const file = new File([blob], `${osNumber}.png`, { type: 'image/png' })
+
+      // Compartilhamento nativo (WhatsApp etc.) quando suportado
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: `Ordem de Serviço ${osNumber}`,
+        })
+      } else {
+        // Desktop sem Web Share: baixa a imagem
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${osNumber}.png`
+        a.click()
+        URL.revokeObjectURL(url)
+      }
+    } catch (e: any) {
+      // Usuário cancelou o share — não é erro
+      if (e?.name !== 'AbortError') {
+        console.error(e)
+        alert('Não foi possível compartilhar. Tente novamente.')
+      }
+    } finally {
+      el.style.paddingBottom = prevPadding
+      setSharing(false)
+    }
+  }
 
   if (loading) return <div className="flex items-center justify-center h-screen text-slate-500">Carregando...</div>
   if (!call) return <div className="flex items-center justify-center h-screen text-slate-500">Chamado não encontrado.</div>
@@ -45,17 +94,25 @@ function ImprimirContent({ id }: { id: string }) {
 
   return (
     <>
-      <div className="print:hidden fixed bottom-6 inset-x-0 flex justify-center z-50 px-4">
+      <div className="print:hidden fixed bottom-6 inset-x-0 flex justify-center z-50 px-4 gap-3">
+        <button
+          onClick={handleShare}
+          disabled={sharing}
+          className="flex items-center gap-2.5 text-white font-semibold px-8 py-4 rounded-2xl shadow-2xl transition active:scale-95 disabled:opacity-70"
+          style={{ backgroundColor: '#16a34a', boxShadow: '0 8px 24px rgba(22,163,74,0.45)' }}>
+          {sharing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Share2 className="w-5 h-5" />}
+          {sharing ? 'Gerando...' : 'Compartilhar'}
+        </button>
         <button
           onClick={() => window.print()}
-          className="flex items-center gap-2.5 text-white font-semibold px-8 py-4 rounded-2xl shadow-2xl transition active:scale-95"
-          style={{ backgroundColor: '#16a34a', boxShadow: '0 8px 24px rgba(22,163,74,0.45)' }}>
-          <Share2 className="w-5 h-5" />
-          Compartilhar PDF
+          className="flex items-center gap-2 text-white font-semibold px-5 py-4 rounded-2xl shadow-2xl transition active:scale-95"
+          style={{ backgroundColor: primaryColor }}>
+          <Printer className="w-5 h-5" />
+          PDF
         </button>
       </div>
 
-      <div className="os-sheet print:m-0 bg-white p-6 pb-28 print:pb-0 font-sans text-[13px] text-black max-w-[800px] mx-auto min-h-screen">
+      <div ref={sheetRef} className="os-sheet print:m-0 bg-white p-6 pb-28 print:pb-0 font-sans text-[13px] text-black max-w-[800px] mx-auto min-h-screen">
         {/* Cabeçalho */}
         <div className="border-2 border-black mb-0">
           <div className="flex">
