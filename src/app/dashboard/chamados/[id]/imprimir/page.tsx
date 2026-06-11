@@ -2,12 +2,15 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { use } from 'react'
+import Link from 'next/link'
 import { getCall } from '@/lib/db/calls'
 import { useTenant } from '@/lib/tenant-context'
-import { Share2, Printer, Loader2 } from 'lucide-react'
+import { ArrowLeft, Share2, Loader2 } from 'lucide-react'
 
-const fmt = (v: number | string) =>
+const BRL = (v: number | string) =>
   `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+
+const B = '1px solid black'
 
 function ImprimirContent({ id }: { id: string }) {
   const { tenant } = useTenant()
@@ -23,12 +26,9 @@ function ImprimirContent({ id }: { id: string }) {
   async function handleShare() {
     if (!sheetRef.current || sharing) return
     setSharing(true)
-    const el = sheetRef.current
-    const prevPadding = el.style.paddingBottom
-    el.style.paddingBottom = '24px'
     try {
       const html2canvas = (await import('html2canvas')).default
-      const canvas = await html2canvas(el, {
+      const canvas = await html2canvas(sheetRef.current, {
         scale: 2,
         backgroundColor: '#ffffff',
         useCORS: true,
@@ -36,18 +36,11 @@ function ImprimirContent({ id }: { id: string }) {
       })
       const blob: Blob | null = await new Promise(res => canvas.toBlob(res, 'image/png'))
       if (!blob) throw new Error('Falha ao gerar imagem')
-
       const osNumber = call?.service_orders?.[0]?.os_number ?? 'OS'
       const file = new File([blob], `${osNumber}.png`, { type: 'image/png' })
-
-      // Compartilhamento nativo (WhatsApp etc.) quando suportado
       if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: `Ordem de Serviço ${osNumber}`,
-        })
+        await navigator.share({ files: [file], title: `Ordem de Serviço ${osNumber}` })
       } else {
-        // Desktop sem Web Share: baixa a imagem
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
@@ -56,13 +49,11 @@ function ImprimirContent({ id }: { id: string }) {
         URL.revokeObjectURL(url)
       }
     } catch (e: any) {
-      // Usuário cancelou o share — não é erro
       if (e?.name !== 'AbortError') {
         console.error(e)
         alert('Não foi possível compartilhar. Tente novamente.')
       }
     } finally {
-      el.style.paddingBottom = prevPadding
       setSharing(false)
     }
   }
@@ -74,307 +65,235 @@ function ImprimirContent({ id }: { id: string }) {
   if (!so) return <div className="flex items-center justify-center h-screen text-slate-500">Este chamado não possui ordem de serviço.</div>
 
   const companyName = tenant?.name ?? 'Empresa'
-  const primaryColor = tenant?.primary_color ?? '#f97316'
   const logoUrl = tenant?.logo_url
-
-  const originLabel = call.origin ?? null
+  const cnpj = tenant?.cnpj ?? ''
+  const tenantPhone = tenant?.phone ?? ''
 
   const client = call.client
-  const items = so.items ?? []
+  const clientName = client?.name ?? call.contact_name ?? '—'
+  const items: any[] = so.items ?? []
+  const TOTAL_ROWS = 8
+  const emptyRows = Math.max(0, TOTAL_ROWS - items.length)
 
-  const levantamento = [
-    so.has_floor_plan && 'Com planta baixa',
-    so.has_no_floor_plan && 'Sem planta baixa',
-    so.has_no_knowledge && 'Sem conhecimento',
-    so.has_hydraulic_plan && 'Com planta hidráulica',
-    so.has_no_hydraulic_plan && 'Sem planta hidráulica',
-    so.has_guarantee && 'Com garantia de 30 dias',
-    so.has_no_guarantee && 'Sem garantia',
-  ].filter(Boolean)
+  const totalServicos = items.reduce((acc: number, it: any) => acc + Number(it.total ?? it.quantity * it.unit_price), 0)
+  const locacao = Number(so.equipment_rental_value ?? 0)
+  const desconto = Number(so.discount ?? 0)
+  const impostos = Number(so.taxes ?? 0)
+  const valorTotal = Number(so.total_value ?? 0)
+
+  const osDate = so.date ? new Date(so.date + 'T12:00:00').toLocaleDateString('pt-BR') : '—'
+
+  const levChecks = [
+    { label: 'Com planta baixa', on: !!so.has_floor_plan },
+    { label: 'Sem planta baixa', on: !!so.has_no_floor_plan },
+    { label: 'Com planta hidráulica', on: !!so.has_hydraulic_plan },
+    { label: 'Sem planta hidráulica', on: !!so.has_no_hydraulic_plan },
+    { label: 'Sem conhecimento', on: !!so.has_no_knowledge },
+    { label: 'Sem garantia', on: !!so.has_no_guarantee },
+    { label: 'Com garantia 30 dias', on: !!so.has_guarantee },
+  ]
+
+  const cobrancaItems = ['Metro Linear', 'Metro Cúbico', 'Litros', 'Carga', 'Valor Fechado', 'Metro Quadrado']
 
   return (
     <>
-      <div className="print:hidden fixed bottom-6 inset-x-0 flex justify-center z-50 px-4 gap-3">
+      {/* Controls */}
+      <div className="print:hidden flex items-center justify-between max-w-3xl mx-auto pt-3 pb-3 px-3">
+        <Link href={`/dashboard/chamados/${id}`}
+          className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition">
+          <ArrowLeft className="w-4 h-4" /> Voltar
+        </Link>
         <button
           onClick={handleShare}
           disabled={sharing}
-          className="flex items-center gap-2.5 text-white font-semibold px-8 py-4 rounded-2xl shadow-2xl transition active:scale-95 disabled:opacity-70"
-          style={{ backgroundColor: '#16a34a', boxShadow: '0 8px 24px rgba(22,163,74,0.45)' }}>
-          {sharing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Share2 className="w-5 h-5" />}
+          className="flex items-center gap-2 text-white font-semibold px-6 py-2.5 rounded-xl shadow-lg transition active:scale-95 disabled:opacity-70"
+          style={{ backgroundColor: '#16a34a' }}>
+          {sharing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />}
           {sharing ? 'Gerando...' : 'Compartilhar'}
-        </button>
-        <button
-          onClick={() => window.print()}
-          className="flex items-center gap-2 text-white font-semibold px-5 py-4 rounded-2xl shadow-2xl transition active:scale-95"
-          style={{ backgroundColor: primaryColor }}>
-          <Printer className="w-5 h-5" />
-          PDF
         </button>
       </div>
 
-      <div ref={sheetRef} className="os-sheet print:m-0 bg-white p-6 pb-28 print:pb-0 font-sans text-[13px] text-black max-w-[800px] mx-auto min-h-screen">
-        {/* Cabeçalho */}
-        <div className="border-2 border-black mb-0">
-          <div className="flex">
-            {/* Logo / empresa */}
-            <div className="border-r-2 border-black flex items-center justify-center w-40 min-h-[80px]"
-              style={{ backgroundColor: primaryColor }}>
-              {logoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={logoUrl} alt={companyName} loading="eager"
-                  className="object-contain p-2"
-                  style={{ width: 80, height: 64 }} />
-              ) : (
-                <div className="text-center text-white p-3">
-                  <p className="font-black text-xl leading-tight">{companyName.split(' ')[0]}</p>
-                  <p className="text-[10px] leading-tight opacity-80">
-                    {companyName.split(' ').slice(1).join(' ') || 'Serviços'}
-                  </p>
-                </div>
-              )}
-            </div>
-            {/* Dados empresa */}
-            <div className="flex-1 p-3 text-[11px] leading-snug">
-              <p className="font-bold text-[13px]">{companyName}</p>
-              <p>Atendimento 24h · Domingos e Feriados</p>
-              {originLabel && (
-                <p className="mt-1 font-semibold" style={{ color: primaryColor }}>
-                  {originLabel}
-                </p>
-              )}
-            </div>
-            {/* OS número */}
-            <div className="border-l-2 border-black p-3 flex flex-col items-center justify-center w-36">
-              <p className="text-[10px] font-bold uppercase tracking-wide">Ordem de Serviço</p>
-              <p className="text-3xl font-black mt-1">{so.os_number}</p>
-            </div>
+      {/* OS Sheet */}
+      <div
+        ref={sheetRef}
+        className="os-sheet bg-white mx-auto"
+        style={{ maxWidth: 760, fontFamily: 'Arial, sans-serif', fontSize: 11, color: '#000', padding: 12 }}
+      >
+        {/* ── Header ── */}
+        <div style={{ display: 'flex', border: B }}>
+          {/* Logo */}
+          <div style={{ width: 120, borderRight: B, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 8, flexShrink: 0 }}>
+            {logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={logoUrl} alt={companyName} loading="eager"
+                style={{ maxWidth: 100, maxHeight: 64, objectFit: 'contain' }} />
+            ) : (
+              <p style={{ fontWeight: 900, fontSize: 16, textAlign: 'center' }}>{companyName}</p>
+            )}
+          </div>
+          {/* Company info */}
+          <div style={{ flex: 1, padding: '8px 12px', textAlign: 'center', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            {logoUrl && <p style={{ fontWeight: 700, fontSize: 13 }}>{companyName}</p>}
+            {cnpj && <p style={{ fontSize: 11 }}>CNPJ: {cnpj}</p>}
+            {tenantPhone && <p style={{ fontSize: 11 }}>Fone: {tenantPhone}</p>}
+            {!cnpj && !tenantPhone && <p style={{ fontSize: 11 }}>Atendimento 24h · Domingos e Feriados</p>}
+          </div>
+          {/* OS number */}
+          <div style={{ width: 130, borderLeft: B, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 8, flexShrink: 0 }}>
+            <p style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Ordem de Serviço</p>
+            <p style={{ fontSize: 28, fontWeight: 900, lineHeight: 1.1 }}>{so.os_number}</p>
+            <p style={{ fontSize: 10 }}>{osDate}</p>
           </div>
         </div>
 
-        {/* Dados do cliente */}
-        <div className="border-x-2 border-b-2 border-black">
-          <div className="px-3 py-1 font-bold text-center text-[11px] uppercase border-b border-black text-white"
-            style={{ backgroundColor: primaryColor }}>
-            Dados do Cliente
-          </div>
-          <div className="grid grid-cols-3 divide-x divide-black">
-            <div className="p-2 col-span-2">
-              <p className="text-[10px] font-bold uppercase text-gray-500">Nome</p>
-              <p className="font-semibold">{client?.name ?? call.contact_name ?? '—'}</p>
-            </div>
-            <div className="p-2">
-              <p className="text-[10px] font-bold uppercase text-gray-500">CNPJ / CPF</p>
-              <p>{client?.cpf_cnpj ?? '—'}</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-4 divide-x divide-black border-t border-black">
-            <div className="p-2 col-span-2">
-              <p className="text-[10px] font-bold uppercase text-gray-500">Endereço</p>
-              <p>{call.call_address || client?.address || '—'}</p>
-            </div>
-            <div className="p-2">
-              <p className="text-[10px] font-bold uppercase text-gray-500">Bairro</p>
-              <p>{call.call_neighborhood || client?.neighborhood || '—'}</p>
-            </div>
-            <div className="p-2">
-              <p className="text-[10px] font-bold uppercase text-gray-500">CEP</p>
-              <p>{client?.cep ?? '—'}</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-4 divide-x divide-black border-t border-black">
-            <div className="p-2 col-span-2">
-              <p className="text-[10px] font-bold uppercase text-gray-500">Município</p>
-              <p>{call.call_city || client?.city || '—'}</p>
-            </div>
-            <div className="p-2">
-              <p className="text-[10px] font-bold uppercase text-gray-500">Fone</p>
-              <p>{call.contact_phone || client?.phone || '—'}</p>
-            </div>
-            <div className="p-2">
-              <p className="text-[10px] font-bold uppercase text-gray-500">UF</p>
-              <p>{client?.state ?? '—'}</p>
-            </div>
-          </div>
-        </div>
+        {/* ── Client data grid ── */}
+        <table style={{ width: '100%', borderCollapse: 'collapse', borderTop: 'none' }}>
+          <tbody>
+            <tr>
+              <OSCell label="Código do Cliente" value="" style={{ width: 110 }} />
+              <OSCell label="OS" value={String(so.os_number)} style={{ width: 70 }} />
+              <OSCell label="Bairro" value={call.call_neighborhood || client?.neighborhood || ''} />
+              <OSCell label="ESTADO" value={client?.state || ''} style={{ width: 56 }} />
+            </tr>
+            <tr>
+              <OSCell label="Nome" value={clientName} colSpan={2} />
+              <OSCell label="CEP" value={client?.cep || ''} />
+              <OSCell label="Inscrição Est." value="" style={{ width: 56 }} />
+            </tr>
+            <tr>
+              <OSCell label="Endereço" value={call.call_address || client?.address || ''} colSpan={2} />
+              <OSCell label="Cidade" value={call.call_city || client?.city || ''} />
+              <OSCell label="Veículo" value="" />
+            </tr>
+            <tr>
+              <OSCell label="Data do Vcto" value={osDate} style={{ width: 110 }} />
+              <OSCell label="CPF/CNPJ" value={client?.cpf_cnpj || ''} />
+              <OSCell label="Motorista" value={so.driver || ''} />
+              <OSCell label="NF" value={so.nf_number || ''} style={{ width: 56 }} />
+            </tr>
+            <tr>
+              <OSCell label="Fone" value={call.contact_phone || client?.phone || ''} />
+              <OSCell label="Forma de Pagto" value={so.payment_method || ''} colSpan={3} />
+            </tr>
+          </tbody>
+        </table>
 
-        {/* Tipo de serviço */}
-        <div className="border-x-2 border-b-2 border-black">
-          <div className="px-3 py-1 font-bold text-center text-[11px] uppercase border-b border-black text-white"
-            style={{ backgroundColor: primaryColor }}>
-            Dados do Serviço
-          </div>
-          <div className="grid grid-cols-2 divide-x divide-black">
-            <div className="p-2">
-              <p className="text-[10px] font-bold uppercase text-gray-500">Categoria</p>
-              <p>{call.service_category ?? '—'}</p>
-            </div>
-            <div className="p-2">
-              <p className="text-[10px] font-bold uppercase text-gray-500">Data</p>
-              <p>{so.date ? new Date(so.date + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</p>
-            </div>
-          </div>
-          {call.notes && (
-            <div className="p-2 border-t border-black">
-              <p className="text-[10px] font-bold uppercase text-gray-500">Observações do chamado</p>
-              <p>{call.notes}</p>
-            </div>
-          )}
-        </div>
-
-        {/* Levantamento */}
-        {levantamento.length > 0 && (
-          <div className="border-x-2 border-b-2 border-black">
-            <div className="px-3 py-1 font-bold text-center text-[11px] uppercase border-b border-black text-white"
-              style={{ backgroundColor: primaryColor }}>
-              Levantamento
-            </div>
-            <div className="p-2 flex flex-wrap gap-x-6 gap-y-1">
-              {levantamento.map(item => (
-                <span key={item as string} className="flex items-center gap-1.5">
-                  <span className="inline-block w-3 h-3 border border-black flex items-center justify-center text-[10px]">✓</span>
-                  <span>{item as string}</span>
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Itens do serviço */}
-        <div className="border-x-2 border-b-2 border-black">
-          <div className="px-3 py-1 font-bold text-center text-[11px] uppercase border-b border-black text-white"
-            style={{ backgroundColor: primaryColor }}>
-            Serviços / Peças
-          </div>
-          <table className="w-full text-[12px]">
-            <thead>
-              <tr className="border-b border-black">
-                <th className="text-left p-2 w-12 border-r border-black font-bold">Qtd</th>
-                <th className="text-left p-2 border-r border-black font-bold">Descrição</th>
-                <th className="text-right p-2 w-28 border-r border-black font-bold">Vlr Unit.</th>
-                <th className="text-right p-2 w-28 font-bold">Vlr Total</th>
+        {/* ── Service items ── */}
+        <table style={{ width: '100%', borderCollapse: 'collapse', borderTop: 'none' }}>
+          <thead>
+            <tr style={{ background: '#f3f4f6' }}>
+              <th style={{ border: B, padding: '3px 5px', textAlign: 'left', width: 50 }}>Quant.</th>
+              <th style={{ border: B, padding: '3px 5px', textAlign: 'left' }}>Descrição</th>
+              <th style={{ border: B, padding: '3px 5px', textAlign: 'right', width: 90 }}>R$ Unit.</th>
+              <th style={{ border: B, padding: '3px 5px', textAlign: 'right', width: 90 }}>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((it: any) => (
+              <tr key={it.id}>
+                <td style={{ border: B, padding: '3px 5px', textAlign: 'center' }}>{it.quantity}</td>
+                <td style={{ border: B, padding: '3px 5px' }}>{it.description}</td>
+                <td style={{ border: B, padding: '3px 5px', textAlign: 'right' }}>{BRL(it.unit_price)}</td>
+                <td style={{ border: B, padding: '3px 5px', textAlign: 'right' }}>{BRL(it.total ?? it.quantity * it.unit_price)}</td>
               </tr>
-            </thead>
-            <tbody>
-              {items.length > 0 ? items.map((item: any) => (
-                <tr key={item.id} className="border-b border-gray-200">
-                  <td className="p-2 border-r border-black text-center">{item.quantity}</td>
-                  <td className="p-2 border-r border-black">{item.description}</td>
-                  <td className="p-2 border-r border-black text-right">{fmt(item.unit_price)}</td>
-                  <td className="p-2 text-right">{fmt(item.total ?? item.quantity * item.unit_price)}</td>
-                </tr>
-              )) : (
-                <tr><td colSpan={4} className="p-2 text-center text-gray-400">Nenhum item</td></tr>
-              )}
-              {Array.from({ length: Math.max(0, 2 - items.length) }).map((_, i) => (
-                <tr key={`empty-${i}`} className="border-b border-gray-200">
-                  <td className="p-2 border-r border-black">&nbsp;</td>
-                  <td className="p-2 border-r border-black">&nbsp;</td>
-                  <td className="p-2 border-r border-black">&nbsp;</td>
-                  <td className="p-2">&nbsp;</td>
-                </tr>
+            ))}
+            {Array.from({ length: emptyRows }).map((_, i) => (
+              <tr key={`e${i}`}>
+                <td style={{ border: B, padding: '3px 5px', height: 20 }}>&nbsp;</td>
+                <td style={{ border: B, padding: '3px 5px' }}>&nbsp;</td>
+                <td style={{ border: B, padding: '3px 5px' }}>&nbsp;</td>
+                <td style={{ border: B, padding: '3px 5px' }}>&nbsp;</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {/* ── Locação row ── */}
+        <table style={{ width: '100%', borderCollapse: 'collapse', borderTop: 'none' }}>
+          <tbody>
+            <tr>
+              <td style={{ border: B, padding: '3px 5px', fontWeight: 700, fontSize: 10 }}>
+                Locação de Equipamentos e Mão de Obra
+              </td>
+              <td style={{ border: B, padding: '3px 5px', textAlign: 'right', width: 90 }}>
+                {locacao > 0 ? BRL(locacao) : ''}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        {/* ── Sistema de Cobrança + Levantamento + Totals ── */}
+        <div style={{ display: 'flex', border: B, borderTop: 'none' }}>
+          {/* Left: checkboxes */}
+          <div style={{ flex: 1, padding: '6px 8px', borderRight: B }}>
+            <p style={{ fontWeight: 700, fontSize: 10, textTransform: 'uppercase', marginBottom: 4 }}>Sistema de Cobrança</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 8px' }}>
+              {cobrancaItems.map(c => (
+                <div key={c} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10 }}>
+                  <span style={{ display: 'inline-block', width: 11, height: 11, border: B, flexShrink: 0 }} />
+                  {c}
+                </div>
               ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Totais */}
-        <div className="border-x-2 border-b-2 border-black">
-          <div className="flex">
-            <div className="flex-1 p-3 border-r border-black">
-              {so.conditions && (
-                <>
-                  <p className="text-[10px] font-bold uppercase text-gray-500">Condições de Pagamento</p>
-                  <p className="mt-0.5">{so.conditions}</p>
-                </>
-              )}
-              {so.observations && (
-                <div className="mt-2">
-                  <p className="text-[10px] font-bold uppercase text-gray-500">Observações</p>
-                  <p className="mt-0.5">{so.observations}</p>
-                </div>
-              )}
             </div>
-            <div className="w-52 divide-y divide-black">
-              {Number(so.equipment_rental_value) > 0 && (
-                <div className="flex justify-between px-3 py-1.5">
-                  <span className="font-semibold">Locação / M.O.</span>
-                  <span>{fmt(so.equipment_rental_value)}</span>
+            <p style={{ fontWeight: 700, fontSize: 10, textTransform: 'uppercase', marginTop: 8, marginBottom: 4 }}>Levantamento</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 8px' }}>
+              {levChecks.map(c => (
+                <div key={c.label} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10 }}>
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    width: 11, height: 11, border: B, flexShrink: 0,
+                    background: c.on ? '#000' : 'transparent', color: '#fff', fontSize: 8, fontWeight: 900
+                  }}>{c.on ? '✓' : ''}</span>
+                  {c.label}
                 </div>
-              )}
-              {Number(so.discount) > 0 && (
-                <div className="flex justify-between px-3 py-1.5">
-                  <span className="font-semibold">Desconto</span>
-                  <span>- {fmt(so.discount)}</span>
-                </div>
-              )}
-              {Number(so.taxes) > 0 && (
-                <div className="flex justify-between px-3 py-1.5">
-                  <span className="font-semibold">Impostos</span>
-                  <span>{fmt(so.taxes)}</span>
-                </div>
-              )}
-              <div className="flex justify-between px-3 py-2 text-white"
-                style={{ backgroundColor: primaryColor }}>
-                <span className="font-bold text-[14px]">TOTAL</span>
-                <span className="font-bold text-[14px]">{fmt(so.total_value)}</span>
-              </div>
+              ))}
+            </div>
+          </div>
+          {/* Right: totals */}
+          <div style={{ width: 160, flexShrink: 0 }}>
+            <TotalRow label="Total dos Serviços" value={BRL(totalServicos)} />
+            <TotalRow label="Descontos" value={desconto > 0 ? `- ${BRL(desconto)}` : ''} />
+            <TotalRow label="Impostos" value={impostos > 0 ? BRL(impostos) : ''} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 8px', background: '#111', color: '#fff', fontWeight: 900, fontSize: 12 }}>
+              <span>VALOR TOTAL</span>
+              <span>{BRL(valorTotal)}</span>
             </div>
           </div>
         </div>
 
-        {/* Pagamento / NF / Equipe */}
-        <div className="border-x-2 border-b-2 border-black">
-          <div className="grid grid-cols-3 divide-x divide-black">
-            {so.nf_number && (
-              <div className="p-2">
-                <p className="text-[10px] font-bold uppercase text-gray-500">Nº NF</p>
-                <p>{so.nf_number}</p>
-              </div>
-            )}
-            {so.payment_method && (
-              <div className="p-2">
-                <p className="text-[10px] font-bold uppercase text-gray-500">Forma de Pagamento</p>
-                <p>{so.payment_method}</p>
-              </div>
-            )}
-            {so.team && (
-              <div className="p-2">
-                <p className="text-[10px] font-bold uppercase text-gray-500">Equipe</p>
-                <p>{so.team.name}</p>
-              </div>
-            )}
+        {/* ── Condições + Observações ── */}
+        <div style={{ display: 'flex', border: B, borderTop: 'none' }}>
+          <div style={{ flex: 1, padding: '5px 8px', borderRight: B }}>
+            <p style={{ fontWeight: 700, fontSize: 9, textTransform: 'uppercase', marginBottom: 3 }}>Condições de Pagamento</p>
+            <p style={{ fontSize: 11, minHeight: 28 }}>{so.conditions || ''}</p>
+          </div>
+          <div style={{ flex: 1, padding: '5px 8px' }}>
+            <p style={{ fontWeight: 700, fontSize: 9, textTransform: 'uppercase', marginBottom: 3 }}>Observações</p>
+            <p style={{ fontSize: 11, minHeight: 28 }}>{so.observations || call.notes || ''}</p>
           </div>
         </div>
 
-        {/* Assinaturas */}
-        <div className="border-x-2 border-b-2 border-black">
-          <div className="grid grid-cols-3 divide-x divide-black">
-            <div className="p-3">
-              <p className="text-[10px] font-bold uppercase text-gray-500 mb-6">Data</p>
-              <div className="border-t border-black pt-1">
-                <p className="text-[10px] text-center text-gray-500">
-                  {new Date().toLocaleDateString('pt-BR')}
-                </p>
-              </div>
-            </div>
-            <div className="p-3">
-              <p className="text-[10px] font-bold uppercase text-gray-500 mb-6">Técnico Responsável</p>
-              <div className="border-t border-black pt-1">
-                <p className="text-[10px] text-center text-gray-500">{so.driver ?? ''}</p>
-              </div>
-            </div>
-            <div className="p-3">
-              <p className="text-[10px] font-bold uppercase text-gray-500 mb-6">Assinatura do Cliente</p>
-              <div className="border-t border-black pt-1">
-                <p className="text-[10px] text-center text-gray-500">{client?.name ?? call.contact_name ?? ''}</p>
-              </div>
-            </div>
-          </div>
+        {/* ── Signature text ── */}
+        <div style={{ border: B, borderTop: 'none', padding: '5px 8px', textAlign: 'center' }}>
+          <p style={{ fontSize: 11, fontWeight: 600 }}>
+            PAGAREI(emos) PELO(s) SERVIÇO(s) PRESTADO(s) O VALOR TOTAL DE R$__________
+          </p>
+          <p style={{ fontSize: 10, color: '#444', marginTop: 2 }}>
+            Declaro que os serviços acima descritos foram prestados a contento.
+          </p>
         </div>
 
-        {/* Rodapé */}
-        <div className="text-center text-[10px] text-gray-400 mt-2">
-          {companyName} · Atendimento 24 horas, inclusive domingos e feriados
+        {/* ── Signature row ── */}
+        <div style={{ display: 'flex', border: B, borderTop: 'none' }}>
+          <SigCell label="Data" bottom={osDate} flex={1} />
+          <SigCell label="Assinatura" bottom="" flex={2} />
+          <SigCell label="Carro" bottom="" flex={1} />
+          <div style={{ flex: 1, borderLeft: B, padding: '5px 8px' }}>
+            <p style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase' }}>Prof. 1</p>
+            <div style={{ borderBottom: B, marginTop: 18, marginBottom: 6 }} />
+            <p style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase' }}>Prof. 2</p>
+            <div style={{ borderBottom: B, marginTop: 18 }} />
+          </div>
         </div>
       </div>
 
@@ -383,32 +302,41 @@ function ImprimirContent({ id }: { id: string }) {
           @page { margin: 7mm; size: A4; }
           html, body { background: white !important; height: auto !important; overflow: visible !important; }
           .print\\:hidden { display: none !important; }
-          /* Comprime tudo para caber em 1 folha */
-          .os-sheet {
-            font-size: 10px !important;
-            padding: 0 !important;
-            max-width: 100% !important;
-            min-height: 0 !important;
-          }
-          .os-sheet * { page-break-inside: avoid; }
-          .os-sheet .p-2 { padding: 3px 5px !important; }
-          .os-sheet .p-3 { padding: 5px 6px !important; }
-          .os-sheet .px-3 { padding-left: 6px !important; padding-right: 6px !important; }
-          .os-sheet .py-1 { padding-top: 2px !important; padding-bottom: 2px !important; }
-          .os-sheet .py-1\\.5 { padding-top: 2px !important; padding-bottom: 2px !important; }
-          .os-sheet .py-2 { padding-top: 3px !important; padding-bottom: 3px !important; }
-          .os-sheet .mb-6 { margin-bottom: 14px !important; }
-          .os-sheet table { font-size: 10px !important; }
-          .os-sheet .text-3xl { font-size: 20px !important; }
-          .os-sheet .text-\\[13px\\] { font-size: 11px !important; }
-          .os-sheet .text-\\[14px\\] { font-size: 12px !important; }
-          .os-sheet .text-\\[11px\\] { font-size: 9px !important; }
-          .os-sheet .text-\\[12px\\] { font-size: 10px !important; }
-          .os-sheet .text-\\[10px\\] { font-size: 8px !important; }
-          .os-sheet .min-h-\\[80px\\] { min-height: 56px !important; }
+          aside, nav, header { display: none !important; }
+          main { padding: 0 !important; margin: 0 !important; }
+          .os-sheet { max-width: 100% !important; padding: 4px !important; }
         }
       `}</style>
     </>
+  )
+}
+
+function OSCell({ label, value, colSpan, style }: { label: string; value: string; colSpan?: number; style?: React.CSSProperties }) {
+  return (
+    <td colSpan={colSpan} style={{ border: '1px solid black', padding: '2px 5px', verticalAlign: 'top', ...style }}>
+      <p style={{ fontSize: 8, fontWeight: 700, textTransform: 'uppercase', color: '#6b7280', lineHeight: 1, marginBottom: 2 }}>{label}</p>
+      <p style={{ fontSize: 11, minHeight: 14 }}>{value || ' '}</p>
+    </td>
+  )
+}
+
+function TotalRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 8px', borderBottom: '1px solid black', fontSize: 10 }}>
+      <span>{label}</span>
+      <span style={{ fontWeight: 600 }}>{value}</span>
+    </div>
+  )
+}
+
+function SigCell({ label, bottom, flex }: { label: string; bottom: string; flex: number }) {
+  return (
+    <div style={{ flex, borderLeft: flex > 1 ? 'none' : '1px solid black', borderRight: '1px solid black', padding: '5px 8px' }}>
+      <p style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase' }}>{label}</p>
+      <div style={{ borderBottom: '1px solid black', marginTop: 24, paddingBottom: 2 }}>
+        {bottom && <span style={{ fontSize: 9, color: '#555' }}>{bottom}</span>}
+      </div>
+    </div>
   )
 }
 
