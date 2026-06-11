@@ -53,6 +53,7 @@ async function exportPDF(data: any, range: DateRange) {
   row('Aprovados (serviço realizado):', String(s?.approvedCalls ?? 0), [5, 150, 105])
   row('Agendados:', String(s?.scheduledCalls ?? 0), [37, 99, 235])
   row('Não quis visita:', String(s?.noVisitCalls ?? 0), [100, 116, 139])
+  row('Não aprovou:', String(s?.notApprovedCalls ?? 0), [217, 119, 6])
   row('Cancelados:', String(s?.cancelledCalls ?? 0), [220, 38, 38])
 
   const approvalRate = s?.totalCalls > 0 ? Math.round((s.approvedCalls / s.totalCalls) * 100) : 0
@@ -198,12 +199,13 @@ export default function RelatoriosPage() {
       ) : (
         <>
           {/* Cards de status dos chamados */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
             {[
               { label: 'Total', value: s?.totalCalls ?? 0, color: 'text-slate-700', icon: BarChart3 },
               { label: 'Aprovados', value: s?.approvedCalls ?? 0, color: 'text-emerald-600', icon: CheckCircle },
               { label: 'Agendados', value: s?.scheduledCalls ?? 0, color: 'text-orange-500', icon: Clock },
               { label: 'Não quis', value: s?.noVisitCalls ?? 0, color: 'text-slate-500', icon: XCircle },
+              { label: 'Não aprovou', value: s?.notApprovedCalls ?? 0, color: 'text-amber-600', icon: XCircle },
               { label: 'Cancelados', value: s?.cancelledCalls ?? 0, color: 'text-red-500', icon: XCircle },
               { label: 'Aprovação', value: `${s?.totalCalls > 0 ? Math.round((s.approvedCalls / s.totalCalls) * 100) : 0}%`, color: 'text-emerald-600', icon: CheckCircle },
             ].map(c => (

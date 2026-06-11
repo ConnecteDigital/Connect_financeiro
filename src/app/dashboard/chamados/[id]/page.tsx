@@ -4,23 +4,19 @@ import { useEffect, useState, useRef } from 'react'
 import { ArrowLeft, Phone, CheckCircle, XCircle, Clock, Edit, DollarSign, User, FileText, Wrench, Paperclip, Upload, Trash2, Download, Printer } from 'lucide-react'
 import Link from 'next/link'
 import { use } from 'react'
-import { getCall } from '@/lib/db/calls'
+import { useRouter } from 'next/navigation'
+import { getCall, deleteCall } from '@/lib/db/calls'
 import { updateCall } from '@/lib/db/calls'
 import { updateExpense } from '@/lib/db/expenses'
 import { createClient } from '@/lib/supabase/client'
+import { getOriginLabel } from '@/lib/use-call-origins'
 
 const statusConfig: Record<string, { label: string; color: string; bg: string; icon: React.ElementType }> = {
   agendado: { label: 'Agendado', color: 'text-blue-700', bg: 'bg-blue-100', icon: Clock },
   aprovado: { label: 'Aprovado', color: 'text-emerald-700', bg: 'bg-emerald-100', icon: CheckCircle },
+  nao_aprovou: { label: 'Não aprovou', color: 'text-amber-700', bg: 'bg-amber-100', icon: XCircle },
   nao_quis_visita: { label: 'Não quis visita', color: 'text-slate-600', bg: 'bg-slate-100', icon: XCircle },
   cancelado: { label: 'Cancelado', color: 'text-red-600', bg: 'bg-red-100', icon: XCircle },
-}
-
-const originLabel: Record<string, string> = {
-  site_lider: 'Site Líder',
-  site_poa: 'Site POA',
-  indicacao: 'Indicação',
-  terceirizado: 'Terceirizado',
 }
 
 const paymentBadge: Record<string, { label: string; color: string }> = {
@@ -39,9 +35,11 @@ const fmt = (v: number) => `R$ ${Number(v).toLocaleString('pt-BR', { minimumFrac
 
 export default function ChamadoDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
+  const router = useRouter()
   const [call, setCall] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [updatingPayment, setUpdatingPayment] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [attachments, setAttachments] = useState<any[]>([])
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -96,6 +94,19 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
     const supabase = createClient()
     const { data } = supabase.storage.from('chamados-anexos').getPublicUrl(`${id}/${name}`)
     window.open(data.publicUrl, '_blank')
+  }
+
+  async function handleDeleteCall() {
+    if (!confirm('Excluir este chamado? Esta ação não pode ser desfeita e removerá também a ordem de serviço vinculada.')) return
+    setDeleting(true)
+    try {
+      await deleteCall(id)
+      router.push('/dashboard/chamados')
+    } catch (err) {
+      console.error(err)
+      alert('Erro ao excluir o chamado. Tente novamente.')
+      setDeleting(false)
+    }
   }
 
   async function updatePaymentStatus(soId: string, status: string) {
@@ -154,12 +165,20 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
               </span>
             </div>
             <p className="text-slate-500 text-sm mt-0.5">
+              {call.call_number && <span className="font-mono font-semibold text-orange-500">{call.call_number}{' · '}</span>}
               {new Date(call.date).toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-              {' · '}{originLabel[call.origin]}
+              {' · '}{getOriginLabel(call.origin)}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {call.status === 'agendado' && (
+            <Link href={`/dashboard/chamados/${id}/romaneio`}
+              className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition">
+              <FileText className="w-4 h-4" />
+              Enviar Romaneio
+            </Link>
+          )}
           {so && (
             <Link href={`/dashboard/chamados/${id}/imprimir`} target="_blank"
               className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold px-4 py-2.5 rounded-lg transition">
@@ -172,6 +191,11 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
             <Edit className="w-4 h-4" />
             Editar Chamado
           </Link>
+          <button onClick={handleDeleteCall} disabled={deleting}
+            className="flex items-center gap-2 bg-red-50 hover:bg-red-100 disabled:opacity-50 text-red-600 text-sm font-semibold px-4 py-2.5 rounded-lg transition border border-red-200">
+            <Trash2 className="w-4 h-4" />
+            {deleting ? 'Excluindo...' : 'Excluir'}
+          </button>
         </div>
       </div>
 
@@ -190,12 +214,24 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
           )}
           <div>
             <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Origem</p>
-            <p className="text-slate-700 font-medium mt-0.5">{originLabel[call.origin]}</p>
+            <p className="text-slate-700 font-medium mt-0.5">{getOriginLabel(call.origin)}</p>
           </div>
           <div>
             <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Status</p>
             <p className="text-slate-700 font-medium mt-0.5">{cfg?.label}</p>
           </div>
+          {call.contact_phone && (
+            <div>
+              <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Telefone</p>
+              <p className="text-slate-700 font-medium mt-0.5">{call.contact_phone}</p>
+            </div>
+          )}
+          {call.scheduled_date && (
+            <div>
+              <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Data do Serviço</p>
+              <p className="text-slate-700 font-medium mt-0.5">{new Date(call.scheduled_date + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
+            </div>
+          )}
           {call.service_category && (
             <div>
               <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Tipo de Serviço</p>
@@ -206,6 +242,12 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
             <div>
               <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Horário Agendado</p>
               <p className="text-blue-600 font-semibold mt-0.5">🕐 {String(call.scheduled_time).slice(0,5)}</p>
+            </div>
+          )}
+          {(call.call_city || call.call_neighborhood) && (
+            <div>
+              <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Cidade / Bairro</p>
+              <p className="text-slate-700 font-medium mt-0.5">{[call.call_city, call.call_neighborhood].filter(Boolean).join(' / ')}</p>
             </div>
           )}
           {call.call_address && (
@@ -332,6 +374,26 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
                 <span className="text-blue-600">{fmt(so.total_value)}</span>
               </div>
             </div>
+
+            {/* Custos serviço próprio */}
+            {so.service_type === 'proprio' && (Number(so.own_material_cost) > 0 || Number(so.own_fuel_cost) > 0 || Number(so.own_other_cost) > 0 || Number(so.other_service_value) > 0) && (
+              <div className="border-t border-slate-100 pt-4 mt-4">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Custos do Serviço</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                  {[
+                    { label: 'Material', val: so.own_material_cost },
+                    { label: 'Combustível', val: so.own_fuel_cost },
+                    { label: 'Outros Custos', val: so.own_other_cost },
+                    { label: 'Outro serviço contratado', val: so.other_service_value },
+                  ].filter(x => Number(x.val) > 0).map(x => (
+                    <div key={x.label}>
+                      <p className="text-slate-400 text-xs">{x.label}</p>
+                      <p className="text-slate-700 font-medium">{fmt(x.val)}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Custos terceirizado */}
             {so.service_type !== 'proprio' && (

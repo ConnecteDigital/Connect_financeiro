@@ -49,6 +49,9 @@ export default function NovaSaidaPage() {
         recurrence_day: form.type === 'fixo' && form.recurrence_day ? parseInt(form.recurrence_day) : null,
         supplier_id: form.supplier_id || null,
         client_id: form.client_id || null,
+        // gasto avulso já entra como pago; conta fixa continua pendente até o pagamento
+        status: form.type === 'avulso' ? 'pago' : 'pendente',
+        paid_date: form.type === 'avulso' ? new Date().toISOString().split('T')[0] : null,
       })
       router.push('/dashboard/saidas')
     } catch {

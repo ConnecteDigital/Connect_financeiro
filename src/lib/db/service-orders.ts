@@ -3,7 +3,7 @@ import { getMyTenantId } from './tenant'
 
 export async function createServiceOrder(
   orderData: Record<string, unknown>,
-  items: Array<{ quantity: number; description: string; unit_price: number }>
+  items: Array<Record<string, unknown>>
 ) {
   const supabase = createClient()
   const tenant_id = await getMyTenantId()

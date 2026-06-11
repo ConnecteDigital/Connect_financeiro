@@ -113,12 +113,15 @@ create table calls (
   contact_name text,
   contact_phone text,
   origin text not null,
-  status text not null default 'agendado' check (status in ('agendado','aprovado','nao_quis_visita','cancelado')),
+  status text not null default 'agendado' check (status in ('agendado','aprovado','nao_aprovou','nao_quis_visita','cancelado')),
   notes text,
   service_category text,
   scheduled_time time,
   scheduled_date date,
   call_address text,
+  call_city text,
+  call_neighborhood text,
+  call_number text,
   created_at timestamptz default now()
 );
 
@@ -188,6 +191,9 @@ create table service_order_items (
   description text not null,
   unit_price numeric not null default 0,
   total numeric generated always as (quantity * unit_price) stored,
+  category text,
+  sub_options text,
+  notes text,
   created_at timestamptz default now()
 );
 
@@ -269,6 +275,23 @@ $$ language plpgsql;
 create trigger set_client_code
   before insert on clients
   for each row execute function generate_client_code();
+
+-- =============================================
+-- TRIGGER: NUMERAÇÃO AUTOMÁTICA DE CHAMADOS POR TENANT
+-- =============================================
+create or replace function generate_call_number()
+returns trigger as $$
+begin
+  if new.call_number is null then
+    new.call_number := 'CH-' || lpad(next_tenant_sequence(new.tenant_id, 'call')::text, 5, '0');
+  end if;
+  return new;
+end;
+$$ language plpgsql;
+
+create trigger set_call_number
+  before insert on calls
+  for each row execute function generate_call_number();
 
 -- =============================================
 -- TRIGGER: CRIAR PROFILE AUTOMÁTICO NO SIGNUP

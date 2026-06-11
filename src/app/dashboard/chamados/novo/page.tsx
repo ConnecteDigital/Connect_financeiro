@@ -1,7 +1,7 @@
-﻿'use client'
+'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { ArrowLeft, Plus, Trash2, Save, Loader2, Camera, Paperclip, FileText, X } from 'lucide-react'
+import { ArrowLeft, Save, Loader2, CalendarDays, Camera, Paperclip, FileText, X } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createCall } from '@/lib/db/calls'
@@ -9,13 +9,33 @@ import { createServiceOrder } from '@/lib/db/service-orders'
 import { getClients, createClient_ } from '@/lib/db/clients'
 import { getTeams } from '@/lib/db/teams'
 import { getServiceTypes } from '@/lib/db/service-types'
+import { getAuxiliaries } from '@/lib/db/auxiliaries'
 import { useCallOrigins } from '@/lib/use-call-origins'
+import { SERVICE_CONFIG } from '@/lib/service-config'
 import { createClient } from '@/lib/supabase/client'
 
 type ServiceType = 'proprio' | 'terceirizado_saida' | 'terceirizado_entrada'
 type PaymentStatus = 'pago' | 'pago_parcial' | 'pendente'
-type BillingSystem = 'metro_linear' | 'metro_cubico' | 'litros' | 'carga' | 'valor_fechado' | 'metro_quadrado'
-interface Item { id: string; quantity: number; description: string; unit_price: number }
+
+interface ServiceLine {
+  category: string
+  sub: string | null
+  quantity: number
+  unitPrice: number
+  notes: string
+}
+
+const CALL_STATUSES = [
+  { value: 'agendado', label: 'Agendado' },
+  { value: 'aprovado', label: 'Aprovado' },
+  { value: 'nao_aprovou', label: 'Não aprovou' },
+  { value: 'nao_quis_visita', label: 'Não quis visita' },
+  { value: 'cancelado', label: 'Cancelado' },
+]
+
+const PAYMENT_METHODS = ['Dinheiro', 'Cartão', 'PIX', 'Boleto']
+
+const emptyNewClient = { cpf_cnpj: '', address: '', neighborhood: '', city: '', state: '', cep: '', email: '' }
 
 interface PendingFile { id: string; file: File; preview?: string }
 
@@ -25,7 +45,8 @@ export default function NovoChamadoPage() {
   const [error, setError] = useState('')
   const [clients, setClients] = useState<any[]>([])
   const [teams, setTeams] = useState<any[]>([])
-  const [serviceTypes, setServiceTypes] = useState<any[]>([])
+  const [auxiliaries, setAuxiliaries] = useState<any[]>([])
+  const [categoryNames, setCategoryNames] = useState<string[]>([])
   const { origins: callOrigins } = useCallOrigins()
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -38,22 +59,30 @@ export default function NovoChamadoPage() {
   const [callNotes, setCallNotes] = useState('')
   const [clientId, setClientId] = useState('')
   const [contactName, setContactName] = useState('')
-  const [serviceCategory, setServiceCategory] = useState('')
+  const [contactPhone, setContactPhone] = useState('')
+  const [callCity, setCallCity] = useState('')
+  const [callNeighborhood, setCallNeighborhood] = useState('')
+  // Cadastro de cliente inline (chamado aprovado)
+  const [newClient, setNewClient] = useState(emptyNewClient)
   // Campos de agendamento
+  const [scheduledDate, setScheduledDate] = useState(new Date().toISOString().split('T')[0])
   const [scheduledTime, setScheduledTime] = useState('')
   const [callAddress, setCallAddress] = useState('')
 
   const isApproved = callStatus === 'aprovado'
   const isScheduled = callStatus === 'agendado'
 
+  // Serviços — seção única
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
+  const [serviceLines, setServiceLines] = useState<ServiceLine[]>([])
+
   // OS
   const [serviceType, setServiceType] = useState<ServiceType>('proprio')
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('pendente')
-  const [billingSystem, setBillingSystem] = useState<BillingSystem | ''>('')
-  const [items, setItems] = useState<Item[]>([{ id: '1', quantity: 1, description: '', unit_price: 0 }])
+  const [partnerPct, setPartnerPct] = useState(50)
+  const [auxiliaryId, setAuxiliaryId] = useState('')
   const [discount, setDiscount] = useState(0)
   const [taxes, setTaxes] = useState(0)
-  const [equipmentRentalPct, setEquipmentRentalPct] = useState(0)
   const [equipmentRentalValue, setEquipmentRentalValue] = useState(0)
   const [hasFloorPlan, setHasFloorPlan] = useState(false)
   const [hasNoFloorPlan, setHasNoFloorPlan] = useState(false)
@@ -61,6 +90,8 @@ export default function NovoChamadoPage() {
   const [hasHydraulicPlan, setHasHydraulicPlan] = useState(false)
   const [hasNoHydraulicPlan, setHasNoHydraulicPlan] = useState(false)
   const [hasGuarantee, setHasGuarantee] = useState(false)
+  const [hasGuarantee60, setHasGuarantee60] = useState(false)
+  const [hasGuarantee90, setHasGuarantee90] = useState(false)
   const [hasNoGuarantee, setHasNoGuarantee] = useState(false)
   const [teamId, setTeamId] = useState('')
   const [driver, setDriver] = useState('')
@@ -73,24 +104,69 @@ export default function NovoChamadoPage() {
   const [remainingDueDate, setRemainingDueDate] = useState('')
   const [conditions, setConditions] = useState('')
   const [observations, setObservations] = useState('')
-  const [fuelCost, setFuelCost] = useState(0)
-  const [mealCost, setMealCost] = useState(0)
-  const [truckCost, setTruckCost] = useState(0)
-  const [otherCost, setOtherCost] = useState(0)
+  // Custos serviço próprio
+  const [materialCost, setMaterialCost] = useState(0)
+  const [ownFuelCost, setOwnFuelCost] = useState(0)
+  const [ownOtherCost, setOwnOtherCost] = useState(0)
+  const [otherServiceValue, setOtherServiceValue] = useState(0)
 
   useEffect(() => {
-    Promise.all([getClients(), getTeams(), getServiceTypes()])
-      .then(([c, t, st]) => { setClients(c); setTeams(t); setServiceTypes(st) })
+    Promise.all([getClients(), getTeams(), getServiceTypes(), getAuxiliaries()])
+      .then(([c, t, st, aux]) => {
+        setClients(c)
+        setTeams(t)
+        setCategoryNames(st.map((s: any) => s.name))
+        setAuxiliaries(aux)
+      })
       .catch(console.error)
   }, [])
 
-  const subtotal = items.reduce((s, i) => s + i.quantity * i.unit_price, 0)
-  const total = subtotal + equipmentRentalValue - discount + taxes
+  // ── Serviços ──
+  const lineTotal = (l: ServiceLine) => l.quantity * l.unitPrice
+  const subtotal = serviceLines.reduce((sum, l) => sum + lineTotal(l), 0)
+  const bruto = subtotal + equipmentRentalValue - discount + taxes
+  const isOutsourced = serviceType !== 'proprio'
+  const liquidoParceria = isOutsourced ? bruto * partnerPct / 100 : bruto
+  const selectedAux = auxiliaries.find(a => a.id === auxiliaryId)
+  const auxValue = selectedAux ? bruto * Number(selectedAux.percentage) / 100 : 0
+  const liquidoFinal = liquidoParceria - auxValue
 
-  const addItem = () => setItems(prev => [...prev, { id: Date.now().toString(), quantity: 1, description: '', unit_price: 0 }])
-  const removeItem = (id: string) => setItems(prev => prev.filter(i => i.id !== id))
-  const updateItem = (id: string, field: keyof Item, value: string | number) =>
-    setItems(prev => prev.map(i => i.id === id ? { ...i, [field]: value } : i))
+  function toggleCategory(name: string) {
+    const cfg = SERVICE_CONFIG[name]
+    if (selectedCategories.includes(name)) {
+      setSelectedCategories(prev => prev.filter(c => c !== name))
+      setServiceLines(prev => prev.filter(l => l.category !== name))
+    } else {
+      setSelectedCategories(prev => [...prev, name])
+      if (!cfg?.subOptions) {
+        setServiceLines(prev => [...prev, { category: name, sub: null, quantity: 0, unitPrice: 0, notes: '' }])
+      }
+    }
+  }
+
+  function toggleSub(category: string, sub: string) {
+    setServiceLines(prev => {
+      const exists = prev.some(l => l.category === category && l.sub === sub)
+      return exists
+        ? prev.filter(l => !(l.category === category && l.sub === sub))
+        : [...prev, { category, sub, quantity: 0, unitPrice: 0, notes: '' }]
+    })
+  }
+
+  const updateLine = (category: string, sub: string | null, patch: Partial<ServiceLine>) =>
+    setServiceLines(prev => prev.map(l => l.category === category && l.sub === sub ? { ...l, ...patch } : l))
+
+  // Texto do tipo de serviço gravado no chamado, ex: "Desobstrução (Vaso, Esgoto), Limpeza (Fossa)"
+  const serviceCategoryText = selectedCategories.map(cat => {
+    const subs = serviceLines.filter(l => l.category === cat && l.sub).map(l => l.sub)
+    return subs.length ? `${cat} (${subs.join(', ')})` : cat
+  }).join(', ')
+
+  // Sugestões de clientes cadastrados (chamado aprovado)
+  const clientSuggestions = isApproved && !clientId && contactName.trim().length >= 2
+    ? clients.filter(c => c.name.toLowerCase().includes(contactName.trim().toLowerCase())).slice(0, 5)
+    : []
+  const linkedClient = clients.find(c => c.id === clientId)
 
   function addFiles(fileList: FileList | null) {
     if (!fileList) return
@@ -125,26 +201,47 @@ export default function NovoChamadoPage() {
       setError('Informe o nome do contato ou selecione um cliente cadastrado.')
       return
     }
+    if (!origin) {
+      setError('Selecione a origem do chamado.')
+      return
+    }
     setSaving(true)
     setError('')
     try {
       // Auto-criar cliente se não existe cadastrado
+      // (no chamado aprovado, leva também os dados completos preenchidos)
       let finalClientId = clientId
       if (!clientId && contactName.trim()) {
-        const newClient = await createClient_({ name: contactName.trim() })
-        finalClientId = newClient.id
+        const created = await createClient_({
+          name: contactName.trim(),
+          phone: contactPhone || null,
+          ...(isApproved ? {
+            cpf_cnpj: newClient.cpf_cnpj || null,
+            address: newClient.address || null,
+            neighborhood: newClient.neighborhood || callNeighborhood || null,
+            city: newClient.city || callCity || null,
+            state: newClient.state || null,
+            cep: newClient.cep || null,
+            email: newClient.email || null,
+          } : {}),
+        })
+        finalClientId = created.id
       }
 
       const call = await createCall({
         date: callDate,
         client_id: finalClientId || null,
         contact_name: contactName || null,
+        contact_phone: contactPhone || null,
         origin,
         status: callStatus,
         notes: callNotes || null,
-        service_category: serviceCategory || null,
-        scheduled_time: scheduledTime || null,
+        service_category: serviceCategoryText || null,
+        scheduled_date: isScheduled ? scheduledDate || null : null,
+        scheduled_time: isScheduled ? scheduledTime || null : null,
         call_address: callAddress || null,
+        call_city: callCity || null,
+        call_neighborhood: callNeighborhood || null,
       })
 
       if (isApproved) {
@@ -154,29 +251,32 @@ export default function NovoChamadoPage() {
           date: callDate,
           client_id: finalClientId || null,
           team_id: teamId || null,
+          auxiliary_id: auxiliaryId || null,
+          auxiliary_value: auxValue,
           driver: driver || null,
           nf_number: nfNumber || null,
           vehicle: vehicle || null,
           due_date: dueDate || null,
           service_type: serviceType,
-          billing_system: billingSystem || null,
           has_floor_plan: hasFloorPlan,
           has_no_floor_plan: hasNoFloorPlan,
           has_no_knowledge: hasNoKnowledge,
           has_hydraulic_plan: hasHydraulicPlan,
           has_no_hydraulic_plan: hasNoHydraulicPlan,
           has_guarantee: hasGuarantee,
+          has_guarantee_60: hasGuarantee60,
+          has_guarantee_90: hasGuarantee90,
           has_no_guarantee: hasNoGuarantee,
-          equipment_rental_pct: equipmentRentalPct,
           equipment_rental_value: equipmentRentalValue,
           subtotal,
           discount,
           taxes,
-          total_value: total,
-          outsource_fuel_cost: fuelCost,
-          outsource_meal_cost: mealCost,
-          outsource_truck_cost: truckCost,
-          outsource_other_cost: otherCost,
+          total_value: bruto,
+          outsource_profit_pct: partnerPct,
+          own_material_cost: materialCost,
+          own_fuel_cost: ownFuelCost,
+          own_other_cost: ownOtherCost,
+          other_service_value: otherServiceValue,
           payment_method: paymentMethod || null,
           payment_status: paymentStatus,
           amount_paid: amountPaid,
@@ -185,11 +285,23 @@ export default function NovoChamadoPage() {
           conditions: conditions || null,
           observations: observations || null,
         }
-        const validItems = items.filter(i => i.description.trim()).map(i => ({ quantity: i.quantity, description: i.description, unit_price: i.unit_price }))
+        const validItems = serviceLines.map(l => ({
+          quantity: l.quantity || 1,
+          description: l.category + (l.sub ? ` — ${l.sub}` : ''),
+          unit_price: l.unitPrice,
+          category: l.category,
+          sub_options: l.sub,
+          notes: l.notes || null,
+        }))
         await createServiceOrder(orderData, validItems)
       }
 
-      router.push('/dashboard/chamados')
+      // Agendado vai para a página do chamado, onde fica o botão de enviar o romaneio
+      if (isScheduled) {
+        router.push(`/dashboard/chamados/${call.id}`)
+      } else {
+        router.push('/dashboard/chamados')
+      }
     } catch (err: any) {
       console.error(err)
       setError('Erro ao salvar chamado. Tente novamente.')
@@ -214,21 +326,16 @@ export default function NovoChamadoPage() {
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-4">
         <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3">Informações do Chamado</h2>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Data *</label>
-            <input type="date" required value={callDate} onChange={e => setCallDate(e.target.value)}
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Origem *</label>
-            <select value={origin} onChange={e => setOrigin(e.target.value)}
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
-              <option value="">Selecione...</option>
-              {callOrigins.map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
+        {/* Origem */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">Origem *</label>
+          <div className="flex flex-wrap gap-2">
+            {callOrigins.map(o => (
+              <button key={o.value} type="button" onClick={() => setOrigin(o.value)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${origin === o.value ? 'bg-orange-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                {o.label}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -236,12 +343,7 @@ export default function NovoChamadoPage() {
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">Status *</label>
           <div className="flex flex-wrap gap-2">
-            {[
-              { value: 'agendado', label: 'Agendado' },
-              { value: 'aprovado', label: 'Aprovado' },
-              { value: 'nao_quis_visita', label: 'Nao quis visita' },
-              { value: 'cancelado', label: 'Cancelado' },
-            ].map(s => (
+            {CALL_STATUSES.map(s => (
               <button key={s.value} type="button" onClick={() => setCallStatus(s.value)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition ${callStatus === s.value ? 'bg-orange-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
                 {s.label}
@@ -250,22 +352,111 @@ export default function NovoChamadoPage() {
           </div>
         </div>
 
-        {/* Nome do contato */}
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5">
-            Nome do Contato *
-            <span className="text-slate-400 font-normal ml-1">(quem ligou)</span>
-          </label>
-          <input type="text" value={contactName} onChange={e => setContactName(e.target.value)}
-            placeholder="Ex: João Silva"
+        {/* Data do chamado */}
+        <div className="sm:max-w-xs">
+          <label className="block text-sm font-medium text-slate-700 mb-1.5">Data do Chamado *</label>
+          <input type="date" required value={callDate} onChange={e => setCallDate(e.target.value)}
             className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
         </div>
+
+        {/* Contato + telefone */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="relative">
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              {isApproved ? 'Nome do Cliente *' : 'Nome do Contato *'}
+              <span className="text-slate-400 font-normal ml-1">{isApproved ? '(busca nos cadastrados)' : '(quem ligou)'}</span>
+            </label>
+            <input type="text" value={contactName}
+              onChange={e => { setContactName(e.target.value); if (clientId) setClientId('') }}
+              placeholder="Ex: João Silva"
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+            {clientSuggestions.length > 0 && (
+              <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden">
+                <p className="px-3 py-1.5 text-xs text-slate-400 bg-slate-50 border-b border-slate-100">Cliente já cadastrado? Clique para vincular:</p>
+                {clientSuggestions.map(c => (
+                  <button key={c.id} type="button"
+                    onClick={() => { setClientId(c.id); setContactName(c.name); if (!contactPhone && c.phone) setContactPhone(c.phone) }}
+                    className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-orange-50 transition">
+                    {c.name}
+                    {(c.city || c.phone) && <span className="text-xs text-slate-400 ml-2">{[c.city, c.phone].filter(Boolean).join(' · ')}</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Telefone</label>
+            <input type="tel" value={contactPhone} onChange={e => setContactPhone(e.target.value)}
+              placeholder="(51) 99999-9999"
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+          </div>
+        </div>
+
+        {/* Cliente vinculado ou cadastro inline (chamado aprovado) */}
+        {isApproved && linkedClient && (
+          <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-2.5">
+            <p className="text-sm text-emerald-700">
+              ✓ Vinculado ao cliente cadastrado <span className="font-semibold">{linkedClient.name}</span>
+              {linkedClient.code && <span className="text-emerald-500 ml-1">({linkedClient.code})</span>}
+            </p>
+            <button type="button" onClick={() => setClientId('')}
+              className="text-xs text-emerald-600 hover:text-emerald-800 font-medium underline">
+              Desvincular
+            </button>
+          </div>
+        )}
+        {isApproved && !clientId && contactName.trim().length >= 2 && clientSuggestions.length === 0 && (
+          <div className="border border-orange-100 bg-orange-50/50 rounded-lg p-4 space-y-3">
+            <p className="text-sm font-semibold text-orange-600">
+              Cliente novo — será cadastrado automaticamente. Complete os dados:
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">CPF/CNPJ</label>
+                <input type="text" value={newClient.cpf_cnpj} onChange={e => setNewClient(p => ({ ...p, cpf_cnpj: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-medium text-slate-600 mb-1">Endereço</label>
+                <input type="text" value={newClient.address} onChange={e => setNewClient(p => ({ ...p, address: e.target.value }))}
+                  placeholder="Rua, número"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Bairro</label>
+                <input type="text" value={newClient.neighborhood} onChange={e => setNewClient(p => ({ ...p, neighborhood: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Cidade</label>
+                <input type="text" value={newClient.city} onChange={e => setNewClient(p => ({ ...p, city: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">UF</label>
+                <input type="text" maxLength={2} value={newClient.state} onChange={e => setNewClient(p => ({ ...p, state: e.target.value.toUpperCase() }))}
+                  placeholder="RS"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">CEP</label>
+                <input type="text" value={newClient.cep} onChange={e => setNewClient(p => ({ ...p, cep: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-medium text-slate-600 mb-1">E-mail</label>
+                <input type="email" value={newClient.email} onChange={e => setNewClient(p => ({ ...p, email: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Cliente cadastrado */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1.5">
             Cliente cadastrado
-            <span className="text-slate-400 font-normal ml-1">(opcional — vincule se já existe no sistema)</span>
+            <span className="text-slate-400 font-normal ml-1">(opcional)</span>
           </label>
           <select value={clientId} onChange={e => setClientId(e.target.value)}
             className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
@@ -274,23 +465,39 @@ export default function NovoChamadoPage() {
           </select>
         </div>
 
+        {/* Cidade e bairro — sempre disponíveis, mesmo sem aprovação ou visita */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Cidade</label>
+            <input type="text" value={callCity} onChange={e => setCallCity(e.target.value)}
+              placeholder="Ex: Porto Alegre"
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Bairro</label>
+            <input type="text" value={callNeighborhood} onChange={e => setCallNeighborhood(e.target.value)}
+              placeholder="Ex: Centro"
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+          </div>
+        </div>
+
         {/* Campos de agendamento */}
         {isScheduled && (
           <div className="border border-orange-100 bg-orange-50/50 rounded-lg p-4 space-y-3">
-            <p className="text-sm font-semibold text-orange-600">Detalhes do Agendamento</p>
+            <p className="text-sm font-semibold text-orange-600 flex items-center gap-1.5">
+              <CalendarDays className="w-4 h-4" />
+              Detalhes do Agendamento
+            </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Horário Agendado</label>
-                <input type="time" value={scheduledTime} onChange={e => setScheduledTime(e.target.value)}
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Data do Serviço</label>
+                <input type="date" value={scheduledDate} onChange={e => setScheduledDate(e.target.value)}
                   className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Tipo de Serviço</label>
-                <select value={serviceCategory} onChange={e => setServiceCategory(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white">
-                  <option value="">Selecionar tipo de servico</option>
-                  {serviceTypes.map(st => <option key={st.id} value={st.name}>{st.name}</option>)}
-                </select>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Horário</label>
+                <input type="time" value={scheduledTime} onChange={e => setScheduledTime(e.target.value)}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
               </div>
               <div className="sm:col-span-2">
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Endereço do Serviço</label>
@@ -301,6 +508,73 @@ export default function NovoChamadoPage() {
             </div>
           </div>
         )}
+
+        {/* Tipo(s) de serviço — seção única */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">Tipo(s) de Serviço</label>
+          <div className="flex flex-wrap gap-2 mb-2">
+            {categoryNames.map(name => (
+              <button key={name} type="button" onClick={() => toggleCategory(name)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${selectedCategories.includes(name) ? 'bg-orange-500 border-orange-500 text-white' : 'border-slate-200 text-slate-600 hover:border-orange-300'}`}>
+                {name}
+              </button>
+            ))}
+          </div>
+
+          {selectedCategories.map(cat => {
+            const cfg = SERVICE_CONFIG[cat]
+            const catLines = serviceLines.filter(l => l.category === cat)
+            return (
+              <div key={cat} className="border border-orange-100 bg-orange-50/40 rounded-lg p-3 mt-2 space-y-3">
+                <p className="text-sm font-semibold text-slate-700 uppercase tracking-wide">{cat}</p>
+                {cfg?.subOptions && (
+                  <div className="flex flex-wrap gap-2">
+                    {cfg.subOptions.map(sub => {
+                      const active = catLines.some(l => l.sub === sub)
+                      return (
+                        <button key={sub} type="button" onClick={() => toggleSub(cat, sub)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${active ? 'bg-orange-500 border-orange-500 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-orange-300'}`}>
+                          {sub}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {/* Valores por serviço — só no chamado aprovado */}
+                {isApproved && catLines.map(l => (
+                  <div key={l.sub ?? cat} className="bg-white border border-slate-100 rounded-lg p-3 space-y-2">
+                    {l.sub && <p className="text-xs font-bold text-orange-600 uppercase">{l.sub}</p>}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">{cfg?.qtyLabel ?? 'Quantidade'}</label>
+                        <input type="number" min="0" step="0.01" value={l.quantity || ''}
+                          onChange={e => updateLine(l.category, l.sub, { quantity: Number(e.target.value) })}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">{cfg?.priceLabel ?? 'Valor (R$)'}</label>
+                        <input type="number" min="0" step="0.01" value={l.unitPrice || ''}
+                          onChange={e => updateLine(l.category, l.sub, { unitPrice: Number(e.target.value) })}
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                      </div>
+                      <div className="col-span-2 sm:col-span-1">
+                        <label className="block text-xs font-medium text-slate-600 mb-1">Valor total</label>
+                        <p className="px-3 py-2 text-sm font-bold text-orange-600 bg-slate-50 border border-slate-100 rounded-lg">
+                          R$ {lineTotal(l).toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
+                    <input type="text" value={l.notes}
+                      onChange={e => updateLine(l.category, l.sub, { notes: e.target.value })}
+                      placeholder="Descrição deste serviço..."
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                  </div>
+                ))}
+              </div>
+            )
+          })}
+        </div>
 
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1.5">Observações</label>
@@ -325,12 +599,20 @@ export default function NovoChamadoPage() {
                 </select>
               </div>
               <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Auxiliar</label>
+                <select value={auxiliaryId} onChange={e => setAuxiliaryId(e.target.value)}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
+                  <option value="">Sem auxiliar</option>
+                  {auxiliaries.map(a => <option key={a.id} value={a.id}>{a.name} ({Number(a.percentage)}%)</option>)}
+                </select>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Motorista</label>
                 <input type="text" value={driver} onChange={e => setDriver(e.target.value)}
                   className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">NÂº da NF</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Nº da NF</label>
                 <input type="text" value={nfNumber} onChange={e => setNfNumber(e.target.value)}
                   className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
               </div>
@@ -344,15 +626,22 @@ export default function NovoChamadoPage() {
                 <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
                   className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Forma de Pagamento</label>
-                <input type="text" placeholder="Dinheiro, PIX, Cartão..." value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Forma de Pagamento</label>
+              <div className="flex flex-wrap gap-2">
+                {PAYMENT_METHODS.map(m => (
+                  <button key={m} type="button" onClick={() => setPaymentMethod(paymentMethod === m ? '' : m)}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition ${paymentMethod === m ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                    {m}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
 
-          {/* Tipo execução */}
+          {/* Tipo execução + custos */}
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-4">
             <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3">Tipo de Execução</h2>
             <div className="flex flex-wrap gap-2">
@@ -367,103 +656,97 @@ export default function NovoChamadoPage() {
                 </button>
               ))}
             </div>
-            {serviceType !== 'proprio' && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                {[
-                  { label: 'Gasolina (R$)', val: fuelCost, set: setFuelCost },
-                  { label: 'Almoço (R$)', val: mealCost, set: setMealCost },
-                  { label: 'Aluguel Caminhão (R$)', val: truckCost, set: setTruckCost },
-                  { label: 'Outros (R$)', val: otherCost, set: setOtherCost },
-                ].map(f => (
-                  <div key={f.label}>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">{f.label}</label>
-                    <input type="number" min="0" step="0.01" value={f.val} onChange={e => f.set(Number(e.target.value))}
-                      className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+            {serviceType === 'proprio' ? (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {[
+                    { label: 'Material (R$)', val: materialCost, set: setMaterialCost },
+                    { label: 'Combustível (R$)', val: ownFuelCost, set: setOwnFuelCost },
+                    { label: 'Outros Custos (R$)', val: ownOtherCost, set: setOwnOtherCost },
+                  ].map(f => (
+                    <div key={f.label}>
+                      <label className="block text-sm font-medium text-slate-700 mb-1.5">{f.label}</label>
+                      <input type="number" min="0" step="0.01" value={f.val || ''} onChange={e => f.set(Number(e.target.value))}
+                        className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Contratou algum outro serviço?
+                    <span className="text-slate-400 font-normal ml-1">(valor pago a terceiro)</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-slate-500">R$</span>
+                    <input type="number" min="0" step="0.01" value={otherServiceValue || ''} onChange={e => setOtherServiceValue(Number(e.target.value))}
+                      className="w-36 px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
                   </div>
-                ))}
+                </div>
+              </>
+            ) : (
+              <div className="border border-orange-100 bg-orange-50/50 rounded-lg p-4">
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Porcentagem do serviço (%)
+                  <span className="text-slate-400 font-normal ml-1">(normalmente 50%)</span>
+                </label>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <input type="number" min="0" max="100" step="0.5" value={partnerPct || ''} onChange={e => setPartnerPct(Number(e.target.value))}
+                    className="w-28 px-3 py-2.5 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                  <p className="text-sm text-slate-600">
+                    Valor bruto <span className="font-semibold">R$ {bruto.toFixed(2)}</span>
+                    {' → '}líquido ({partnerPct}%): <span className="font-bold text-emerald-600">R$ {liquidoParceria.toFixed(2)}</span>
+                  </p>
+                </div>
               </div>
             )}
           </div>
 
-          {/* Itens */}
-          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-4">
-            <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3">Itens do Serviço</h2>
-            <div className="space-y-2">
-              <div className="grid grid-cols-12 gap-2 text-xs font-semibold text-slate-500 uppercase px-1">
-                <div className="col-span-2">Qtd.</div><div className="col-span-6">Descrição</div>
-                <div className="col-span-2">Vlr. Unit.</div><div className="col-span-1">Total</div><div className="col-span-1"></div>
-              </div>
-              {items.map(item => (
-                <div key={item.id} className="grid grid-cols-12 gap-2 items-center">
-                  <div className="col-span-2">
-                    <input type="number" min="1" value={item.quantity} onChange={e => updateItem(item.id, 'quantity', Number(e.target.value))}
-                      className="w-full px-2 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
-                  </div>
-                  <div className="col-span-6">
-                    <input type="text" value={item.description} placeholder="Descrição" onChange={e => updateItem(item.id, 'description', e.target.value)}
-                      className="w-full px-2 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
-                  </div>
-                  <div className="col-span-2">
-                    <input type="number" min="0" step="0.01" value={item.unit_price} onChange={e => updateItem(item.id, 'unit_price', Number(e.target.value))}
-                      className="w-full px-2 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
-                  </div>
-                  <div className="col-span-1 text-sm text-slate-700 font-medium text-center">{(item.quantity * item.unit_price).toFixed(2)}</div>
-                  <div className="col-span-1 flex justify-center">
-                    <button type="button" onClick={() => removeItem(item.id)} className="text-red-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
-                  </div>
-                </div>
-              ))}
-              <button type="button" onClick={addItem} className="flex items-center gap-1.5 text-orange-500 text-sm font-medium mt-2">
-                <Plus className="w-4 h-4" /> Adicionar item
-              </button>
+          {/* Resumo de valores */}
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-2">
+            <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3 mb-2">Resumo de Valores</h2>
+            <div className="flex justify-between text-sm"><span className="text-slate-600">Subtotal (serviços)</span><span className="font-medium">R$ {subtotal.toFixed(2)}</span></div>
+            <div className="flex justify-between text-sm items-center">
+              <span className="text-slate-600">Locação Equip. e M.O. (R$)</span>
+              <input type="number" min="0" step="0.01" value={equipmentRentalValue || ''} onChange={e => setEquipmentRentalValue(Number(e.target.value))}
+                className="w-24 px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-orange-400" />
             </div>
-
-            <div className="border-t border-slate-100 pt-4 grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Locação Equip. e M.O. (%)</label>
-                <input type="number" min="0" value={equipmentRentalPct} onChange={e => setEquipmentRentalPct(Number(e.target.value))}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor (R$)</label>
-                <input type="number" min="0" step="0.01" value={equipmentRentalValue} onChange={e => setEquipmentRentalValue(Number(e.target.value))}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
-              </div>
+            <div className="flex justify-between text-sm items-center">
+              <span className="text-slate-600">Descontos (R$)</span>
+              <input type="number" min="0" step="0.01" value={discount || ''} onChange={e => setDiscount(Number(e.target.value))}
+                className="w-24 px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-orange-400" />
             </div>
-
-            <div className="border-t border-slate-100 pt-4 space-y-2">
-              <div className="flex justify-between text-sm"><span className="text-slate-600">Subtotal</span><span>R$ {subtotal.toFixed(2)}</span></div>
-              <div className="flex justify-between text-sm items-center">
-                <span className="text-slate-600">Descontos (R$)</span>
-                <input type="number" min="0" step="0.01" value={discount} onChange={e => setDiscount(Number(e.target.value))}
-                  className="w-24 px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-orange-400" />
+            <div className="flex justify-between text-sm items-center">
+              <span className="text-slate-600">Impostos (R$)</span>
+              <input type="number" min="0" step="0.01" value={taxes || ''} onChange={e => setTaxes(Number(e.target.value))}
+                className="w-24 px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-orange-400" />
+            </div>
+            <div className="flex justify-between text-base font-bold border-t border-slate-100 pt-2">
+              <span className="text-slate-800">Valor Total (bruto)</span>
+              <span className="text-orange-500">R$ {bruto.toFixed(2)}</span>
+            </div>
+            {isOutsourced && (
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-600">Líquido da parceria ({partnerPct}%)</span>
+                <span className="font-semibold text-emerald-600">R$ {liquidoParceria.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-sm items-center">
-                <span className="text-slate-600">Impostos (R$)</span>
-                <input type="number" min="0" step="0.01" value={taxes} onChange={e => setTaxes(Number(e.target.value))}
-                  className="w-24 px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-orange-400" />
+            )}
+            {selectedAux && (
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-600">Auxiliar {selectedAux.name} ({Number(selectedAux.percentage)}%)</span>
+                <span className="font-semibold text-red-500">− R$ {auxValue.toFixed(2)}</span>
               </div>
+            )}
+            {(isOutsourced || selectedAux) && (
               <div className="flex justify-between text-base font-bold border-t border-slate-100 pt-2">
-                <span className="text-slate-800">Valor Total</span>
-                <span className="text-orange-500">R$ {total.toFixed(2)}</span>
+                <span className="text-slate-800">Valor Líquido</span>
+                <span className="text-emerald-600">R$ {liquidoFinal.toFixed(2)}</span>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Levantamento */}
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-4">
-            <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3">Levantamento e Cobrança</h2>
-            <div className="flex flex-wrap gap-2">
-              {(['metro_linear','metro_cubico','litros','carga','valor_fechado','metro_quadrado'] as BillingSystem[]).map(b => {
-                const labels: Record<string,string> = { metro_linear:'Metro Linear', metro_cubico:'Metro Cúbico', litros:'Litros', carga:'Carga', valor_fechado:'Valor Fechado', metro_quadrado:'Metro Quadrado' }
-                return (
-                  <button key={b} type="button" onClick={() => setBillingSystem(billingSystem === b ? '' : b)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${billingSystem === b ? 'bg-orange-500 border-orange-500 text-white' : 'border-slate-200 text-slate-600 hover:border-orange-300'}`}>
-                    {labels[b]}
-                  </button>
-                )
-              })}
-            </div>
+            <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3">Levantamento</h2>
             <div className="space-y-3">
               {[
                 { title: 'Planta baixa', options: [
@@ -476,7 +759,9 @@ export default function NovoChamadoPage() {
                   { label: 'Sem planta hidráulica', val: hasNoHydraulicPlan, set: setHasNoHydraulicPlan },
                 ]},
                 { title: 'Garantia', options: [
-                  { label: 'Com garantia de 30 dias', val: hasGuarantee, set: setHasGuarantee },
+                  { label: 'Garantia 30 dias', val: hasGuarantee, set: setHasGuarantee },
+                  { label: 'Garantia 60 dias', val: hasGuarantee60, set: setHasGuarantee60 },
+                  { label: 'Garantia 90 dias', val: hasGuarantee90, set: setHasGuarantee90 },
                   { label: 'Sem garantia', val: hasNoGuarantee, set: setHasNoGuarantee },
                 ]},
               ].map(group => (
@@ -524,12 +809,12 @@ export default function NovoChamadoPage() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor Pago (R$)</label>
-                  <input type="number" min="0" step="0.01" value={amountPaid} onChange={e => setAmountPaid(Number(e.target.value))}
+                  <input type="number" min="0" step="0.01" value={amountPaid || ''} onChange={e => setAmountPaid(Number(e.target.value))}
                     className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor Restante (R$)</label>
-                  <input type="number" min="0" step="0.01" value={remainingAmount} onChange={e => setRemainingAmount(Number(e.target.value))}
+                  <input type="number" min="0" step="0.01" value={remainingAmount || ''} onChange={e => setRemainingAmount(Number(e.target.value))}
                     className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
                 </div>
                 <div>
@@ -540,10 +825,11 @@ export default function NovoChamadoPage() {
               </div>
             )}
           </div>
+
           {/* Fotos e documentos */}
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-4">
             <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3">Fotos e Documentos</h2>
-            <p className="text-xs text-slate-500">Anexe fotos do local ou documentos relacionados ao serviço.</p>
+            <p className="text-xs text-slate-500">Anexe fotos do local ou documentos relacionados ao serviço. Ficam salvos na OS.</p>
 
             <div className="flex gap-3">
               <button type="button" onClick={() => cameraInputRef.current?.click()}
@@ -563,18 +849,18 @@ export default function NovoChamadoPage() {
             {pendingFiles.length > 0 && (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {pendingFiles.map(f => (
-                  <div key={f.id} className="relative group rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+                  <div key={f.id} className="relative rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
                     {f.preview ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={f.preview} alt={f.file.name} className="w-full h-24 object-cover" />
                     ) : (
-                      <div className="w-full h-24 flex flex-col items-center justify-center gap-1 text-slate-400">
+                      <div className="w-full h-24 flex flex-col items-center justify-center gap-1 text-slate-400 px-2">
                         <FileText className="w-7 h-7" />
-                        <span className="text-xs text-center px-2 truncate w-full text-center">{f.file.name}</span>
+                        <span className="text-xs truncate w-full text-center">{f.file.name}</span>
                       </div>
                     )}
                     <button type="button" onClick={() => removePendingFile(f.id)}
-                      className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition">
+                      className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1">
                       <X className="w-3 h-3" />
                     </button>
                   </div>
@@ -601,4 +887,3 @@ export default function NovoChamadoPage() {
     </form>
   )
 }
-
