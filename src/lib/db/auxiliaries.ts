@@ -20,6 +20,18 @@ export async function createAuxiliary(name: string, percentage: number, type: 't
   return data
 }
 
+export async function updateAuxiliary(id: string, values: Record<string, unknown>) {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('auxiliaries')
+    .update(values)
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
 export async function deleteAuxiliary(id: string) {
   const supabase = createClient()
   const { error } = await supabase.from('auxiliaries').delete().eq('id', id)

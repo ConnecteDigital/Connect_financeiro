@@ -1,10 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Users, Plus, Trash2, Save, Settings, Loader2, Wrench, UserCog, Power, Globe, X, Check, ToggleLeft, ToggleRight } from 'lucide-react'
+import { Users, Plus, Trash2, Save, Settings, Loader2, Wrench, UserCog, Power, Globe, X, Check, ToggleLeft, ToggleRight, Star } from 'lucide-react'
 import { getTeams, createTeam, deleteTeam } from '@/lib/db/teams'
 import { getAllServiceTypes, createServiceType, toggleServiceType, deleteServiceType } from '@/lib/db/service-types'
-import { getAuxiliaries, createAuxiliary, deleteAuxiliary } from '@/lib/db/auxiliaries'
+import { getAuxiliaries, createAuxiliary, updateAuxiliary, deleteAuxiliary } from '@/lib/db/auxiliaries'
 import { createClient } from '@/lib/supabase/client'
 import { useTenant } from '@/lib/tenant-context'
 
@@ -12,6 +12,43 @@ const ORIGIN_PRESETS = [
   'Indicação', 'WhatsApp', 'Site', 'Instagram',
   'Facebook', 'Google', 'Terceirizado', 'Telefone',
 ]
+
+function AddAuxForm({ type, savingAux, onAdd }: {
+  type: 'tecnico' | 'dono'
+  savingAux: boolean
+  onAdd: (name: string, pct: number) => Promise<void>
+}) {
+  const [name, setName] = useState('')
+  const [pct, setPct] = useState('')
+
+  async function submit() {
+    if (!name.trim()) return
+    await onAdd(name.trim(), Number(pct) || 0)
+    setName('')
+    setPct('')
+  }
+
+  const isDono = type === 'dono'
+  return (
+    <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+      <input type="text" value={name} onChange={e => setName(e.target.value)}
+        onKeyDown={e => e.key === 'Enter' && submit()}
+        placeholder={isDono ? 'Nome do dono...' : 'Nome do técnico...'}
+        className="input-field py-2.5 text-sm flex-1 min-w-[140px]" />
+      <input type="number" min="0" max="100" step="0.01" value={pct}
+        onChange={e => setPct(e.target.value)}
+        onKeyDown={e => e.key === 'Enter' && submit()}
+        placeholder="%"
+        className="input-field py-2.5 text-sm w-20" />
+      <button onClick={submit} disabled={savingAux || !name.trim()}
+        className="btn-primary text-sm px-4 py-2.5 flex-shrink-0"
+        style={isDono ? { background: '#7c3aed' } : {}}>
+        {savingAux ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+        {isDono ? 'Adicionar Dono' : 'Adicionar Técnico'}
+      </button>
+    </div>
+  )
+}
 
 export default function ConfiguracoesPage() {
   const { tenant, updateTenant } = useTenant()
@@ -34,10 +71,8 @@ export default function ConfiguracoesPage() {
 
   // Auxiliares
   const [auxiliaries, setAuxiliaries] = useState<any[]>([])
-  const [newAuxName, setNewAuxName] = useState('')
-  const [newAuxPct, setNewAuxPct] = useState('')
-  const [newAuxType, setNewAuxType] = useState<'tecnico' | 'dono'>('tecnico')
   const [savingAux, setSavingAux] = useState(false)
+  const [togglingDefault, setTogglingDefault] = useState<string | null>(null)
 
   // Origens dos chamados
   const [origins, setOrigins] = useState<string[]>([])
@@ -45,9 +80,20 @@ export default function ConfiguracoesPage() {
   const [savingOrigins, setSavingOrigins] = useState(false)
   const [originsSaved, setOriginsSaved] = useState(false)
 
+  // Dados da empresa
+  const [companyName, setCompanyName] = useState('')
+  const [cnpj, setCnpj] = useState('')
+  const [phone, setPhone] = useState('')
+  const [savingCompany, setSavingCompany] = useState(false)
+  const [companySaved, setCompanySaved] = useState(false)
+
   useEffect(() => {
-    if (tenant?.call_origins) setOrigins(tenant.call_origins)
-    if (tenant) setEnableCommissions(tenant.enable_commissions ?? false)
+    if (!tenant) return
+    if (tenant.call_origins) setOrigins(tenant.call_origins)
+    setEnableCommissions(tenant.enable_commissions ?? false)
+    setCompanyName(tenant.name ?? '')
+    setCnpj(tenant.cnpj ?? '')
+    setPhone(tenant.phone ?? '')
   }, [tenant])
 
   useEffect(() => {
@@ -67,7 +113,6 @@ export default function ConfiguracoesPage() {
     setSavingCommissions(true)
     try {
       const supabase = createClient()
-      // .select().single() força erro se o RLS bloquear (update de 0 linhas)
       const { data, error } = await supabase
         .from('tenants')
         .update({ enable_commissions: next })
@@ -76,7 +121,7 @@ export default function ConfiguracoesPage() {
         .single()
       if (error || !data) {
         console.error('Falha ao salvar enable_commissions:', error)
-        alert('Não foi possível salvar. Verifique se a migration_v6.sql (policy de update do tenant) foi executada no Supabase.')
+        alert('Não foi possível salvar. Verifique se a migration_v6.sql foi executada no Supabase.')
         return
       }
       setEnableCommissions(data.enable_commissions)
@@ -119,6 +164,30 @@ export default function ConfiguracoesPage() {
       updateTenant({ call_origins: data.call_origins })
     } finally {
       setSavingOrigins(false)
+    }
+  }
+
+  async function handleSaveCompany() {
+    if (!tenant) return
+    setSavingCompany(true)
+    try {
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from('tenants')
+        .update({ name: companyName.trim(), cnpj: cnpj.trim() || null, phone: phone.trim() || null })
+        .eq('id', tenant.id)
+        .select('name, cnpj, phone')
+        .single()
+      if (error || !data) {
+        console.error('Falha ao salvar dados da empresa:', error)
+        alert('Não foi possível salvar. Verifique as migrações no Supabase.')
+        return
+      }
+      setCompanySaved(true)
+      updateTenant({ name: data.name, cnpj: data.cnpj, phone: data.phone })
+      setTimeout(() => setCompanySaved(false), 3000)
+    } finally {
+      setSavingCompany(false)
     }
   }
 
@@ -167,17 +236,22 @@ export default function ConfiguracoesPage() {
   }
 
   // ── Auxiliares ──
-  async function handleAddAuxiliary() {
-    if (!newAuxName.trim()) return
-    setSavingAux(true)
+  async function handleToggleDefault(aux: any) {
+    setTogglingDefault(aux.id)
     try {
-      const aux = await createAuxiliary(newAuxName.trim(), Number(newAuxPct) || 0, newAuxType)
-      setAuxiliaries(a => [...a, aux])
-      setNewAuxName('')
-      setNewAuxPct('')
-      setNewAuxType('tecnico')
+      const next = !aux.is_default
+      // If enabling default, disable all other donos first
+      if (next && aux.type === 'dono') {
+        const otherDonos = auxiliaries.filter(a => a.type === 'dono' && a.id !== aux.id && a.is_default)
+        for (const d of otherDonos) {
+          await updateAuxiliary(d.id, { is_default: false })
+          setAuxiliaries(prev => prev.map(a => a.id === d.id ? { ...a, is_default: false } : a))
+        }
+      }
+      const updated = await updateAuxiliary(aux.id, { is_default: next })
+      setAuxiliaries(prev => prev.map(a => a.id === aux.id ? updated : a))
     } finally {
-      setSavingAux(false)
+      setTogglingDefault(null)
     }
   }
 
@@ -190,10 +264,13 @@ export default function ConfiguracoesPage() {
   if (loading) {
     return (
       <div className="max-w-3xl mx-auto flex items-center justify-center py-20">
-        <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
+        <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--primary)' }} />
       </div>
     )
   }
+
+  const tecnicos = auxiliaries.filter(a => a.type !== 'dono')
+  const donos = auxiliaries.filter(a => a.type === 'dono')
 
   return (
     <div className="space-y-6 max-w-3xl mx-auto">
@@ -241,7 +318,6 @@ export default function ConfiguracoesPage() {
           <Users className="w-5 h-5" style={{ color: 'var(--primary)' }} />
           <h2 className="font-semibold" style={{ color: 'var(--text-primary)' }}>Equipes</h2>
         </div>
-
         <div className="space-y-2">
           {teams.length === 0 && (
             <p className="text-sm text-center py-4" style={{ color: 'var(--text-tertiary)' }}>Nenhuma equipe cadastrada</p>
@@ -255,17 +331,12 @@ export default function ConfiguracoesPage() {
             </div>
           ))}
         </div>
-
         <div className="flex gap-2">
-          <input
-            type="text" value={newTeam}
-            onChange={e => setNewTeam(e.target.value)}
+          <input type="text" value={newTeam} onChange={e => setNewTeam(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleAddTeam()}
             placeholder="Nome da nova equipe..."
-            className="input-field py-2.5 text-sm flex-1"
-          />
-          <button onClick={handleAddTeam} disabled={savingTeam || !newTeam.trim()}
-            className="btn-primary text-sm px-4 py-2.5">
+            className="input-field py-2.5 text-sm flex-1" />
+          <button onClick={handleAddTeam} disabled={savingTeam || !newTeam.trim()} className="btn-primary text-sm px-4 py-2.5">
             {savingTeam ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
             Adicionar
           </button>
@@ -279,7 +350,6 @@ export default function ConfiguracoesPage() {
           <Wrench className="w-5 h-5" style={{ color: 'var(--primary)' }} />
           <h2 className="font-semibold" style={{ color: 'var(--text-primary)' }}>Tipos de Serviço</h2>
         </div>
-
         <div className="space-y-2">
           {serviceTypes.length === 0 && (
             <p className="text-sm text-center py-4" style={{ color: 'var(--text-tertiary)' }}>Nenhum tipo de serviço cadastrado</p>
@@ -297,29 +367,23 @@ export default function ConfiguracoesPage() {
                   title={st.active ? 'Desativar' : 'Ativar'}>
                   <Power className="w-4 h-4" />
                 </button>
-                <button onClick={() => handleDeleteServiceType(st.id)} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition" title="Remover">
+                <button onClick={() => handleDeleteServiceType(st.id)}
+                  className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
             </div>
           ))}
         </div>
-
         <div className="flex gap-2 flex-wrap sm:flex-nowrap">
-          <input
-            type="text" value={newServiceType}
-            onChange={e => setNewServiceType(e.target.value)}
+          <input type="text" value={newServiceType} onChange={e => setNewServiceType(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleAddServiceType()}
             placeholder="Nome do tipo de serviço..."
-            className="input-field py-2.5 text-sm flex-1 min-w-[180px]"
-          />
-          <input
-            type="text" value={newServiceCategory}
-            onChange={e => setNewServiceCategory(e.target.value)}
+            className="input-field py-2.5 text-sm flex-1 min-w-[180px]" />
+          <input type="text" value={newServiceCategory} onChange={e => setNewServiceCategory(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleAddServiceType()}
             placeholder="Categoria (opcional)"
-            className="input-field py-2.5 text-sm w-44"
-          />
+            className="input-field py-2.5 text-sm w-44" />
           <button onClick={handleAddServiceType} disabled={savingServiceType || !newServiceType.trim()}
             className="btn-primary text-sm px-4 py-2.5">
             {savingServiceType ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
@@ -328,32 +392,99 @@ export default function ConfiguracoesPage() {
         </div>
       </div>
 
-      {/* Auxiliares / Comissões */}
+      {/* Donos (sempre visível) */}
+      <div className="rounded-xl border p-6 space-y-4"
+        style={{ background: 'var(--surface)', borderColor: 'var(--border)', boxShadow: 'var(--shadow-sm)' }}>
+        <div className="flex items-center gap-2 border-b pb-3" style={{ borderColor: 'var(--border)' }}>
+          <Star className="w-5 h-5" style={{ color: '#7c3aed' }} />
+          <h2 className="font-semibold" style={{ color: 'var(--text-primary)' }}>Donos</h2>
+          <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(139,92,246,0.12)', color: '#7c3aed' }}>Comissão</span>
+        </div>
+
+        <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+          Donos recebem comissão sobre os serviços. Marque como "padrão" para ele entrar automaticamente em todos os chamados.
+        </p>
+
+        <div className="space-y-2">
+          {donos.length === 0 && (
+            <p className="text-sm text-center py-4" style={{ color: 'var(--text-tertiary)' }}>Nenhum dono cadastrado</p>
+          )}
+          {donos.map(a => (
+            <div key={a.id} className="flex items-center justify-between p-3 rounded-lg"
+              style={{ background: a.is_default ? 'rgba(139,92,246,0.08)' : 'var(--surface-secondary)', border: a.is_default ? '1px solid rgba(139,92,246,0.25)' : '1px solid transparent' }}>
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{a.name}</span>
+                    <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{Number(a.percentage)}%</span>
+                    {a.is_default && (
+                      <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: 'rgba(139,92,246,0.15)', color: '#7c3aed' }}>
+                        Padrão
+                      </span>
+                    )}
+                  </div>
+                  {enableCommissions && (
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
+                      {a.is_default ? 'Entra automaticamente em todos os chamados' : 'Adicionado manualmente nos chamados'}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {enableCommissions && (
+                  <button
+                    onClick={() => handleToggleDefault(a)}
+                    disabled={togglingDefault === a.id}
+                    title={a.is_default ? 'Remover como padrão' : 'Definir como padrão'}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition"
+                    style={a.is_default
+                      ? { background: 'rgba(139,92,246,0.15)', color: '#7c3aed' }
+                      : { background: 'var(--surface-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }
+                    }>
+                    {togglingDefault === a.id
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      : <Star className="w-3.5 h-3.5" fill={a.is_default ? 'currentColor' : 'none'} />
+                    }
+                    {a.is_default ? 'Padrão' : 'Definir padrão'}
+                  </button>
+                )}
+                <button onClick={() => handleDeleteAuxiliary(a.id)} className="text-red-400 hover:text-red-600 transition p-1">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Add dono form */}
+        <AddAuxForm
+          type="dono"
+          savingAux={savingAux}
+          onAdd={async (name, pct) => {
+            setSavingAux(true)
+            try {
+              const aux = await createAuxiliary(name, pct, 'dono')
+              setAuxiliaries(a => [...a, aux])
+            } finally { setSavingAux(false) }
+          }}
+        />
+      </div>
+
+      {/* Técnicos Auxiliares */}
       <div className="rounded-xl border p-6 space-y-4"
         style={{ background: 'var(--surface)', borderColor: 'var(--border)', boxShadow: 'var(--shadow-sm)' }}>
         <div className="flex items-center gap-2 border-b pb-3" style={{ borderColor: 'var(--border)' }}>
           <UserCog className="w-5 h-5" style={{ color: 'var(--primary)' }} />
-          <h2 className="font-semibold" style={{ color: 'var(--text-primary)' }}>
-            {enableCommissions ? 'Técnicos e Donos' : 'Auxiliares'}
-          </h2>
+          <h2 className="font-semibold" style={{ color: 'var(--text-primary)' }}>Técnicos Auxiliares</h2>
         </div>
 
         <div className="space-y-2">
-          {auxiliaries.length === 0 && (
-            <p className="text-sm text-center py-4" style={{ color: 'var(--text-tertiary)' }}>Nenhum auxiliar cadastrado</p>
+          {tecnicos.length === 0 && (
+            <p className="text-sm text-center py-4" style={{ color: 'var(--text-tertiary)' }}>Nenhum técnico cadastrado</p>
           )}
-          {auxiliaries.map(a => (
+          {tecnicos.map(a => (
             <div key={a.id} className="flex items-center justify-between p-3 rounded-lg" style={{ background: 'var(--surface-secondary)' }}>
               <div className="flex items-center gap-2">
-                {enableCommissions && (
-                  <span className="text-xs px-2 py-0.5 rounded-full font-medium"
-                    style={a.type === 'dono'
-                      ? { background: 'rgba(139,92,246,0.15)', color: '#7c3aed' }
-                      : { background: 'rgba(var(--primary-rgb),0.12)', color: 'var(--primary)' }
-                    }>
-                    {a.type === 'dono' ? 'Dono' : 'Técnico'}
-                  </span>
-                )}
                 <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{a.name}</span>
                 <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{Number(a.percentage)}%</span>
               </div>
@@ -364,41 +495,17 @@ export default function ConfiguracoesPage() {
           ))}
         </div>
 
-        <div className="flex gap-2 flex-wrap sm:flex-nowrap">
-          <input
-            type="text" value={newAuxName}
-            onChange={e => setNewAuxName(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleAddAuxiliary()}
-            placeholder="Nome..."
-            className="input-field py-2.5 text-sm flex-1 min-w-[140px]"
-          />
-          <input
-            type="number" min="0" max="100" step="0.01" value={newAuxPct}
-            onChange={e => setNewAuxPct(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleAddAuxiliary()}
-            placeholder="%"
-            className="input-field py-2.5 text-sm w-20"
-          />
-          {enableCommissions && (
-            <div className="flex rounded-lg overflow-hidden border" style={{ borderColor: 'var(--border)' }}>
-              {(['tecnico', 'dono'] as const).map(t => (
-                <button key={t} type="button" onClick={() => setNewAuxType(t)}
-                  className="px-3 py-2 text-xs font-medium transition"
-                  style={newAuxType === t
-                    ? { background: 'var(--primary)', color: '#fff' }
-                    : { background: 'var(--surface)', color: 'var(--text-secondary)' }
-                  }>
-                  {t === 'tecnico' ? 'Técnico' : 'Dono'}
-                </button>
-              ))}
-            </div>
-          )}
-          <button onClick={handleAddAuxiliary} disabled={savingAux || !newAuxName.trim()}
-            className="btn-primary text-sm px-4 py-2.5">
-            {savingAux ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-            Adicionar
-          </button>
-        </div>
+        <AddAuxForm
+          type="tecnico"
+          savingAux={savingAux}
+          onAdd={async (name, pct) => {
+            setSavingAux(true)
+            try {
+              const aux = await createAuxiliary(name, pct, 'tecnico')
+              setAuxiliaries(a => [...a, aux])
+            } finally { setSavingAux(false) }
+          }}
+        />
       </div>
 
       {/* Origens dos Chamados */}
@@ -408,7 +515,7 @@ export default function ConfiguracoesPage() {
           <Globe className="w-5 h-5" style={{ color: 'var(--primary)' }} />
           <h2 className="font-semibold" style={{ color: 'var(--text-primary)' }}>Origens dos Chamados</h2>
         </div>
-        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Canais pelos quais seus clientes entram em contato. Aparecem no formulário de criação de chamado.</p>
+        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Canais pelos quais seus clientes entram em contato.</p>
 
         <div className="flex flex-wrap gap-2">
           {ORIGIN_PRESETS.map(o => {
@@ -429,18 +536,12 @@ export default function ConfiguracoesPage() {
         </div>
 
         <div className="flex gap-2">
-          <input
-            type="text"
-            value={customOrigin}
-            onChange={e => setCustomOrigin(e.target.value)}
+          <input type="text" value={customOrigin} onChange={e => setCustomOrigin(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addCustomOrigin())}
             placeholder="Outro canal personalizado..."
-            className="input-field py-2.5 text-sm flex-1"
-          />
-          <button onClick={addCustomOrigin} disabled={!customOrigin.trim()}
-            className="btn-primary text-sm px-4 py-2.5">
-            <Plus className="w-4 h-4" />
-            Adicionar
+            className="input-field py-2.5 text-sm flex-1" />
+          <button onClick={addCustomOrigin} disabled={!customOrigin.trim()} className="btn-primary text-sm px-4 py-2.5">
+            <Plus className="w-4 h-4" /> Adicionar
           </button>
         </div>
 
@@ -460,8 +561,7 @@ export default function ConfiguracoesPage() {
 
         <div className="flex items-center justify-between pt-1">
           <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{origins.length} canal{origins.length !== 1 ? 'is' : ''} selecionado{origins.length !== 1 ? 's' : ''}</p>
-          <button onClick={handleSaveOrigins} disabled={savingOrigins}
-            className="btn-primary text-sm px-5 py-2.5">
+          <button onClick={handleSaveOrigins} disabled={savingOrigins} className="btn-primary text-sm px-5 py-2.5">
             {savingOrigins ? <Loader2 className="w-4 h-4 animate-spin" /> : originsSaved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
             {originsSaved ? 'Salvo!' : 'Salvar Origens'}
           </button>
@@ -477,24 +577,29 @@ export default function ConfiguracoesPage() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
+          <div className="sm:col-span-2">
             <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Nome da Empresa</label>
-            <input type="text" defaultValue="Desentupidora Líder" className="input-field py-2.5 text-sm" />
+            <input type="text" value={companyName} onChange={e => { setCompanyName(e.target.value); setCompanySaved(false) }}
+              className="input-field py-2.5 text-sm" />
           </div>
           <div>
             <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>CNPJ</label>
-            <input type="text" defaultValue="50.773.617/0001-18" className="input-field py-2.5 text-sm" />
+            <input type="text" value={cnpj} onChange={e => { setCnpj(e.target.value); setCompanySaved(false) }}
+              placeholder="00.000.000/0000-00"
+              className="input-field py-2.5 text-sm" />
           </div>
           <div>
             <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Telefone</label>
-            <input type="text" defaultValue="(51) 99960-8260" className="input-field py-2.5 text-sm" />
+            <input type="text" value={phone} onChange={e => { setPhone(e.target.value); setCompanySaved(false) }}
+              placeholder="(51) 99999-9999"
+              className="input-field py-2.5 text-sm" />
           </div>
         </div>
 
         <div className="flex justify-end">
-          <button className="btn-primary text-sm px-5 py-2.5">
-            <Save className="w-4 h-4" />
-            Salvar
+          <button onClick={handleSaveCompany} disabled={savingCompany} className="btn-primary text-sm px-5 py-2.5">
+            {savingCompany ? <Loader2 className="w-4 h-4 animate-spin" /> : companySaved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+            {companySaved ? 'Salvo!' : 'Salvar'}
           </button>
         </div>
       </div>

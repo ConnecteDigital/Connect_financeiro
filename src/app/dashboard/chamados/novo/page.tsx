@@ -129,9 +129,21 @@ export default function NovoChamadoPage() {
         setClients(c)
         setTeams(t)
         setAuxiliaries(aux)
+        // Auto-add default dono when commissions enabled
+        if (commissionsEnabled) {
+          const defaultDono = aux.find((a: any) => a.type === 'dono' && a.is_default)
+          if (defaultDono) {
+            setSelectedAuxiliaries([{
+              auxiliary_id: defaultDono.id,
+              name: defaultDono.name,
+              type: 'dono',
+              percentage: Number(defaultDono.percentage),
+            }])
+          }
+        }
       })
       .catch(console.error)
-  }, [])
+  }, [commissionsEnabled])
 
   // ── Value calculations ──
   const lineTotal = (l: ServiceLine) => l.quantity * l.unitPrice
