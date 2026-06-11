@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import { use } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { getCall } from '@/lib/db/calls'
 import { useTenant } from '@/lib/tenant-context'
 import { ArrowLeft, Printer, MessageCircle } from 'lucide-react'
@@ -91,7 +90,8 @@ function RomaneioContent({ id }: { id: string }) {
           style={{ backgroundColor: primaryColor }}>
           <div className="flex items-center gap-3">
             {logoUrl ? (
-              <Image src={logoUrl} alt={companyName} width={44} height={44}
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={logoUrl} alt={companyName} loading="eager"
                 className="object-contain rounded-lg bg-white/20 p-0.5"
                 style={{ width: 44, height: 44 }} />
             ) : (

@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { use } from 'react'
-import Image from 'next/image'
 import { getCall } from '@/lib/db/calls'
 import { useTenant } from '@/lib/tenant-context'
 import { Share2 } from 'lucide-react'
@@ -64,7 +63,8 @@ function ImprimirContent({ id }: { id: string }) {
             <div className="border-r-2 border-black flex items-center justify-center w-40 min-h-[80px]"
               style={{ backgroundColor: primaryColor }}>
               {logoUrl ? (
-                <Image src={logoUrl} alt={companyName} width={80} height={64}
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={logoUrl} alt={companyName} loading="eager"
                   className="object-contain p-2"
                   style={{ width: 80, height: 64 }} />
               ) : (

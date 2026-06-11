@@ -65,8 +65,8 @@ export default function SaidasPage() {
       <div className="grid grid-cols-3 gap-3">
         {[
           { label: 'Total', value: fmt(totalPago + totalPendente), color: 'var(--text-primary)', bg: 'var(--surface)', icon: TrendingDown, iconColor: 'var(--text-secondary)' },
-          { label: 'Pago', value: fmt(totalPago), color: '#16a34a', bg: '#f0fdf4', icon: CheckCircle, iconColor: '#16a34a' },
-          { label: 'Pendente', value: fmt(totalPendente), color: '#d97706', bg: '#fffbeb', icon: AlertCircle, iconColor: '#d97706' },
+          { label: 'Pago', value: fmt(totalPago), color: '#16a34a', bg: 'rgba(22,163,74,0.10)', icon: CheckCircle, iconColor: '#16a34a' },
+          { label: 'Pendente', value: fmt(totalPendente), color: '#d97706', bg: 'rgba(217,119,6,0.10)', icon: AlertCircle, iconColor: '#d97706' },
         ].map((c, i) => (
           <div key={i} className="rounded-2xl p-3 sm:p-4" style={{ background: c.bg, boxShadow: 'var(--shadow-sm)' }}>
             <div className="flex items-center gap-1.5 mb-1.5">
@@ -81,25 +81,26 @@ export default function SaidasPage() {
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-2">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--text-tertiary)' }} />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: 'var(--text-tertiary)' }} />
+          {/* .input-field define padding próprio e ganharia do pl-9 — força via style */}
           <input type="text" placeholder="Buscar despesa..." value={search}
             onChange={e => setSearch(e.target.value)}
-            className="input-field pl-9 py-2.5 text-sm" />
+            className="input-field py-2.5 text-sm" style={{ paddingLeft: 38 }} />
         </div>
-        <div className="flex gap-1 rounded-xl p-1" style={{ background: '#ebebed' }}>
+        <div className="flex gap-1 rounded-xl p-1" style={{ background: 'var(--surface-secondary)' }}>
           {(['todos', 'fixo', 'avulso'] as const).map(t => (
             <button key={t} onClick={() => setTypeFilter(t)}
               className="px-3 py-1.5 rounded-lg text-xs font-medium transition"
-              style={typeFilter === t ? { background: '#fff', color: 'var(--text-primary)', boxShadow: 'var(--shadow-sm)' } : { color: 'var(--text-secondary)' }}>
+              style={typeFilter === t ? { background: 'var(--surface)', color: 'var(--text-primary)', boxShadow: 'var(--shadow-sm)' } : { color: 'var(--text-secondary)' }}>
               {t === 'todos' ? 'Todos' : t === 'fixo' ? 'Fixos' : 'Avulsos'}
             </button>
           ))}
         </div>
-        <div className="flex gap-1 rounded-xl p-1" style={{ background: '#ebebed' }}>
+        <div className="flex gap-1 rounded-xl p-1" style={{ background: 'var(--surface-secondary)' }}>
           {(['todos', 'pago', 'pendente'] as const).map(s => (
             <button key={s} onClick={() => setStatusFilter(s)}
               className="px-3 py-1.5 rounded-lg text-xs font-medium transition"
-              style={statusFilter === s ? { background: '#fff', color: 'var(--text-primary)', boxShadow: 'var(--shadow-sm)' } : { color: 'var(--text-secondary)' }}>
+              style={statusFilter === s ? { background: 'var(--surface)', color: 'var(--text-primary)', boxShadow: 'var(--shadow-sm)' } : { color: 'var(--text-secondary)' }}>
               {s === 'todos' ? 'Todos' : s === 'pago' ? 'Pago' : 'Pendente'}
             </button>
           ))}
@@ -173,12 +174,12 @@ export default function SaidasPage() {
                   </button>
                   <Link href={`/dashboard/saidas/${e.id}/editar`}
                     className="w-7 h-7 rounded-full flex items-center justify-center transition"
-                    style={{ background: '#f5f5f7' }}>
+                    style={{ background: 'var(--surface-secondary)' }}>
                     <ChevronRight className="w-3.5 h-3.5" style={{ color: 'var(--text-tertiary)' }} />
                   </Link>
                   <button onClick={() => handleDelete(e.id, e.description)}
                     className="w-7 h-7 rounded-full flex items-center justify-center transition"
-                    style={{ background: '#fff1f2' }}>
+                    style={{ background: 'rgba(239,68,68,0.12)' }}>
                     <Trash2 className="w-3.5 h-3.5 text-red-400" />
                   </button>
                 </div>

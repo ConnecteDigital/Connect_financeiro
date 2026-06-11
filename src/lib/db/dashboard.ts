@@ -30,6 +30,10 @@ export async function getDashboardStatsRange(startDate: string, endDate: string)
 
   const total_calls = calls.length
   const approved_calls = calls.filter(c => c.status === 'aprovado').length
+  const scheduled_calls = calls.filter(c => c.status === 'agendado').length
+  const cancelled_calls = calls.filter(c => c.status === 'cancelado').length
+  const no_visit_calls = calls.filter(c => c.status === 'nao_quis_visita').length
+  const not_approved_calls = calls.filter(c => c.status === 'nao_aprovou').length
   const gross_revenue = orders.reduce((s, o) => s + (o.total_value || 0), 0)
 
   const total_costs = orders.reduce((s, o) => {
@@ -45,13 +49,21 @@ export async function getDashboardStatsRange(startDate: string, endDate: string)
     .filter(o => o.payment_status === 'pendente' || o.payment_status === 'pago_parcial')
     .reduce((s, o) => s + (o.remaining_amount || o.total_value || 0), 0)
 
+  const paid_revenue = gross_revenue - pending_receivables
+
   return {
     total_calls,
     approved_calls,
+    scheduled_calls,
+    cancelled_calls,
+    no_visit_calls,
+    not_approved_calls,
     gross_revenue,
     net_revenue,
     pending_receivables,
     total_expenses,
+    outsource_costs: total_costs,
+    paid_revenue,
   }
 }
 

@@ -7,6 +7,8 @@ import { getReportData } from '@/lib/db/reports'
 import { format, startOfMonth, endOfMonth } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import DateRangePicker, { DateRange } from '@/components/DateRangePicker'
+import { useCallOrigins } from '@/lib/use-call-origins'
+import { useTenant } from '@/lib/tenant-context'
 
 const fmt = (v: number) => `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
 
@@ -17,7 +19,7 @@ const SERVICE_CATEGORIES = [
   'Outros',
 ]
 
-async function exportPDF(data: any, range: DateRange) {
+async function exportPDF(data: any, range: DateRange, companyName: string) {
   const { jsPDF } = await import('jspdf')
   const doc = new jsPDF()
   const s = data?.summary
@@ -41,7 +43,7 @@ async function exportPDF(data: any, range: DateRange) {
 
   // Header
   doc.setFontSize(22); doc.setTextColor(37, 99, 235); doc.setFont('helvetica', 'bold')
-  doc.text('Líder Financeiro', margin, y); y += 8
+  doc.text(companyName, margin, y); y += 8
   doc.setFontSize(10); doc.setTextColor(100, 116, 139); doc.setFont('helvetica', 'normal')
   doc.text(`Relatório: ${range.label}`, margin, y); y += 5
   doc.text(`Gerado em ${new Date().toLocaleString('pt-BR')}`, margin, y); y += 8
@@ -74,7 +76,7 @@ async function exportPDF(data: any, range: DateRange) {
   if (data?.byOrigin?.length) {
     title('Chamados por Origem', 13); y += 2
     data.byOrigin.forEach((o: any) => {
-      row(`${o.name}:`, `${o.calls} chamados Â· ${fmt(o.revenue)}`)
+      row(`${o.name}:`, `${o.calls} chamados - ${fmt(o.revenue)}`)
     })
     y += 2; line()
   }
@@ -83,7 +85,7 @@ async function exportPDF(data: any, range: DateRange) {
   if (data?.byCategory?.length) {
     title('Por Tipo de Serviço', 13); y += 2
     data.byCategory.forEach((c: any) => {
-      row(`${c.category}:`, `${c.calls} chamados Â· ${fmt(c.revenue)}`)
+      row(`${c.category}:`, `${c.calls} chamados - ${fmt(c.revenue)}`)
     })
     y += 2; line()
   }
@@ -93,14 +95,14 @@ async function exportPDF(data: any, range: DateRange) {
     if (y > 230) { doc.addPage(); y = 20 }
     title('Ranking por Cidade', 13); y += 2
     data.byCity.slice(0, 8).forEach((c: any, i: number) => {
-      row(`${i + 1}. ${c.city}:`, `${c.calls} OS Â· ${fmt(c.revenue)}`)
+      row(`${i + 1}. ${c.city}:`, `${c.calls} OS - ${fmt(c.revenue)}`)
     })
   }
 
   doc.setFontSize(8); doc.setTextColor(148, 163, 184); doc.setFont('helvetica', 'normal')
-  doc.text('Desentupidora Líder Â· Sistema Líder Financeiro', margin, 287)
+  doc.text(`${companyName} - Connect Financeiro`, margin, 287)
 
-  doc.save(`relatorio-lider-${format(new Date(), 'yyyy-MM-dd')}.pdf`)
+  doc.save(`relatorio-${format(new Date(), 'yyyy-MM-dd')}.pdf`)
 }
 
 const today = new Date()
@@ -116,6 +118,8 @@ export default function RelatoriosPage() {
   const [categoryFilter, setCategoryFilter] = useState('todos')
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const { origins: tenantOrigins } = useCallOrigins()
+  const { tenant } = useTenant()
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -146,8 +150,8 @@ export default function RelatoriosPage() {
           <p className="text-slate-500 text-sm mt-0.5">Análise completa do desempenho financeiro e operacional</p>
         </div>
         <div className="flex items-center gap-2">
-          <DateRangePicker value={range} onChange={setRange} />
-          <button onClick={() => data && exportPDF(data, range)} disabled={!data || loading}
+          <DateRangePicker value={range} onChange={setRange} variant="card" />
+          <button onClick={() => data && exportPDF(data, range, tenant?.name ?? 'Connect Financeiro')} disabled={!data || loading}
             className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition">
             <Download className="w-4 h-4" />
             PDF
@@ -162,10 +166,7 @@ export default function RelatoriosPage() {
           <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
             {[
               { v: 'todos', l: 'Todos' },
-              
-              
-              { v: 'indicacao', l: 'Indicacao' },
-              { v: 'terceirizado', l: 'Terceirizado' },
+              ...tenantOrigins.map(o => ({ v: o.value, l: o.label })),
             ].map(o => (
               <button key={o.v} onClick={() => setOriginFilter(o.v)}
                 className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border transition ${originFilter === o.v ? 'bg-orange-500 text-white border-orange-500' : 'text-slate-500 border-slate-200 hover:border-orange-300'}`}>

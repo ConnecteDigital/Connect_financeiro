@@ -2,12 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, PhoneCall, Users, TrendingDown,
   BarChart3, Settings, LogOut, Building2,
-  Plus, MoreHorizontal, UserCog,
+  Plus, MoreHorizontal, UserCog, Moon, Sun,
 } from 'lucide-react'
 import { ConnectDigitalLogo } from '@/components/logos'
 import { useTenant } from '@/lib/tenant-context'
@@ -41,11 +40,10 @@ function TenantAvatar({ size = 36 }: { size?: number }) {
   const { tenant } = useTenant()
   if (tenant?.logo_url) {
     return (
-      <Image
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
         src={tenant.logo_url}
         alt={tenant.name}
-        width={size}
-        height={size}
         className="rounded-xl object-contain flex-shrink-0"
         style={{ width: size, height: size }}
       />
@@ -81,10 +79,10 @@ function BottomNav({ onMoreClick, moreOpen, visible }: { onMoreClick: () => void
         {/* Floating pill */}
         <div className="mx-3 mb-3 rounded-2xl"
           style={{
-            background: 'rgba(255,255,255,0.90)',
+            background: 'var(--nav-bg)',
             backdropFilter: 'blur(24px) saturate(180%)',
             WebkitBackdropFilter: 'blur(24px) saturate(180%)',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.14), 0 0 0 0.5px rgba(0,0,0,0.07)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.14), 0 0 0 0.5px var(--border)',
           }}>
           <div className="flex items-end justify-around px-1 pt-2 pb-2">
             {/* Left items */}
@@ -161,7 +159,7 @@ function MoreDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
       <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 transition-transform duration-300 ease-out"
         style={{
           transform: open ? 'translateY(0)' : 'translateY(110%)',
-          background: 'rgba(255,255,255,0.97)',
+          background: 'var(--drawer-bg)',
           backdropFilter: 'blur(20px)',
           WebkitBackdropFilter: 'blur(20px)',
           borderRadius: '24px 24px 0 0',
@@ -176,8 +174,8 @@ function MoreDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
               <Link key={href} href={href} onClick={onClose}
                 className="flex flex-col items-center gap-2 p-3 rounded-2xl transition-all"
                 style={{
-                  background: active ? 'rgba(var(--primary-rgb),0.08)' : '#f5f5f7',
-                  color: active ? 'var(--primary)' : '#3a3a3c',
+                  background: active ? 'rgba(var(--primary-rgb),0.08)' : 'var(--surface-secondary)',
+                  color: active ? 'var(--primary)' : 'var(--text-primary)',
                 }}>
                 <Icon className="w-6 h-6" strokeWidth={1.8} />
                 <span className="text-[11px] font-medium text-center leading-tight">{label}</span>
@@ -198,7 +196,7 @@ function MoreDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
 }
 
 /* ── Desktop sidebar ─────────────────────────────────────────── */
-function Sidebar() {
+function Sidebar({ theme, onToggleTheme }: { theme: 'light' | 'dark'; onToggleTheme: () => void }) {
   const pathname = usePathname()
   const { tenant } = useTenant()
 
@@ -255,6 +253,11 @@ function Sidebar() {
             <p className="text-zinc-400 text-xs font-semibold mt-0.5">Connect Digital</p>
           </div>
         </div>
+        <button onClick={onToggleTheme}
+          className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-sm font-medium text-zinc-500 hover:bg-zinc-800 hover:text-white transition">
+          {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          {theme === 'dark' ? 'Modo claro' : 'Modo escuro'}
+        </button>
         <button onClick={handleLogout}
           className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-sm font-medium text-zinc-500 hover:bg-zinc-800 hover:text-white transition">
           <LogOut className="w-4 h-4" />
@@ -266,7 +269,7 @@ function Sidebar() {
 }
 
 /* ── Mobile top header ───────────────────────────────────────── */
-function MobileHeader({ visible }: { visible: boolean }) {
+function MobileHeader({ visible, theme, onToggleTheme }: { visible: boolean; theme: 'light' | 'dark'; onToggleTheme: () => void }) {
   const { tenant } = useTenant()
   const pathname = usePathname()
 
@@ -279,10 +282,10 @@ function MobileHeader({ visible }: { visible: boolean }) {
       style={{
         paddingTop: 'calc(12px + env(safe-area-inset-top, 0px))',
         paddingBottom: '12px',
-        background: 'rgba(245,245,247,0.92)',
+        background: 'var(--header-bg)',
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
-        borderBottom: '1px solid rgba(0,0,0,0.06)',
+        borderBottom: '1px solid var(--border)',
         position: 'fixed',
         top: 0,
         left: 0,
@@ -301,11 +304,21 @@ function MobileHeader({ visible }: { visible: boolean }) {
           </p>
         </div>
       </div>
-      <Link href="/dashboard/configuracoes"
-        className="w-9 h-9 rounded-full flex items-center justify-center transition"
-        style={{ background: 'rgba(0,0,0,0.06)' }}>
-        <Settings className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
-      </Link>
+      <div className="flex items-center gap-2">
+        <button onClick={onToggleTheme}
+          className="w-9 h-9 rounded-full flex items-center justify-center transition"
+          style={{ background: 'var(--chip-bg)' }}
+          aria-label="Alternar modo escuro">
+          {theme === 'dark'
+            ? <Sun className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
+            : <Moon className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />}
+        </button>
+        <Link href="/dashboard/configuracoes"
+          className="w-9 h-9 rounded-full flex items-center justify-center transition"
+          style={{ background: 'var(--chip-bg)' }}>
+          <Settings className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
+        </Link>
+      </div>
     </header>
   )
 }
@@ -315,6 +328,7 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
   const [moreOpen, setMoreOpen] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [navVisible, setNavVisible] = useState(true)
+  const [theme, setTheme] = useState<'light' | 'dark'>('light')
   const { tenant } = useTenant()
   const pathname = usePathname()
   const mainRef = useRef<HTMLElement>(null)
@@ -322,6 +336,8 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
   const scrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const isPrintPage = pathname.includes('/imprimir')
+  // Documentos (OS, romaneio) são sempre claros, mesmo no modo escuro
+  const forceLight = isPrintPage || pathname.includes('/romaneio')
 
   // Show onboarding only on first visit
   useEffect(() => {
@@ -329,6 +345,24 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
       setShowOnboarding(true)
     }
   }, [])
+
+  // Theme: load preference + apply to <html>. Print pages are always light.
+  useEffect(() => {
+    const saved = localStorage.getItem('connect_theme')
+    if (saved === 'dark' || saved === 'light') setTheme(saved)
+  }, [])
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', forceLight ? 'light' : theme)
+  }, [theme, forceLight])
+
+  function toggleTheme() {
+    setTheme(t => {
+      const next = t === 'dark' ? 'light' : 'dark'
+      localStorage.setItem('connect_theme', next)
+      return next
+    })
+  }
 
   // Apply tenant primary color as CSS variable
   useEffect(() => {
@@ -340,9 +374,15 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
       const b = parseInt(hex.substring(4, 6), 16)
       document.documentElement.style.setProperty('--primary-rgb', `${r}, ${g}, ${b}`)
       document.documentElement.style.setProperty('--primary-dark', darkenHex(tenant.primary_color, 0.15))
-      document.documentElement.style.setProperty('--primary-light', lightenHex(tenant.primary_color, 0.94))
+      // No escuro, o tom pastel claro vira um tint translúcido da cor
+      document.documentElement.style.setProperty(
+        '--primary-light',
+        theme === 'dark' && !forceLight
+          ? `rgba(${r}, ${g}, ${b}, 0.16)`
+          : lightenHex(tenant.primary_color, 0.94)
+      )
     }
-  }, [tenant?.primary_color])
+  }, [tenant?.primary_color, theme, forceLight])
 
   // Hide-on-scroll: attach listener to the main scroll container
   useEffect(() => {
@@ -386,10 +426,10 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: 'var(--background)' }}>
-      <Sidebar />
+      <Sidebar theme={theme} onToggleTheme={toggleTheme} />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <MobileHeader visible={navVisible} />
+        <MobileHeader visible={navVisible} theme={theme} onToggleTheme={toggleTheme} />
 
         <main
           ref={mainRef}

@@ -1,17 +1,20 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { PhoneCall, CheckCircle, DollarSign, TrendingUp, TrendingDown, AlertCircle, Clock, MapPin, ChevronRight, Plus } from 'lucide-react'
+import { PhoneCall, CheckCircle, XCircle, TrendingUp, TrendingDown, AlertCircle, Clock, MapPin, ChevronRight, Plus, Wallet, BarChart3 } from 'lucide-react'
 import { format, startOfMonth, endOfMonth } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { useRouter } from 'next/navigation'
 import { getDashboardStatsRange, getNotifications, getPendingReceivables } from '@/lib/db/dashboard'
 import DateRangePicker, { DateRange } from '@/components/DateRangePicker'
 import Link from 'next/link'
 import { useTenant } from '@/lib/tenant-context'
 
 interface Stats {
-  total_calls: number; approved_calls: number; gross_revenue: number
-  net_revenue: number; pending_receivables: number; total_expenses: number
+  total_calls: number; approved_calls: number; scheduled_calls: number
+  cancelled_calls: number; no_visit_calls: number; not_approved_calls: number
+  gross_revenue: number; net_revenue: number; pending_receivables: number
+  total_expenses: number; outsource_costs: number; paid_revenue: number
 }
 
 const today = new Date()
@@ -64,8 +67,11 @@ export default function DashboardPage() {
   const [notifications, setNotifications] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [showReceivables, setShowReceivables] = useState(false)
+  const [showFinance, setShowFinance] = useState(false)
+  const [showStatus, setShowStatus] = useState(false)
   const [receivables, setReceivables] = useState<any[] | null>(null)
   const { tenant } = useTenant()
+  const router = useRouter()
 
   function openReceivables() {
     setShowReceivables(true)
@@ -126,11 +132,11 @@ export default function DashboardPage() {
           {/* Mini metrics row */}
           <div className="grid grid-cols-3 gap-2 mt-2">
             {[
-              { label: 'Líquido', value: stats?.net_revenue ?? 0, onClick: undefined as (() => void) | undefined },
+              { label: 'Líquido', value: stats?.net_revenue ?? 0, onClick: () => setShowFinance(true) },
               { label: 'A Receber', value: stats?.pending_receivables ?? 0, onClick: openReceivables },
-              { label: 'Saídas', value: stats?.total_expenses ?? 0, onClick: undefined },
+              { label: 'Saídas', value: stats?.total_expenses ?? 0, onClick: () => router.push('/dashboard/saidas') },
             ].map((m, i) => (
-              <button key={i} type="button" onClick={m.onClick} disabled={!m.onClick}
+              <button key={i} type="button" onClick={m.onClick}
                 className="rounded-2xl px-3 py-2.5 text-left"
                 style={{ background: 'rgba(0,0,0,0.15)' }}>
                 <p className="text-white/60 text-[10px] font-medium uppercase tracking-wide">{m.label}</p>
@@ -143,34 +149,37 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── Call stats chips ──────────────────────────────────── */}
+      {/* ── Call stats chips (todos clicáveis) ────────────────── */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
           {
             icon: PhoneCall, label: 'Chamados', color: 'text-zinc-700',
             value: loading ? null : String(stats?.total_calls ?? 0),
             sub: loading ? null : `${stats?.approved_calls ?? 0} aprovados`,
-            bg: '#f5f5f7', iconBg: 'rgba(0,0,0,0.06)',
+            bg: 'var(--surface)', iconBg: 'var(--chip-bg)',
+            onClick: () => setShowStatus(true),
           },
           {
             icon: CheckCircle, label: 'Aprovação', color: 'text-emerald-600',
             value: loading ? null : `${approvalRate}%`,
             sub: loading ? null : 'taxa de conversão',
-            bg: '#f0fdf4', iconBg: 'rgba(22,163,74,0.12)',
+            bg: 'rgba(22,163,74,0.08)', iconBg: 'rgba(22,163,74,0.12)',
+            onClick: () => setShowStatus(true),
           },
           {
             icon: AlertCircle, label: 'A Receber', color: 'text-amber-600',
             value: loading ? null : `R$ ${fmt(stats?.pending_receivables ?? 0)}`,
-            sub: 'toque para ver', bg: '#fffbeb', iconBg: 'rgba(217,119,6,0.12)',
+            sub: 'toque para ver', bg: 'rgba(217,119,6,0.08)', iconBg: 'rgba(217,119,6,0.12)',
             onClick: openReceivables,
           },
           {
             icon: TrendingDown, label: 'Despesas', color: 'text-red-500',
             value: loading ? null : `R$ ${fmt(stats?.total_expenses ?? 0)}`,
-            sub: 'este período', bg: '#fff1f2', iconBg: 'rgba(239,68,68,0.10)',
+            sub: 'toque para ver', bg: 'rgba(239,68,68,0.07)', iconBg: 'rgba(239,68,68,0.10)',
+            onClick: () => router.push('/dashboard/saidas'),
           },
         ].map((card: any, i) => (
-          <button key={i} type="button" onClick={card.onClick} disabled={!card.onClick}
+          <button key={i} type="button" onClick={card.onClick}
             className="rounded-2xl p-4 flex flex-col gap-2 text-left"
             style={{ background: card.bg, boxShadow: 'var(--shadow-sm)' }}>
             <div className="w-8 h-8 rounded-xl flex items-center justify-center"
@@ -186,6 +195,69 @@ export default function DashboardPage() {
             </div>
           </button>
         ))}
+      </div>
+
+      {/* ── Resumo financeiro do período ──────────────────────── */}
+      <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--surface)', boxShadow: 'var(--shadow-sm)' }}>
+        <div className="flex items-center gap-2.5 px-4 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
+          <Wallet className="w-4 h-4" style={{ color: 'var(--primary)' }} />
+          <h3 className="font-semibold text-sm flex-1" style={{ color: 'var(--text-primary)' }}>Resumo Financeiro</h3>
+          <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{range.label}</span>
+        </div>
+        <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
+          {[
+            { label: 'Receita bruta', value: stats?.gross_revenue ?? 0, color: 'var(--text-primary)' },
+            { label: 'Custos terceirizados', value: -(stats?.outsource_costs ?? 0), color: '#ef4444' },
+            { label: 'Despesas do período', value: -(stats?.total_expenses ?? 0), color: '#ef4444' },
+            { label: 'Receita líquida', value: stats?.net_revenue ?? 0, color: '#16a34a', bold: true },
+            { label: 'Recebido', value: stats?.paid_revenue ?? 0, color: '#16a34a' },
+            { label: 'A receber', value: stats?.pending_receivables ?? 0, color: '#d97706' },
+          ].map((r: any) => (
+            <div key={r.label} className="flex items-center justify-between px-4 py-2.5"
+              style={{ borderColor: 'var(--border)' }}>
+              <span className={`text-sm ${r.bold ? 'font-bold' : 'font-medium'}`} style={{ color: r.bold ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+                {r.label}
+              </span>
+              <span className={`text-sm tabular ${r.bold ? 'font-bold' : 'font-semibold'}`} style={{ color: r.color }}>
+                {loading ? '—' : `${r.value < 0 ? '- ' : ''}R$ ${fmt(Math.abs(r.value))}`}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Chamados por status ───────────────────────────────── */}
+      <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--surface)', boxShadow: 'var(--shadow-sm)' }}>
+        <div className="flex items-center gap-2.5 px-4 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
+          <BarChart3 className="w-4 h-4" style={{ color: 'var(--primary)' }} />
+          <h3 className="font-semibold text-sm flex-1" style={{ color: 'var(--text-primary)' }}>Chamados do Período</h3>
+          <Link href="/dashboard/relatorios" className="text-xs font-semibold" style={{ color: 'var(--primary)' }}>
+            Ver relatórios →
+          </Link>
+        </div>
+        <div className="p-4 space-y-3">
+          {[
+            { label: 'Aprovados', value: stats?.approved_calls ?? 0, color: '#16a34a' },
+            { label: 'Agendados', value: stats?.scheduled_calls ?? 0, color: 'var(--primary)' },
+            { label: 'Não aprovou', value: stats?.not_approved_calls ?? 0, color: '#d97706' },
+            { label: 'Não quis visita', value: stats?.no_visit_calls ?? 0, color: '#8e8e93' },
+            { label: 'Cancelados', value: stats?.cancelled_calls ?? 0, color: '#ef4444' },
+          ].map(s => (
+            <div key={s.label}>
+              <div className="flex items-center justify-between text-sm mb-1">
+                <span className="font-medium" style={{ color: 'var(--text-secondary)' }}>{s.label}</span>
+                <span className="font-bold tabular" style={{ color: 'var(--text-primary)' }}>{loading ? '—' : s.value}</span>
+              </div>
+              <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--surface-secondary)' }}>
+                <div className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${stats?.total_calls ? Math.min((s.value / stats.total_calls) * 100, 100) : 0}%`,
+                    background: s.color,
+                  }} />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* ── Modal: detalhe de valores a receber ───────────────── */}
@@ -241,6 +313,90 @@ export default function DashboardPage() {
                 ))
               )}
               <div className="h-[env(safe-area-inset-bottom,16px)]" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: resumo financeiro detalhado ────────────────── */}
+      {showFinance && (
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowFinance(false)} />
+          <div className="relative w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl overflow-hidden"
+            style={{ maxHeight: '80dvh' }}>
+            <div className="flex items-center justify-between px-5 pt-5 pb-3">
+              <div>
+                <h3 className="font-bold text-slate-800">Receita Líquida</h3>
+                <p className="text-xs text-slate-400 mt-0.5">{range.label}</p>
+              </div>
+              <button onClick={() => setShowFinance(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+                ✕
+              </button>
+            </div>
+            <div className="px-5 pb-6 space-y-1">
+              {[
+                { label: 'Receita bruta', value: stats?.gross_revenue ?? 0, color: '#1d1d1f' },
+                { label: 'Custos terceirizados', value: -(stats?.outsource_costs ?? 0), color: '#ef4444' },
+                { label: 'Despesas do período', value: -(stats?.total_expenses ?? 0), color: '#ef4444' },
+              ].map(r => (
+                <div key={r.label} className="flex items-center justify-between py-2.5 border-b border-slate-100">
+                  <span className="text-sm font-medium text-slate-500">{r.label}</span>
+                  <span className="text-sm font-semibold tabular" style={{ color: r.color }}>
+                    {`${r.value < 0 ? '- ' : ''}R$ ${fmt(Math.abs(r.value))}`}
+                  </span>
+                </div>
+              ))}
+              <div className="flex items-center justify-between py-3">
+                <span className="text-base font-bold text-slate-800">Líquido</span>
+                <span className="text-base font-bold tabular" style={{ color: '#16a34a' }}>
+                  R$ {fmt(stats?.net_revenue ?? 0)}
+                </span>
+              </div>
+              <div className="h-[env(safe-area-inset-bottom,16px)]" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: chamados por status ────────────────────────── */}
+      {showStatus && (
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowStatus(false)} />
+          <div className="relative w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl overflow-hidden"
+            style={{ maxHeight: '80dvh' }}>
+            <div className="flex items-center justify-between px-5 pt-5 pb-3">
+              <div>
+                <h3 className="font-bold text-slate-800">Chamados do Período</h3>
+                <p className="text-xs text-slate-400 mt-0.5">{range.label} · {stats?.total_calls ?? 0} no total</p>
+              </div>
+              <button onClick={() => setShowStatus(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+                ✕
+              </button>
+            </div>
+            <div className="px-5 pb-4 space-y-1">
+              {[
+                { label: 'Aprovados', value: stats?.approved_calls ?? 0, color: '#16a34a', icon: CheckCircle },
+                { label: 'Agendados', value: stats?.scheduled_calls ?? 0, color: '#3b82f6', icon: Clock },
+                { label: 'Não aprovou', value: stats?.not_approved_calls ?? 0, color: '#d97706', icon: XCircle },
+                { label: 'Não quis visita', value: stats?.no_visit_calls ?? 0, color: '#8e8e93', icon: XCircle },
+                { label: 'Cancelados', value: stats?.cancelled_calls ?? 0, color: '#ef4444', icon: XCircle },
+              ].map(s => (
+                <div key={s.label} className="flex items-center gap-3 py-2.5 border-b border-slate-100">
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+                    style={{ background: `${s.color}1f` }}>
+                    <s.icon className="w-4 h-4" style={{ color: s.color }} />
+                  </div>
+                  <span className="flex-1 text-sm font-medium text-slate-600">{s.label}</span>
+                  <span className="text-base font-bold tabular text-slate-800">{s.value}</span>
+                </div>
+              ))}
+              <Link href="/dashboard/chamados" onClick={() => setShowStatus(false)}
+                className="block text-center text-sm font-semibold py-3" style={{ color: 'var(--primary)' }}>
+                Ver todos os chamados →
+              </Link>
+              <div className="h-[env(safe-area-inset-bottom,8px)]" />
             </div>
           </div>
         </div>

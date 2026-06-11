@@ -15,6 +15,8 @@ export interface DateRange {
 interface Props {
   value: DateRange
   onChange: (range: DateRange) => void
+  /** 'overlay' = sobre fundo colorido (hero); 'card' = sobre fundo claro da página */
+  variant?: 'overlay' | 'card'
 }
 
 const today = () => new Date()
@@ -70,14 +72,15 @@ const presets = [
   },
 ]
 
-export default function DateRangePicker({ value, onChange }: Props) {
+export default function DateRangePicker({ value, onChange, variant = 'overlay' }: Props) {
   const [open, setOpen] = useState(false)
   const [customStart, setCustomStart] = useState(value.start)
   const [customEnd, setCustomEnd] = useState(value.end)
   const [dropPos, setDropPos] = useState({ top: 0, right: 0 })
   const buttonRef = useRef<HTMLButtonElement>(null)
 
-  // Close on outside click
+  // Close on outside click — precisa reconhecer o sheet mobile E o dropdown
+  // desktop, senão o touchstart fecha o portal antes do click no preset.
   useEffect(() => {
     if (!open) return
     function handle(e: Event) {
@@ -85,6 +88,8 @@ export default function DateRangePicker({ value, onChange }: Props) {
       if (buttonRef.current?.contains(target)) return
       const dropdown = document.getElementById('drp-dropdown')
       if (dropdown && dropdown.contains(target)) return
+      const sheet = document.getElementById('drp-mobile-sheet')
+      if (sheet && sheet.contains(target)) return
       setOpen(false)
     }
     document.addEventListener('mousedown', handle)
@@ -127,7 +132,15 @@ export default function DateRangePicker({ value, onChange }: Props) {
       <button
         ref={buttonRef}
         onClick={handleOpen}
-        className="flex items-center gap-1.5 bg-white/20 backdrop-blur rounded-xl px-3 py-2 text-white text-sm font-medium transition hover:bg-white/30"
+        className={variant === 'overlay'
+          ? 'flex items-center gap-1.5 bg-white/20 backdrop-blur rounded-xl px-3 py-2 text-white text-sm font-medium transition hover:bg-white/30'
+          : 'flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium transition'}
+        style={variant === 'card' ? {
+          background: 'var(--surface)',
+          color: 'var(--text-primary)',
+          border: '1px solid var(--border-strong)',
+          boxShadow: 'var(--shadow-sm)',
+        } : undefined}
       >
         <Calendar className="w-4 h-4 flex-shrink-0 opacity-80" />
         <span className="max-w-[120px] truncate">{value.label}</span>
@@ -139,7 +152,7 @@ export default function DateRangePicker({ value, onChange }: Props) {
           {/* Mobile: full-screen bottom sheet */}
           <div className="sm:hidden fixed inset-0 z-[70]">
             <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setOpen(false)} />
-            <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl overflow-hidden"
+            <div id="drp-mobile-sheet" className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl overflow-hidden"
               style={{ maxHeight: '85dvh' }}>
               <div className="flex items-center justify-between px-4 pt-4 pb-2">
                 <p className="font-semibold text-slate-800">Selecionar período</p>
