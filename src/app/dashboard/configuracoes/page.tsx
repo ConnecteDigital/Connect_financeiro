@@ -1,12 +1,20 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Users, Plus, Trash2, Save, Settings, Loader2, Wrench, UserCog, Power } from 'lucide-react'
+import { Users, Plus, Trash2, Save, Settings, Loader2, Wrench, UserCog, Power, Globe, X, Check } from 'lucide-react'
 import { getTeams, createTeam, deleteTeam } from '@/lib/db/teams'
 import { getAllServiceTypes, createServiceType, toggleServiceType, deleteServiceType } from '@/lib/db/service-types'
 import { getAuxiliaries, createAuxiliary, deleteAuxiliary } from '@/lib/db/auxiliaries'
+import { createClient } from '@/lib/supabase/client'
+import { useTenant } from '@/lib/tenant-context'
+
+const ORIGIN_PRESETS = [
+  'Indicação', 'WhatsApp', 'Site', 'Instagram',
+  'Facebook', 'Google', 'Terceirizado', 'Telefone',
+]
 
 export default function ConfiguracoesPage() {
+  const { tenant } = useTenant()
   const [loading, setLoading] = useState(true)
 
   // Equipes
@@ -26,6 +34,16 @@ export default function ConfiguracoesPage() {
   const [newAuxPct, setNewAuxPct] = useState('')
   const [savingAux, setSavingAux] = useState(false)
 
+  // Origens dos chamados
+  const [origins, setOrigins] = useState<string[]>([])
+  const [customOrigin, setCustomOrigin] = useState('')
+  const [savingOrigins, setSavingOrigins] = useState(false)
+  const [originsSaved, setOriginsSaved] = useState(false)
+
+  useEffect(() => {
+    if (tenant?.call_origins) setOrigins(tenant.call_origins)
+  }, [tenant])
+
   useEffect(() => {
     Promise.all([getTeams(), getAllServiceTypes(), getAuxiliaries()])
       .then(([tms, sts, auxs]) => {
@@ -36,6 +54,31 @@ export default function ConfiguracoesPage() {
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [])
+
+  function toggleOrigin(o: string) {
+    setOrigins(prev => prev.includes(o) ? prev.filter(x => x !== o) : [...prev, o])
+    setOriginsSaved(false)
+  }
+
+  function addCustomOrigin() {
+    const v = customOrigin.trim()
+    if (!v || origins.includes(v)) return
+    setOrigins(prev => [...prev, v])
+    setCustomOrigin('')
+    setOriginsSaved(false)
+  }
+
+  async function handleSaveOrigins() {
+    if (!tenant) return
+    setSavingOrigins(true)
+    try {
+      const supabase = createClient()
+      await supabase.from('tenants').update({ call_origins: origins }).eq('id', tenant.id)
+      setOriginsSaved(true)
+    } finally {
+      setSavingOrigins(false)
+    }
+  }
 
   // ── Equipes ──
   async function handleAddTeam() {
@@ -250,6 +293,74 @@ export default function ConfiguracoesPage() {
             className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white text-sm font-medium px-4 py-2.5 rounded-lg transition">
             {savingAux ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
             Adicionar
+          </button>
+        </div>
+      </div>
+
+      {/* Origens dos Chamados */}
+      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-4">
+        <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+          <Globe className="w-5 h-5 text-orange-500" />
+          <h2 className="font-semibold text-slate-800">Origens dos Chamados</h2>
+        </div>
+        <p className="text-sm text-slate-500">Canais pelos quais seus clientes entram em contato. Aparecem no formulário de criação de chamado.</p>
+
+        {/* Presets */}
+        <div className="flex flex-wrap gap-2">
+          {ORIGIN_PRESETS.map(o => {
+            const active = origins.includes(o)
+            return (
+              <button key={o} type="button" onClick={() => toggleOrigin(o)}
+                className="px-3 py-1.5 rounded-lg text-sm font-medium border-2 transition flex items-center gap-1.5"
+                style={{
+                  background: active ? 'var(--primary)' : '#f8fafc',
+                  borderColor: active ? 'var(--primary)' : '#e2e8f0',
+                  color: active ? '#fff' : '#475569',
+                }}>
+                {active && <Check className="w-3.5 h-3.5 flex-shrink-0" strokeWidth={3} />}
+                {o}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Custom input */}
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={customOrigin}
+            onChange={e => setCustomOrigin(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addCustomOrigin())}
+            placeholder="Outro canal personalizado..."
+            className="flex-1 px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+          />
+          <button onClick={addCustomOrigin} disabled={!customOrigin.trim()}
+            className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white text-sm font-medium px-4 py-2.5 rounded-lg transition">
+            <Plus className="w-4 h-4" />
+            Adicionar
+          </button>
+        </div>
+
+        {/* Selected non-preset origins */}
+        {origins.filter(o => !ORIGIN_PRESETS.includes(o)).length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {origins.filter(o => !ORIGIN_PRESETS.includes(o)).map(o => (
+              <span key={o} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-white bg-orange-500">
+                {o}
+                <button type="button" onClick={() => toggleOrigin(o)} className="opacity-70 hover:opacity-100 transition">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div className="flex items-center justify-between pt-1">
+          <p className="text-xs text-slate-400">{origins.length} canal{origins.length !== 1 ? 'is' : ''} selecionado{origins.length !== 1 ? 's' : ''}</p>
+          <button onClick={handleSaveOrigins} disabled={savingOrigins}
+            className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition">
+            {savingOrigins ? <Loader2 className="w-4 h-4 animate-spin" /> : originsSaved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+            {originsSaved ? 'Salvo!' : 'Salvar Origens'}
           </button>
         </div>
       </div>
