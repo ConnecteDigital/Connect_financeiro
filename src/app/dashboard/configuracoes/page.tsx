@@ -14,7 +14,7 @@ const ORIGIN_PRESETS = [
 ]
 
 export default function ConfiguracoesPage() {
-  const { tenant } = useTenant()
+  const { tenant, updateTenant } = useTenant()
   const [loading, setLoading] = useState(true)
 
   // Commissions
@@ -80,6 +80,7 @@ export default function ConfiguracoesPage() {
         return
       }
       setEnableCommissions(data.enable_commissions)
+      updateTenant({ enable_commissions: data.enable_commissions })
     } finally {
       setSavingCommissions(false)
     }
@@ -115,6 +116,7 @@ export default function ConfiguracoesPage() {
         return
       }
       setOriginsSaved(true)
+      updateTenant({ call_origins: data.call_origins })
     } finally {
       setSavingOrigins(false)
     }

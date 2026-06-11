@@ -16,9 +16,14 @@ export interface Tenant {
 interface TenantContextValue {
   tenant: Tenant | null
   loading: boolean
+  updateTenant: (patch: Partial<Tenant>) => void
 }
 
-const TenantContext = createContext<TenantContextValue>({ tenant: null, loading: true })
+const TenantContext = createContext<TenantContextValue>({
+  tenant: null,
+  loading: true,
+  updateTenant: () => {},
+})
 
 export function TenantProvider({ children }: { children: React.ReactNode }) {
   const [tenant, setTenant] = useState<Tenant | null>(null)
@@ -36,8 +41,12 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       })
   }, [])
 
+  function updateTenant(patch: Partial<Tenant>) {
+    setTenant(prev => prev ? { ...prev, ...patch } : prev)
+  }
+
   return (
-    <TenantContext.Provider value={{ tenant, loading }}>
+    <TenantContext.Provider value={{ tenant, loading, updateTenant }}>
       {children}
     </TenantContext.Provider>
   )
