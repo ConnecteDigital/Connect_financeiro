@@ -97,20 +97,12 @@ function ImprimirContent({ id }: { id: string }) {
 
   return (
     <>
-      {/* Controls */}
-      <div className="print:hidden flex items-center justify-between max-w-3xl mx-auto pt-3 pb-3 px-3">
+      {/* Voltar */}
+      <div className="print:hidden flex items-center max-w-3xl mx-auto pt-3 pb-2 px-3">
         <Link href={`/dashboard/chamados/${id}`}
           className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition">
           <ArrowLeft className="w-4 h-4" /> Voltar
         </Link>
-        <button
-          onClick={handleShare}
-          disabled={sharing}
-          className="flex items-center gap-2 text-white font-semibold px-6 py-2.5 rounded-xl shadow-lg transition active:scale-95 disabled:opacity-70"
-          style={{ backgroundColor: '#16a34a' }}>
-          {sharing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />}
-          {sharing ? 'Gerando...' : 'Compartilhar'}
-        </button>
       </div>
 
       {/* OS Sheet */}
@@ -192,7 +184,12 @@ function ImprimirContent({ id }: { id: string }) {
             {items.map((it: any) => (
               <tr key={it.id}>
                 <td style={{ border: B, padding: '3px 5px', textAlign: 'center' }}>{it.quantity}</td>
-                <td style={{ border: B, padding: '3px 5px' }}>{it.description}</td>
+                <td style={{ border: B, padding: '3px 5px' }}>
+                  {it.description}
+                  {it.notes && (
+                    <span style={{ display: 'block', fontSize: 10, color: '#374151' }}>{it.notes}</span>
+                  )}
+                </td>
                 <td style={{ border: B, padding: '3px 5px', textAlign: 'right' }}>{BRL(it.unit_price)}</td>
                 <td style={{ border: B, padding: '3px 5px', textAlign: 'right' }}>{BRL(it.total ?? it.quantity * it.unit_price)}</td>
               </tr>
@@ -295,6 +292,21 @@ function ImprimirContent({ id }: { id: string }) {
             <div style={{ borderBottom: B, marginTop: 18 }} />
           </div>
         </div>
+      </div>
+
+      {/* Espaço para o botão fixo não cobrir o fim da folha */}
+      <div className="print:hidden" style={{ height: 96 }} />
+
+      {/* Botão compartilhar fixo no rodapé */}
+      <div className="print:hidden fixed bottom-6 inset-x-0 flex justify-center z-50">
+        <button
+          onClick={handleShare}
+          disabled={sharing}
+          className="flex items-center gap-2.5 text-white font-semibold px-8 py-4 rounded-2xl shadow-2xl transition active:scale-95 disabled:opacity-70"
+          style={{ backgroundColor: '#16a34a', boxShadow: '0 8px 24px rgba(22,163,74,0.45)' }}>
+          {sharing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Share2 className="w-5 h-5" />}
+          {sharing ? 'Gerando...' : 'Compartilhar'}
+        </button>
       </div>
 
       <style>{`
