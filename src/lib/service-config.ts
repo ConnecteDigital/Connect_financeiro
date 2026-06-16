@@ -33,7 +33,7 @@ export const SERVICE_CONFIG: Record<string, ServiceCategoryConfig> = {
     qtyLabel: 'Quantidade',
     priceLabel: 'Valor (R$)',
   },
-  'Repasse': {
+  'Reclamação': {
     qtyLabel: 'Quantidade',
     priceLabel: 'Valor (R$)',
   },

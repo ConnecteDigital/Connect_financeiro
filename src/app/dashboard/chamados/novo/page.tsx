@@ -92,7 +92,7 @@ export default function NovoChamadoPage() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [serviceLines, setServiceLines] = useState<ServiceLine[]>([])
 
-  const isRepasse = selectedCategories.length === 1 && selectedCategories[0] === 'Repasse'
+  const isRepasse = selectedCategories.length === 1 && selectedCategories[0] === 'Reclamação'
 
   // OS
   const [serviceType, setServiceType] = useState<ServiceType>('proprio')
@@ -624,7 +624,7 @@ export default function NovoChamadoPage() {
           </div>
           {isRepasse && isScheduled && (
             <div className="rounded-lg px-4 py-2.5 text-xs text-blue-700 bg-blue-50 border border-blue-100">
-              ↩ Chamado de repasse — não é necessário preencher detalhes de serviço agora.
+              📋 Chamado de reclamação — não é necessário preencher detalhes de serviço agora.
             </div>
           )}
 
