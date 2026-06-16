@@ -33,6 +33,10 @@ export const SERVICE_CONFIG: Record<string, ServiceCategoryConfig> = {
     qtyLabel: 'Quantidade',
     priceLabel: 'Valor (R$)',
   },
+  'Repasse': {
+    qtyLabel: 'Quantidade',
+    priceLabel: 'Valor (R$)',
+  },
 }
 
 export const SERVICE_CATEGORIES = Object.keys(SERVICE_CONFIG)

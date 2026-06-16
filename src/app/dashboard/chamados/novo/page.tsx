@@ -61,20 +61,29 @@ export default function NovoChamadoPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
 
+  // Data local (toISOString retorna UTC — em horário tardio do Brasil mostraria amanhã)
+  const localToday = () => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+
   // Chamado básico
-  const [callDate, setCallDate] = useState(new Date().toISOString().split('T')[0])
+  const [callDate, setCallDate] = useState(localToday)
   const [origin, setOrigin] = useState('')
   const [callStatus, setCallStatus] = useState('agendado')
   const [callNotes, setCallNotes] = useState('')
   const [clientId, setClientId] = useState('')
   const [contactName, setContactName] = useState('')
   const [contactPhone, setContactPhone] = useState('')
+  const [contactCpf, setContactCpf] = useState('')
+  const [solicitante, setSolicitante] = useState('')
   const [callCity, setCallCity] = useState('')
   const [callNeighborhood, setCallNeighborhood] = useState('')
   const [newClient, setNewClient] = useState(emptyNewClient)
-  const [scheduledDate, setScheduledDate] = useState(new Date().toISOString().split('T')[0])
+  const [scheduledDate, setScheduledDate] = useState(localToday)
   const [scheduledTime, setScheduledTime] = useState('')
   const [callAddress, setCallAddress] = useState('')
+  const [scheduledDriver, setScheduledDriver] = useState('')
 
   const isApproved = callStatus === 'aprovado'
   const isScheduled = callStatus === 'agendado'
@@ -82,6 +91,8 @@ export default function NovoChamadoPage() {
   // Serviços
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [serviceLines, setServiceLines] = useState<ServiceLine[]>([])
+
+  const isRepasse = selectedCategories.length === 1 && selectedCategories[0] === 'Repasse'
 
   // OS
   const [serviceType, setServiceType] = useState<ServiceType>('proprio')
@@ -267,6 +278,7 @@ export default function NovoChamadoPage() {
         const created = await createClient_({
           name: contactName.trim(),
           phone: contactPhone || null,
+          cpf_cnpj: contactCpf || null,
           address: newClient.address || null,
           neighborhood: callNeighborhood || null,
           city: callCity || null,
@@ -289,6 +301,9 @@ export default function NovoChamadoPage() {
         call_address: callAddress || null,
         call_city: callCity || null,
         call_neighborhood: callNeighborhood || null,
+        contact_cpf: contactCpf || null,
+        solicitante: solicitante || null,
+        driver: scheduledDriver || null,
       })
 
       if (isApproved) {
@@ -466,12 +481,12 @@ export default function NovoChamadoPage() {
           <input type="date" required value={callDate} onChange={e => setCallDate(e.target.value)} className={inputCls} />
         </div>
 
-        {/* Contato + telefone */}
+        {/* Contato + telefone + CPF + solicitante */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="relative">
+          <div className="relative sm:col-span-2">
             <label className="block text-sm font-medium text-slate-700 mb-1.5">
               {isApproved ? 'Nome do Cliente *' : 'Nome do Contato *'}
-              <span className="text-slate-400 font-normal ml-1">{isApproved ? '(busca nos cadastrados)' : '(quem ligou)'}</span>
+              <span className="text-slate-400 font-normal ml-1">{isApproved ? '(busca nos cadastrados)' : '(quem vai ser atendido)'}</span>
             </label>
             <input type="text" value={contactName}
               onChange={e => { setContactName(e.target.value); if (clientId) setClientId('') }}
@@ -482,7 +497,12 @@ export default function NovoChamadoPage() {
                 <p className="px-3 py-1.5 text-xs text-slate-400 bg-slate-50 border-b border-slate-100">Cliente já cadastrado? Clique para vincular:</p>
                 {clientSuggestions.map(c => (
                   <button key={c.id} type="button"
-                    onClick={() => { setClientId(c.id); setContactName(c.name); if (!contactPhone && c.phone) setContactPhone(c.phone) }}
+                    onClick={() => {
+                      setClientId(c.id)
+                      setContactName(c.name)
+                      if (!contactPhone && c.phone) setContactPhone(c.phone)
+                      if (!contactCpf && c.cpf_cnpj) setContactCpf(c.cpf_cnpj)
+                    }}
                     className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-orange-50 transition">
                     {c.name}
                     {(c.city || c.phone) && <span className="text-xs text-slate-400 ml-2">{[c.city, c.phone].filter(Boolean).join(' · ')}</span>}
@@ -495,6 +515,21 @@ export default function NovoChamadoPage() {
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Telefone</label>
             <input type="tel" value={contactPhone} onChange={e => setContactPhone(e.target.value)}
               placeholder="(51) 99999-9999" className={inputCls} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">CPF / CNPJ</label>
+            <input type="text" value={contactCpf}
+              onChange={e => { setContactCpf(e.target.value); if (clientId) setClientId('') }}
+              placeholder="000.000.000-00" className={inputCls} />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              Solicitante
+              <span className="text-slate-400 font-normal ml-1">(quem ligou para pedir o serviço)</span>
+            </label>
+            <input type="text" value={solicitante} onChange={e => setSolicitante(e.target.value)}
+              placeholder="Ex: Maria (esposa do João), síndico..."
+              className={inputCls} />
           </div>
         </div>
 
@@ -566,6 +601,12 @@ export default function NovoChamadoPage() {
                   placeholder="Rua, número, bairro, cidade"
                   className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
               </div>
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Técnico Responsável</label>
+                <input type="text" value={scheduledDriver} onChange={e => setScheduledDriver(e.target.value)}
+                  placeholder="Nome do técnico que vai atender"
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
+              </div>
             </div>
           </div>
         )}
@@ -581,6 +622,11 @@ export default function NovoChamadoPage() {
               </button>
             ))}
           </div>
+          {isRepasse && isScheduled && (
+            <div className="rounded-lg px-4 py-2.5 text-xs text-blue-700 bg-blue-50 border border-blue-100">
+              ↩ Chamado de repasse — não é necessário preencher detalhes de serviço agora.
+            </div>
+          )}
 
           {selectedCategories.map(cat => {
             const cfg = SERVICE_CONFIG[cat]
