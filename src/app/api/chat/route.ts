@@ -4,6 +4,20 @@ import { createClient } from '@/lib/supabase/server'
 
 const groq = new Groq({ apiKey: process.env.GEMINI_API_KEY ?? '' })
 const MODEL = 'llama-3.3-70b-versatile'
+const FALLBACK_MODEL = 'llama-3.1-8b-instant'
+
+async function groqCall(params: Parameters<typeof groq.chat.completions.create>[0]) {
+  try {
+    return await groq.chat.completions.create(params)
+  } catch (err: unknown) {
+    const status = (err as { status?: number })?.status
+    if (status === 429) {
+      // Rate limit on primary model — retry with faster/higher-quota model
+      return await groq.chat.completions.create({ ...params, model: FALLBACK_MODEL })
+    }
+    throw err
+  }
+}
 
 function localToday(): string {
   const d = new Date()
@@ -438,7 +452,7 @@ FLUXO CORRETO — UMA pergunta por turno, nesta ordem:
       { role: 'user', content: message },
     ]
 
-    const response = await groq.chat.completions.create({
+    const response = await groqCall({
       model: MODEL,
       messages,
       tools: TOOLS,
@@ -475,7 +489,7 @@ FLUXO CORRETO — UMA pergunta por turno, nesta ordem:
         { role: 'tool' as const, tool_call_id: tc.id, content: JSON.stringify(toolResult) },
       ]
 
-      const nextResponse = await groq.chat.completions.create({
+      const nextResponse = await groqCall({
         model: MODEL,
         messages: currentMessages,
         tools: TOOLS,
@@ -496,6 +510,12 @@ FLUXO CORRETO — UMA pergunta por turno, nesta ordem:
     })
   } catch (err: unknown) {
     console.error('Chat error:', err)
+    const status = (err as { status?: number })?.status
+    if (status === 429) {
+      return NextResponse.json({
+        error: 'Limite de uso atingido. Aguarde alguns minutos e tente novamente.',
+      }, { status: 429 })
+    }
     const msg = err instanceof Error ? err.message : 'Erro interno'
     return NextResponse.json({ error: msg }, { status: 500 })
   }
