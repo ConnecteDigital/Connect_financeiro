@@ -325,22 +325,36 @@ async function executeTool(
 
 function detectQuickReplies(reply: string, origins: string[]): string[] | undefined {
   const lower = reply.toLowerCase()
-  // Asking about origin
-  if (origins.length > 0 && (lower.includes('origem') || lower.includes('veio de') || lower.includes('site líder') || lower.includes('site poa') || lower.includes('indicaç'))) {
-    return origins.map(o => ORIGIN_LABELS[o] ?? o)
-  }
-  // Asking about phone
-  if (lower.includes('telefone') && (lower.includes('deseja') || lower.includes('quer') || lower.includes('adicionar'))) {
+
+  // Pergunta ESPECÍFICA sobre origem — frases diretas, não palavras soltas
+  const isAskingOrigin = origins.length > 0 && (
+    lower.includes('origem do chamado') ||
+    lower.includes('veio de onde') ||
+    lower.includes('qual a origem') ||
+    lower.includes('informar a origem') ||
+    lower.includes('me informar a origem') ||
+    lower.includes('de onde veio')
+  )
+  if (isAskingOrigin) return origins.map(o => ORIGIN_LABELS[o] ?? o)
+
+  // Pergunta sobre telefone
+  if ((lower.includes('telefone') || lower.includes('celular')) &&
+      (lower.includes('deseja') || lower.includes('quer') || lower.includes('adicionar') || lower.includes('para contato'))) {
     return ['Sim, tenho telefone', 'Não, obrigado']
   }
-  // Asking about CPF/CNPJ
-  if ((lower.includes('cpf') || lower.includes('cnpj')) && (lower.includes('deseja') || lower.includes('quer') || lower.includes('adicionar'))) {
+
+  // Pergunta sobre CPF/CNPJ
+  if ((lower.includes('cpf') || lower.includes('cnpj')) &&
+      (lower.includes('deseja') || lower.includes('quer') || lower.includes('adicionar'))) {
     return ['Sim, tenho CPF/CNPJ', 'Não, obrigado']
   }
-  // Delete confirmation
-  if (lower.includes('confirma') && (lower.includes('delet') || lower.includes('exclu') || lower.includes('remov'))) {
+
+  // Confirmação de delete
+  if ((lower.includes('confirma') || lower.includes('tem certeza') || lower.includes('deseja realmente')) &&
+      (lower.includes('delet') || lower.includes('exclu') || lower.includes('apag') || lower.includes('remov'))) {
     return ['Sim, deletar', 'Não, cancelar']
   }
+
   return undefined
 }
 
@@ -377,7 +391,15 @@ Responda sempre em português brasileiro, de forma direta e concisa.
 
 Data de hoje: ${today} | Amanhã: ${addDays(today, 1)} | Depois: ${addDays(today, 2)}
 Origens do sistema: ${originsText}
-Categorias: Desentupimento, Hidrojateamento, Limpeza, Sucção, Aplicação de CO2, Reclamação, Outros
+Categorias válidas (use EXATAMENTE esses nomes, nunca coloque serviço em notes):
+- Desentupimento → "desentupir", "entupido", "desentupimento de ralo/pia/vaso/esgoto/coluna"
+- Hidrojateamento → "hidrojato", "jato", "hidrojateamento"
+- Limpeza → "limpar caixa de gordura", "limpeza de fossa", "caixa de gordura"
+- Sucção → "sucção de fossa", "esvaziar fossa", "sugação de fossa", "sugar fossa", "tirar fossa", "sucação de fossa"
+- Aplicação de CO2 → "co2", "gás"
+- Reclamação → "reclamação", "repasse", "voltar", "retorno"
+- Outros → qualquer outro serviço não listado
+NUNCA use o serviço como notes — sempre mapeie para uma das categorias acima.
 
 ═══ REGRAS CRÍTICAS PARA CRIAR CHAMADO ═══
 
