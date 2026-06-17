@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { GoogleGenerativeAI, Tool, SchemaType } from '@google/generative-ai'
+import Groq from 'groq-sdk'
 import { createClient } from '@/lib/supabase/server'
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY ?? '')
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY ?? '' })
+const MODEL = 'llama-3.3-70b-versatile'
 
 function localToday(): string {
   const d = new Date()
@@ -15,124 +16,109 @@ function addDays(date: string, days: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-const TOOLS: Tool[] = [
+const TOOLS: Groq.Chat.ChatCompletionTool[] = [
   {
-    functionDeclarations: [
-      {
-        name: 'criar_chamado',
-        description: 'Cria um novo chamado/atendimento no sistema. Use quando o usuário pedir para criar, lançar ou registrar um chamado, cliente ou atendimento.',
-        parameters: {
-          type: SchemaType.OBJECT,
-          properties: {
-            contact_name: { type: SchemaType.STRING, description: 'Nome do cliente ou contato' },
-            service_category: {
-              type: SchemaType.STRING,
-              description: 'Categoria do serviço. Valores válidos: Desentupimento, Hidrojateamento, Limpeza, Sucção, Aplicação de CO2, Reclamação, Outros',
-            },
-            status: {
-              type: SchemaType.STRING,
-              description: 'Status do chamado: "imediato" (atendimento agora), "agendado" (com data e hora marcadas), "aprovado" (aprovado para execução)',
-            },
-            scheduled_date: {
-              type: SchemaType.STRING,
-              description: 'Data do agendamento no formato YYYY-MM-DD (ex: 2026-06-18). Obrigatório quando status=agendado.',
-            },
-            scheduled_time: {
-              type: SchemaType.STRING,
-              description: 'Hora do agendamento no formato HH:MM (ex: 14:30). Usar quando status=agendado.',
-            },
-            notes: { type: SchemaType.STRING, description: 'Observações ou detalhes adicionais do chamado' },
-            driver: { type: SchemaType.STRING, description: 'Nome do técnico responsável pelo atendimento' },
-            call_address: { type: SchemaType.STRING, description: 'Endereço do atendimento' },
-            call_neighborhood: { type: SchemaType.STRING, description: 'Bairro' },
-            call_city: { type: SchemaType.STRING, description: 'Cidade' },
-            contact_phone: { type: SchemaType.STRING, description: 'Telefone do cliente' },
-            solicitante: { type: SchemaType.STRING, description: 'Nome de quem fez a solicitação/ligou' },
-          },
-          required: ['contact_name', 'service_category', 'status'],
+    type: 'function',
+    function: {
+      name: 'criar_chamado',
+      description: 'Cria um novo chamado/atendimento no sistema. Use quando o usuário pedir para criar, lançar ou registrar um chamado, cliente ou atendimento.',
+      parameters: {
+        type: 'object',
+        properties: {
+          contact_name: { type: 'string', description: 'Nome do cliente ou contato' },
+          service_category: { type: 'string', description: 'Categoria do serviço. Valores válidos: Desentupimento, Hidrojateamento, Limpeza, Sucção, Aplicação de CO2, Reclamação, Outros' },
+          status: { type: 'string', description: 'Status: "imediato" (atendimento agora), "agendado" (com data/hora marcadas), "aprovado" (aprovado para execução)' },
+          scheduled_date: { type: 'string', description: 'Data do agendamento no formato YYYY-MM-DD. Obrigatório quando status=agendado.' },
+          scheduled_time: { type: 'string', description: 'Hora no formato HH:MM (ex: 14:30). Usar quando status=agendado.' },
+          notes: { type: 'string', description: 'Observações ou detalhes adicionais' },
+          driver: { type: 'string', description: 'Nome do técnico responsável' },
+          call_address: { type: 'string', description: 'Endereço do atendimento' },
+          call_neighborhood: { type: 'string', description: 'Bairro' },
+          call_city: { type: 'string', description: 'Cidade' },
+          contact_phone: { type: 'string', description: 'Telefone do cliente' },
+          solicitante: { type: 'string', description: 'Nome de quem fez a solicitação/ligou' },
         },
+        required: ['contact_name', 'service_category', 'status'],
       },
-      {
-        name: 'listar_chamados',
-        description: 'Lista os chamados recentes do sistema. Use quando o usuário perguntar sobre chamados, atendimentos ou quiser ver o que tem registrado.',
-        parameters: {
-          type: SchemaType.OBJECT,
-          properties: {
-            status: {
-              type: SchemaType.STRING,
-              description: 'Filtrar por status: imediato, agendado, aprovado, nao_aprovou, cancelado, nao_quis_visita. Deixar vazio para todos.',
-            },
-            limit: {
-              type: SchemaType.NUMBER,
-              description: 'Quantidade de chamados a retornar (padrão: 5, máximo: 20)',
-            },
-          },
-          required: [],
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'listar_chamados',
+      description: 'Lista os chamados recentes do sistema. Use quando o usuário perguntar sobre chamados, atendimentos ou quiser ver o que tem registrado.',
+      parameters: {
+        type: 'object',
+        properties: {
+          status: { type: 'string', description: 'Filtrar por status: imediato, agendado, aprovado, nao_aprovou, cancelado, nao_quis_visita. Omitir para todos.' },
+          limit: { type: 'number', description: 'Quantidade a retornar (padrão: 5, máximo: 20)' },
         },
+        required: [],
       },
-      {
-        name: 'criar_saida',
-        description: 'Lança uma despesa/saída financeira no sistema. Use quando o usuário quiser registrar gasto, despesa, conta a pagar, compra ou saída.',
-        parameters: {
-          type: SchemaType.OBJECT,
-          properties: {
-            description: { type: SchemaType.STRING, description: 'Descrição da despesa' },
-            amount: { type: SchemaType.NUMBER, description: 'Valor em reais (número, sem R$)' },
-            category: { type: SchemaType.STRING, description: 'Categoria da despesa (ex: combustível, material, alimentação, salário, aluguel, manutenção, outros)' },
-            due_date: { type: SchemaType.STRING, description: 'Data de vencimento no formato YYYY-MM-DD' },
-            type: {
-              type: SchemaType.STRING,
-              description: 'Tipo: "fixo" (recorrente, como aluguel) ou "variavel" (pontual, como combustível)',
-            },
-            notes: { type: SchemaType.STRING, description: 'Observações adicionais' },
-          },
-          required: ['description', 'amount', 'category', 'due_date', 'type'],
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'criar_saida',
+      description: 'Lança uma despesa/saída financeira. Use quando o usuário quiser registrar gasto, despesa, conta a pagar, compra ou saída.',
+      parameters: {
+        type: 'object',
+        properties: {
+          description: { type: 'string', description: 'Descrição da despesa' },
+          amount: { type: 'number', description: 'Valor em reais (número sem R$)' },
+          category: { type: 'string', description: 'Categoria (ex: combustível, material, alimentação, salário, aluguel, manutenção, outros)' },
+          due_date: { type: 'string', description: 'Data de vencimento YYYY-MM-DD' },
+          type: { type: 'string', description: 'Tipo: "fixo" (recorrente) ou "variavel" (pontual)' },
+          notes: { type: 'string', description: 'Observações adicionais' },
         },
+        required: ['description', 'amount', 'category', 'due_date', 'type'],
       },
-      {
-        name: 'resumo_financeiro',
-        description: 'Retorna resumo financeiro com receitas, despesas e chamados. Use quando o usuário perguntar sobre finanças, receitas, quanto ganhou, relatório ou desempenho.',
-        parameters: {
-          type: SchemaType.OBJECT,
-          properties: {
-            periodo: {
-              type: SchemaType.STRING,
-              description: 'Período: "hoje", "semana" (últimos 7 dias), "mes" (mês atual), "mes_passado"',
-            },
-          },
-          required: ['periodo'],
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'resumo_financeiro',
+      description: 'Retorna resumo financeiro com receitas, despesas e chamados. Use quando o usuário perguntar sobre finanças, receitas, quanto ganhou, relatório ou desempenho.',
+      parameters: {
+        type: 'object',
+        properties: {
+          periodo: { type: 'string', description: 'Período: "hoje", "semana" (últimos 7 dias), "mes" (mês atual), "mes_passado"' },
         },
+        required: ['periodo'],
       },
-      {
-        name: 'listar_a_receber',
-        description: 'Lista todos os valores pendentes de recebimento (clientes que ainda não pagaram). Use quando o usuário perguntar sobre a receber, inadimplência ou pagamentos pendentes.',
-        parameters: {
-          type: SchemaType.OBJECT,
-          properties: {},
-          required: [],
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'listar_a_receber',
+      description: 'Lista valores pendentes de recebimento. Use quando o usuário perguntar sobre a receber, inadimplência ou pagamentos pendentes.',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'listar_saidas_pendentes',
+      description: 'Lista despesas/contas a pagar pendentes. Use quando o usuário perguntar sobre contas a pagar ou despesas pendentes.',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'buscar_cliente',
+      description: 'Busca clientes pelo nome.',
+      parameters: {
+        type: 'object',
+        properties: {
+          nome: { type: 'string', description: 'Nome do cliente para buscar' },
         },
+        required: ['nome'],
       },
-      {
-        name: 'listar_saidas_pendentes',
-        description: 'Lista despesas/contas a pagar que estão pendentes. Use quando o usuário perguntar sobre contas a pagar, despesas pendentes ou o que falta pagar.',
-        parameters: {
-          type: SchemaType.OBJECT,
-          properties: {},
-          required: [],
-        },
-      },
-      {
-        name: 'buscar_cliente',
-        description: 'Busca clientes pelo nome. Use quando o usuário quiser encontrar um cliente específico.',
-        parameters: {
-          type: SchemaType.OBJECT,
-          properties: {
-            nome: { type: SchemaType.STRING, description: 'Nome do cliente para buscar' },
-          },
-          required: ['nome'],
-        },
-      },
-    ],
+    },
   },
 ]
 
@@ -205,7 +191,6 @@ async function executeTool(
   if (name === 'resumo_financeiro') {
     let startDate = today
     let endDate = today
-
     const p = args.periodo as string
     if (p === 'semana') {
       startDate = addDays(today, -7)
@@ -219,21 +204,17 @@ async function executeTool(
       const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0)
       endDate = `${lastDay.getFullYear()}-${String(lastDay.getMonth() + 1).padStart(2, '0')}-${String(lastDay.getDate()).padStart(2, '0')}`
     }
-
     const [callsRes, ordersRes, expensesRes] = await Promise.all([
       supabase.from('calls').select('status').gte('date', startDate).lte('date', endDate),
       supabase.from('service_orders').select('total_value, payment_status, remaining_amount').gte('date', startDate).lte('date', endDate),
       supabase.from('expenses').select('amount, status').gte('due_date', startDate).lte('due_date', endDate),
     ])
-
     const calls = callsRes.data ?? []
     const orders = ordersRes.data ?? []
     const expenses = expensesRes.data ?? []
-
     const receita_bruta = orders.reduce((s, o) => s + (o.total_value || 0), 0)
     const total_despesas = expenses.reduce((s, e) => s + (e.amount || 0), 0)
     const a_receber = orders.filter(o => ['pendente', 'pago_parcial'].includes(o.payment_status)).reduce((s, o) => s + (o.remaining_amount || o.total_value || 0), 0)
-
     return {
       periodo: `${startDate} a ${endDate}`,
       total_chamados: calls.length,
@@ -287,8 +268,8 @@ export async function POST(req: NextRequest) {
     const { message, history = [] } = await req.json()
     if (!message?.trim()) return NextResponse.json({ error: 'Mensagem vazia' }, { status: 400 })
 
-    if (!process.env.GEMINI_API_KEY) {
-      return NextResponse.json({ error: 'GEMINI_API_KEY não configurada' }, { status: 500 })
+    if (!process.env.GROQ_API_KEY) {
+      return NextResponse.json({ error: 'GROQ_API_KEY não configurada' }, { status: 500 })
     }
 
     const supabase = await createClient()
@@ -301,59 +282,66 @@ export async function POST(req: NextRequest) {
     const tenantId = profile.tenant_id
     const today = localToday()
 
-    const systemPrompt = `Você é o Assistente IA do Connect Financeiro, um sistema de gestão para empresas de desentupimento.
+    const systemPrompt = `Você é o Assistente IA do Connect Financeiro, sistema de gestão para empresas de desentupimento.
 Você ajuda a registrar chamados, lançar saídas, consultar finanças e ver relatórios usando as funções disponíveis.
+Sempre responda em português brasileiro, de forma clara e direta.
 
 Data de hoje: ${today}
-Quando o usuário disser "amanhã", use a data: ${addDays(today, 1)}
-Quando o usuário disser "depois de amanhã", use: ${addDays(today, 2)}
-Quando disser "semana que vem segunda", calcule corretamente a partir de hoje.
+Quando o usuário disser "amanhã", use: ${addDays(today, 1)}
+Quando disser "depois de amanhã", use: ${addDays(today, 2)}
 
 Categorias de serviço válidas: Desentupimento, Hidrojateamento, Limpeza, Sucção, Aplicação de CO2, Reclamação, Outros
-Sub-opções de Desentupimento: Ralo, Pia, Vaso, Esgoto, Coluna
-Sub-opções de Limpeza: Caixa de Gordura, Fossa
+Status de chamado: "imediato" (atendimento agora), "agendado" (com data/hora), "aprovado" (aguardando OS)
 
-Status de chamado:
-- "imediato": atendimento sendo realizado agora
-- "agendado": com data e hora marcadas para o futuro
-- "aprovado": cliente aprovou, aguardando OS
+Regras:
+1. Use as funções para executar ações — nunca invente dados
+2. Após executar, confirme o que foi feito de forma concisa
+3. Formate valores como R$ X.XXX,XX
+4. Se faltar info essencial, pergunte apenas o necessário`
 
-Regras importantes:
-1. Sempre use as funções disponíveis para executar ações — não invente dados
-2. Após executar uma função, confirme o que foi feito de forma clara e direta em português
-3. Para chamados agendados, sempre pergunte a data e hora se não foram informadas
-4. Formate valores monetários como R$ X.XXX,XX
-5. Seja conciso e direto nas respostas
-6. Se faltar informação essencial, pergunte apenas o que é necessário`
+    const messages: Groq.Chat.ChatCompletionMessageParam[] = [
+      { role: 'system', content: systemPrompt },
+      ...history,
+      { role: 'user', content: message },
+    ]
 
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash',
+    const response = await groq.chat.completions.create({
+      model: MODEL,
+      messages,
       tools: TOOLS,
-      systemInstruction: systemPrompt,
+      tool_choice: 'auto',
+      temperature: 0.3,
     })
 
-    const chat = model.startChat({ history })
-    const result = await chat.sendMessage(message)
-    const response = result.response
+    const assistantMessage = response.choices[0].message
+    const toolCalls = assistantMessage.tool_calls
 
-    const functionCalls = response.functionCalls()
-    if (functionCalls && functionCalls.length > 0) {
-      const fc = functionCalls[0]
-      const toolResult = await executeTool(fc.name, fc.args as Record<string, unknown>, supabase, tenantId)
+    if (toolCalls && toolCalls.length > 0) {
+      const tc = toolCalls[0]
+      const args = JSON.parse(tc.function.arguments) as Record<string, unknown>
+      const toolResult = await executeTool(tc.function.name, args, supabase, tenantId)
 
-      const result2 = await chat.sendMessage([
+      const messagesWithTool: Groq.Chat.ChatCompletionMessageParam[] = [
+        ...messages,
+        assistantMessage,
         {
-          functionResponse: {
-            name: fc.name,
-            response: { result: toolResult },
-          },
+          role: 'tool',
+          tool_call_id: tc.id,
+          content: JSON.stringify(toolResult),
         },
-      ])
+      ]
 
-      return NextResponse.json({ reply: result2.response.text(), functionCalled: fc.name })
+      const response2 = await groq.chat.completions.create({
+        model: MODEL,
+        messages: messagesWithTool,
+        temperature: 0.3,
+      })
+
+      const reply = response2.choices[0].message.content ?? 'Feito!'
+      return NextResponse.json({ reply, functionCalled: tc.function.name })
     }
 
-    return NextResponse.json({ reply: response.text() })
+    return NextResponse.json({ reply: assistantMessage.content ?? 'Como posso ajudar?' })
   } catch (err: unknown) {
     console.error('Chat error:', err)
     const msg = err instanceof Error ? err.message : 'Erro interno'

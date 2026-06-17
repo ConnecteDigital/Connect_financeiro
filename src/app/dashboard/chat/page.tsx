@@ -88,7 +88,7 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const historyRef = useRef<{ role: string; parts: { text: string }[] }[]>([])
+  const historyRef = useRef<{ role: 'user' | 'assistant'; content: string }[]>([])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -103,10 +103,9 @@ export default function ChatPage() {
     setInput('')
     setLoading(true)
 
-    // Build Gemini history (exclude the initial greeting, and only include real conversation)
     const newHistory = [
       ...historyRef.current,
-      { role: 'user', parts: [{ text: trimmed }] },
+      { role: 'user' as const, content: trimmed },
     ]
 
     try {
@@ -128,10 +127,9 @@ export default function ChatPage() {
       }
       setMessages(prev => [...prev, assistantMsg])
 
-      // Update history for next turn
       historyRef.current = [
         ...newHistory,
-        { role: 'model', parts: [{ text: assistantText }] },
+        { role: 'assistant' as const, content: assistantText },
       ]
     } catch (e: unknown) {
       const errMsg = e instanceof Error ? e.message : 'Erro ao conectar com o assistente'
