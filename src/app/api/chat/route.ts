@@ -1,19 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Groq from 'groq-sdk'
+import type { ChatCompletionCreateParamsNonStreaming } from 'groq-sdk/resources/chat/completions'
 import { createClient } from '@/lib/supabase/server'
 
 const groq = new Groq({ apiKey: process.env.GEMINI_API_KEY ?? '' })
 const MODEL = 'llama-3.3-70b-versatile'
 const FALLBACK_MODEL = 'llama-3.1-8b-instant'
 
-async function groqCall(params: Parameters<typeof groq.chat.completions.create>[0]) {
+async function groqCall(params: Omit<ChatCompletionCreateParamsNonStreaming, 'stream'>): Promise<Groq.Chat.ChatCompletion> {
+  const full: ChatCompletionCreateParamsNonStreaming = { ...params, stream: false }
   try {
-    return await groq.chat.completions.create(params)
+    return await groq.chat.completions.create(full)
   } catch (err: unknown) {
     const status = (err as { status?: number })?.status
     if (status === 429) {
-      // Rate limit on primary model — retry with faster/higher-quota model
-      return await groq.chat.completions.create({ ...params, model: FALLBACK_MODEL })
+      return await groq.chat.completions.create({ ...full, model: FALLBACK_MODEL })
     }
     throw err
   }
