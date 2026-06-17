@@ -68,7 +68,6 @@ function buildTools(origins: string[]): Groq.Chat.ChatCompletionTool[] {
           properties: {
             texto: { type: 'string', description: 'Texto livre para buscar (nome, endereço, número, CPF, etc.)' },
             status: { type: 'string', description: 'Filtrar por status: imediato, agendado, aprovado, nao_aprovou, cancelado, nao_quis_visita' },
-            limit: { type: 'number', description: 'Quantidade (padrão 5, máximo 20)' },
           },
           required: ['texto'],
         },
@@ -177,7 +176,7 @@ async function executeTool(
   }
 
   if (name === 'buscar_chamados') {
-    const limit = Math.min(Number(args.limit ?? 5), 20)
+    const limit = 10
     const texto = String(args.texto ?? '').trim()
 
     // Search across multiple fields
