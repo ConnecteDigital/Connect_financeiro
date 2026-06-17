@@ -41,23 +41,19 @@ const ORIGIN_LABELS: Record<string, string> = {
 }
 
 function buildTools(origins: string[]): Groq.Chat.ChatCompletionTool[] {
-  const originDesc = origins.length > 0
-    ? `Valores válidos: ${origins.map(o => `"${o}" (${ORIGIN_LABELS[o] ?? o})`).join(', ')}`
-    : 'Ex: indicacao, terceirizado'
-
   return [
     {
       type: 'function',
       function: {
         name: 'criar_chamado',
-        description: 'Cria um chamado. SÓ chame esta função quando JÁ TIVER coletado origem, nome, serviço e status em turnos anteriores. NUNCA chame junto com perguntas.',
+        description: 'Cria um chamado. SÓ chame após o usuário ter respondido explicitamente à pergunta sobre origem em uma mensagem anterior. NUNCA chame se ainda não perguntou sobre origem.',
         parameters: {
           type: 'object',
           properties: {
             contact_name: { type: 'string', description: 'Nome do cliente' },
             service_category: { type: 'string', description: 'Desentupimento, Hidrojateamento, Limpeza, Sucção, Aplicação de CO2, Reclamação, Outros' },
             status: { type: 'string', description: '"imediato", "agendado" ou "aprovado"' },
-            origin: { type: 'string', description: `Origem obrigatória. ${originDesc}` },
+            origin: { type: 'string', description: 'Valor EXATO que o usuário informou ao responder à pergunta de origem. NUNCA invente ou assuma — só preencha após o usuário ter respondido.' },
             scheduled_date: { type: 'string', description: 'Data YYYY-MM-DD (quando agendado)' },
             scheduled_time: { type: 'string', description: 'Hora HH:MM (quando agendado)' },
             notes: { type: 'string', description: 'Observações' },
@@ -160,12 +156,18 @@ async function executeTool(
   args: Record<string, unknown>,
   supabase: Awaited<ReturnType<typeof createClient>>,
   tenantId: string,
+  validOrigins: string[],
 ): Promise<{ result: unknown; callId?: string }> {
   const today = localToday()
 
   if (name === 'criar_chamado') {
     if (!args.origin) {
-      return { result: { erro: 'ORIGEM_OBRIGATORIA', instrucao: 'Você NÃO pode criar o chamado sem a origem. Pergunte ao usuário: "Esse chamado veio de onde?" e aguarde a resposta antes de tentar criar novamente.' } }
+      return { result: { erro: 'ORIGEM_OBRIGATORIA', instrucao: 'Você AINDA NÃO perguntou a origem ao usuário. Responda APENAS com a pergunta: "Esse chamado veio de onde?" e aguarde. Não crie o chamado.' } }
+    }
+    // Reject if the model invented an origin not in the tenant's list
+    if (validOrigins.length > 0 && !validOrigins.includes(args.origin as string)) {
+      const list = validOrigins.map(o => `${ORIGIN_LABELS[o] ?? o} (${o})`).join(', ')
+      return { result: { erro: 'ORIGEM_INVALIDA', instrucao: `A origem "${args.origin}" não é válida. Origens disponíveis: ${list}. Pergunte ao usuário qual origem e aguarde a resposta.` } }
     }
     const { data, error } = await supabase
       .from('calls')
@@ -400,6 +402,9 @@ export async function POST(req: NextRequest) {
     const originsText = origins.length > 0
       ? origins.map(o => `${o} = ${ORIGIN_LABELS[o] ?? o}`).join(', ')
       : 'indicacao, terceirizado'
+    const originsLabels = origins.length > 0
+      ? origins.map(o => ORIGIN_LABELS[o] ?? o).join(' / ')
+      : 'Indicação / Terceirizado'
 
     const systemPrompt = `Você é o Assistente IA do Connect Financeiro, sistema de gestão para empresas de desentupimento.
 Responda sempre em português brasileiro, de forma direta e concisa.
@@ -416,28 +421,27 @@ Categorias válidas (use EXATAMENTE esses nomes, nunca coloque serviço em notes
 - Outros → qualquer outro serviço não listado
 NUNCA use o serviço como notes — sempre mapeie para uma das categorias acima.
 
-═══ REGRAS CRÍTICAS PARA CRIAR CHAMADO ═══
+═══ REGRAS ABSOLUTAS PARA CRIAR CHAMADO ═══
 
-ANTES de chamar criar_chamado, você DEVE ter coletado EM TURNOS ANTERIORES:
-  1. Nome do cliente ✓
-  2. Serviço ✓
-  3. Status (imediato/agendado/aprovado) ✓
-  4. ORIGEM (obrigatória — pergunte se não informada)
+REGRA #1 — MAIS IMPORTANTE:
+Quando o usuário pedir para criar um chamado, sua PRIMEIRA resposta DEVE SER APENAS:
+"Esse chamado veio de onde? (${originsLabels})"
+Não crie o chamado. Não faça mais nada. APENAS essa pergunta.
 
-OPCIONAIS — pergunte de forma simpática mas NÃO BLOQUEIE se o usuário não quiser:
-  - Telefone: pergunte "Deseja adicionar telefone?" mas aceite "não"
-  - CPF/CNPJ: pergunte "Deseja adicionar CPF ou CNPJ?" mas aceite "não"
+REGRA #2 — NUNCA invente a origem. Só preencha o campo "origin" com o valor EXATO que o usuário respondeu à sua pergunta. Se o usuário não respondeu ainda, não chame criar_chamado.
+
+REGRA #3 — NUNCA chame criar_chamado se o histórico não contém uma resposta explícita do usuário sobre a origem.
+
+FLUXO OBRIGATÓRIO — uma pergunta por turno:
+  Turno 1 (usuário pede chamado) → você pergunta SOMENTE a origem
+  Turno 2 (usuário responde origem) → você pergunta SOMENTE "Deseja adicionar um telefone para contato?"
+  Turno 3 (usuário responde telefone) → você pergunta SOMENTE "Deseja adicionar CPF ou CNPJ?"
+  Turno 4 (usuário responde CPF) → CRIE o chamado imediatamente
 
 PROIBIDO:
-  ✗ Chamar criar_chamado e fazer perguntas no MESMO turno
-  ✗ Criar o chamado sem ter a origem
-  ✗ Criar o chamado sem confirmar que o usuário não quer adicionar mais nada
-
-FLUXO CORRETO — UMA pergunta por turno, nesta ordem:
-  Passo 1: se falta ORIGEM → pergunte SOMENTE a origem (nada mais)
-  Passo 2: após receber a origem → pergunte SOMENTE "Deseja adicionar um telefone para contato?"
-  Passo 3: após resposta do telefone → pergunte SOMENTE "Deseja adicionar CPF ou CNPJ?"
-  Passo 4: após resposta do CPF → CRIE o chamado imediatamente
+  ✗ Chamar criar_chamado sem o usuário ter explicitamente informado a origem
+  ✗ Inventar ou assumir a origem com base nas opções disponíveis
+  ✗ Criar o chamado e fazer perguntas no MESMO turno
 
 ═══ OUTRAS REGRAS ═══
 - Para DELETAR: sempre use buscar_chamados primeiro, mostre o chamado encontrado e confirme com o usuário antes de deletar
@@ -480,7 +484,7 @@ FLUXO CORRETO — UMA pergunta por turno, nesta ordem:
         break
       }
 
-      const { result: toolResult, callId } = await executeTool(tc.function.name, args, supabase, tenantId)
+      const { result: toolResult, callId } = await executeTool(tc.function.name, args, supabase, tenantId, origins)
       lastFunctionCalled = tc.function.name
       if (callId) lastCallId = callId
 
