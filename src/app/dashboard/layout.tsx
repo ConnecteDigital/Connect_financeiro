@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, PhoneCall, Users, TrendingDown,
   BarChart3, Settings, LogOut, Building2,
-  Plus, MoreHorizontal, UserCog, Moon, Sun,
+  Plus, MoreHorizontal, UserCog, Moon, Sun, Sparkles,
 } from 'lucide-react'
 import { ConnectDigitalLogo } from '@/components/logos'
 import { useTenant } from '@/lib/tenant-context'
@@ -20,6 +20,7 @@ const mainNav = [
 ]
 
 const moreNav = [
+  { href: '/dashboard/chat',         label: 'Assistente',   icon: Sparkles },
   { href: '/dashboard/relatorios',   label: 'Relatórios',   icon: BarChart3 },
   { href: '/dashboard/clientes',     label: 'Clientes',     icon: Users },
   { href: '/dashboard/fornecedores', label: 'Fornecedores', icon: Building2 },
