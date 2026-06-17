@@ -4,8 +4,8 @@ import type { ChatCompletionCreateParamsNonStreaming } from 'groq-sdk/resources/
 import { createClient } from '@/lib/supabase/server'
 
 const groq = new Groq({ apiKey: process.env.GEMINI_API_KEY ?? '' })
-const MODEL = 'llama-3.3-70b-versatile'
-const FALLBACK_MODEL = 'llama-3.1-8b-instant'
+const MODEL = 'llama-3.1-8b-instant'
+const FALLBACK_MODEL = 'llama-3.3-70b-versatile'
 
 async function groqCall(params: Omit<ChatCompletionCreateParamsNonStreaming, 'stream'>): Promise<Groq.Chat.ChatCompletion> {
   const full: ChatCompletionCreateParamsNonStreaming = { ...params, stream: false }
@@ -423,54 +423,32 @@ export async function POST(req: NextRequest) {
       ? origins.map(o => ORIGIN_LABELS[o] ?? o).join(' / ')
       : 'Indicação / Terceirizado'
 
-    const systemPrompt = `Você é o Assistente IA do Connect Financeiro, sistema de gestão para empresas de desentupimento.
-Responda sempre em português brasileiro, de forma direta e concisa.
+    const systemPrompt = `Assistente IA do Connect Financeiro (desentupimento). Responda em pt-BR, direto e conciso.
+Hoje: ${today} | Amanhã: ${addDays(today, 1)}
+Origens: ${originsText}
+Serviços (mapear SEMPRE, NUNCA em notes): Desentupimento, Hidrojateamento, Limpeza, Sucção, Aplicação de CO2, Reclamação, Outros.
+Sucção = "sucção/sucação/sugar/tirar/esvaziar fossa". Limpeza = "caixa de gordura/limpeza de fossa".
 
-Data de hoje: ${today} | Amanhã: ${addDays(today, 1)} | Depois: ${addDays(today, 2)}
-Origens do sistema: ${originsText}
-Categorias válidas (use EXATAMENTE esses nomes, nunca coloque serviço em notes):
-- Desentupimento → "desentupir", "entupido", "desentupimento de ralo/pia/vaso/esgoto/coluna"
-- Hidrojateamento → "hidrojato", "jato", "hidrojateamento"
-- Limpeza → "limpar caixa de gordura", "limpeza de fossa", "caixa de gordura"
-- Sucção → "sucção de fossa", "esvaziar fossa", "sugação de fossa", "sugar fossa", "tirar fossa", "sucação de fossa"
-- Aplicação de CO2 → "co2", "gás"
-- Reclamação → "reclamação", "repasse", "voltar", "retorno"
-- Outros → qualquer outro serviço não listado
-NUNCA use o serviço como notes — sempre mapeie para uma das categorias acima.
+CRIAR CHAMADO — FLUXO OBRIGATÓRIO:
+1. Usuário pede chamado → responda APENAS: "Esse chamado veio de onde? (${originsLabels})"
+2. Usuário responde origem → pergunte APENAS: "Deseja adicionar um telefone para contato?"
+3. Usuário responde telefone → pergunte APENAS: "Deseja adicionar CPF ou CNPJ?"
+4. Usuário responde CPF → CRIE o chamado imediatamente com criar_chamado
 
-═══ REGRAS ABSOLUTAS PARA CRIAR CHAMADO ═══
+PROIBIDO: criar chamado sem origem explícita do usuário | criar e perguntar no mesmo turno | inventar/assumir origem.
 
-REGRA #1 — MAIS IMPORTANTE:
-Quando o usuário pedir para criar um chamado, sua PRIMEIRA resposta DEVE SER APENAS:
-"Esse chamado veio de onde? (${originsLabels})"
-Não crie o chamado. Não faça mais nada. APENAS essa pergunta.
-
-REGRA #2 — NUNCA invente a origem. Só preencha o campo "origin" com o valor EXATO que o usuário respondeu à sua pergunta. Se o usuário não respondeu ainda, não chame criar_chamado.
-
-REGRA #3 — NUNCA chame criar_chamado se o histórico não contém uma resposta explícita do usuário sobre a origem.
-
-FLUXO OBRIGATÓRIO — uma pergunta por turno:
-  Turno 1 (usuário pede chamado) → você pergunta SOMENTE a origem
-  Turno 2 (usuário responde origem) → você pergunta SOMENTE "Deseja adicionar um telefone para contato?"
-  Turno 3 (usuário responde telefone) → você pergunta SOMENTE "Deseja adicionar CPF ou CNPJ?"
-  Turno 4 (usuário responde CPF) → CRIE o chamado imediatamente
-
-PROIBIDO:
-  ✗ Chamar criar_chamado sem o usuário ter explicitamente informado a origem
-  ✗ Inventar ou assumir a origem com base nas opções disponíveis
-  ✗ Criar o chamado e fazer perguntas no MESMO turno
-
-═══ OUTRAS REGRAS ═══
-- Para DELETAR: sempre use buscar_chamados primeiro, mostre o chamado encontrado e confirme com o usuário antes de deletar
-- Para BUSCA: use buscar_chamados com qualquer texto (nome, endereço, OS, número, CPF)
-- Formate valores como R$ X.XXX,XX
-- Após criar chamado, informe o número gerado (ex: CH-00051)`
+DELETAR: use buscar_chamados primeiro, mostre o resultado, confirme antes de deletar.
+BUSCA: buscar_chamados aceita nome, endereço, número, CPF, OS.
+Formate: R$ X.XXX,XX | Após criar chamado, informe o número (ex: CH-00051)`
 
     const TOOLS = buildTools(origins)
 
+    // Limit history to last 8 messages (4 turns) to keep token count low
+    const trimmedHistory = (Array.isArray(history) ? history : []).slice(-8)
+
     const messages: Groq.Chat.ChatCompletionMessageParam[] = [
       { role: 'system', content: systemPrompt },
-      ...(Array.isArray(history) ? history : []),
+      ...trimmedHistory,
       { role: 'user', content: message },
     ]
 
