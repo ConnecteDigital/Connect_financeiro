@@ -395,6 +395,7 @@ export default function NovoChamadoPage() {
                 due_date: expenseDate,
                 notes: `Auto: comissão de ${aux.percentage}% sobre R$ ${bruto.toFixed(2)} (OS automática)`,
                 source_service_order_id: order.id,
+                auxiliary_id: aux.auxiliary_id,
               })
             }
           }
