@@ -28,30 +28,31 @@ const ORIGIN_LABELS: Record<string, string> = {
 function buildTools(origins: string[]): Groq.Chat.ChatCompletionTool[] {
   const originDesc = origins.length > 0
     ? `Valores válidos: ${origins.map(o => `"${o}" (${ORIGIN_LABELS[o] ?? o})`).join(', ')}`
-    : 'Ex: indicacao, site_lider, terceirizado'
+    : 'Ex: indicacao, terceirizado'
 
   return [
     {
       type: 'function',
       function: {
         name: 'criar_chamado',
-        description: 'Cria um novo chamado/atendimento no sistema. SEMPRE pergunte a origem e o telefone antes de criar, se não foram informados.',
+        description: 'Cria um chamado. SÓ chame esta função quando JÁ TIVER coletado origem, nome, serviço e status em turnos anteriores. NUNCA chame junto com perguntas.',
         parameters: {
           type: 'object',
           properties: {
-            contact_name: { type: 'string', description: 'Nome do cliente ou contato' },
-            service_category: { type: 'string', description: 'Categoria: Desentupimento, Hidrojateamento, Limpeza, Sucção, Aplicação de CO2, Reclamação, Outros' },
-            status: { type: 'string', description: '"imediato" (atendimento agora), "agendado" (com data/hora), "aprovado" (aguardando OS)' },
-            origin: { type: 'string', description: `Origem do chamado. ${originDesc}` },
-            scheduled_date: { type: 'string', description: 'Data YYYY-MM-DD. Obrigatório quando status=agendado.' },
-            scheduled_time: { type: 'string', description: 'Hora HH:MM. Usar quando status=agendado.' },
-            notes: { type: 'string', description: 'Observações ou detalhes adicionais' },
-            driver: { type: 'string', description: 'Nome do técnico responsável' },
-            call_address: { type: 'string', description: 'Endereço do atendimento' },
+            contact_name: { type: 'string', description: 'Nome do cliente' },
+            service_category: { type: 'string', description: 'Desentupimento, Hidrojateamento, Limpeza, Sucção, Aplicação de CO2, Reclamação, Outros' },
+            status: { type: 'string', description: '"imediato", "agendado" ou "aprovado"' },
+            origin: { type: 'string', description: `Origem obrigatória. ${originDesc}` },
+            scheduled_date: { type: 'string', description: 'Data YYYY-MM-DD (quando agendado)' },
+            scheduled_time: { type: 'string', description: 'Hora HH:MM (quando agendado)' },
+            notes: { type: 'string', description: 'Observações' },
+            driver: { type: 'string', description: 'Técnico responsável' },
+            call_address: { type: 'string', description: 'Endereço' },
             call_neighborhood: { type: 'string', description: 'Bairro' },
             call_city: { type: 'string', description: 'Cidade' },
-            contact_phone: { type: 'string', description: 'Telefone do cliente' },
-            solicitante: { type: 'string', description: 'Nome de quem ligou/solicitou' },
+            contact_phone: { type: 'string', description: 'Telefone (opcional)' },
+            contact_cpf: { type: 'string', description: 'CPF ou CNPJ (opcional)' },
+            solicitante: { type: 'string', description: 'Quem ligou/solicitou' },
           },
           required: ['contact_name', 'service_category', 'status', 'origin'],
         },
@@ -60,15 +61,31 @@ function buildTools(origins: string[]): Groq.Chat.ChatCompletionTool[] {
     {
       type: 'function',
       function: {
-        name: 'listar_chamados',
-        description: 'Lista chamados recentes. Use quando o usuário perguntar sobre chamados ou atendimentos.',
+        name: 'buscar_chamados',
+        description: 'Busca chamados por qualquer critério: nome, número do chamado (CH-00049), número da OS, CPF, CNPJ, endereço, cidade, bairro, serviço.',
         parameters: {
           type: 'object',
           properties: {
-            status: { type: 'string', description: 'Filtrar: imediato, agendado, aprovado, nao_aprovou, cancelado, nao_quis_visita. Omitir para todos.' },
+            texto: { type: 'string', description: 'Texto livre para buscar (nome, endereço, número, CPF, etc.)' },
+            status: { type: 'string', description: 'Filtrar por status: imediato, agendado, aprovado, nao_aprovou, cancelado, nao_quis_visita' },
             limit: { type: 'number', description: 'Quantidade (padrão 5, máximo 20)' },
           },
-          required: [],
+          required: ['texto'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'deletar_chamado',
+        description: 'Deleta um chamado pelo ID. SEMPRE use buscar_chamados antes para confirmar o ID correto com o usuário.',
+        parameters: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', description: 'ID do chamado a deletar (UUID)' },
+            call_number: { type: 'string', description: 'Número do chamado para confirmar (ex: CH-00049)' },
+          },
+          required: ['id', 'call_number'],
         },
       },
     },
@@ -80,12 +97,12 @@ function buildTools(origins: string[]): Groq.Chat.ChatCompletionTool[] {
         parameters: {
           type: 'object',
           properties: {
-            description: { type: 'string', description: 'Descrição da despesa' },
-            amount: { type: 'number', description: 'Valor em reais (número sem R$)' },
-            category: { type: 'string', description: 'Categoria (combustível, material, alimentação, salário, aluguel, manutenção, outros)' },
-            due_date: { type: 'string', description: 'Data de vencimento YYYY-MM-DD' },
-            type: { type: 'string', description: '"fixo" (recorrente) ou "variavel" (pontual)' },
-            notes: { type: 'string', description: 'Observações adicionais' },
+            description: { type: 'string', description: 'Descrição' },
+            amount: { type: 'number', description: 'Valor em reais' },
+            category: { type: 'string', description: 'combustível, material, alimentação, salário, aluguel, manutenção, outros' },
+            due_date: { type: 'string', description: 'Vencimento YYYY-MM-DD' },
+            type: { type: 'string', description: '"fixo" ou "variavel"' },
+            notes: { type: 'string', description: 'Observações' },
           },
           required: ['description', 'amount', 'category', 'due_date', 'type'],
         },
@@ -95,11 +112,11 @@ function buildTools(origins: string[]): Groq.Chat.ChatCompletionTool[] {
       type: 'function',
       function: {
         name: 'resumo_financeiro',
-        description: 'Retorna resumo financeiro. Use quando o usuário perguntar sobre receitas, despesas, desempenho ou relatório.',
+        description: 'Resumo financeiro com receitas, despesas e chamados.',
         parameters: {
           type: 'object',
           properties: {
-            periodo: { type: 'string', description: '"hoje", "semana" (7 dias), "mes" (mês atual), "mes_passado"' },
+            periodo: { type: 'string', description: '"hoje", "semana", "mes" ou "mes_passado"' },
           },
           required: ['periodo'],
         },
@@ -109,7 +126,7 @@ function buildTools(origins: string[]): Groq.Chat.ChatCompletionTool[] {
       type: 'function',
       function: {
         name: 'listar_a_receber',
-        description: 'Lista valores pendentes de recebimento.',
+        description: 'Lista valores pendentes de recebimento de clientes.',
         parameters: { type: 'object', properties: {}, required: [] },
       },
     },
@@ -119,20 +136,6 @@ function buildTools(origins: string[]): Groq.Chat.ChatCompletionTool[] {
         name: 'listar_saidas_pendentes',
         description: 'Lista contas a pagar pendentes.',
         parameters: { type: 'object', properties: {}, required: [] },
-      },
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'buscar_cliente',
-        description: 'Busca clientes pelo nome.',
-        parameters: {
-          type: 'object',
-          properties: {
-            nome: { type: 'string', description: 'Nome para buscar' },
-          },
-          required: ['nome'],
-        },
       },
     },
   ]
@@ -164,28 +167,69 @@ async function executeTool(
         call_neighborhood: args.call_neighborhood ?? null,
         call_city: args.call_city ?? null,
         contact_phone: args.contact_phone ?? null,
+        contact_cpf: args.contact_cpf ?? null,
         solicitante: args.solicitante ?? null,
       })
       .select('id, call_number')
       .single()
     if (error) return { result: { erro: error.message } }
-    return {
-      result: { sucesso: true, chamado_numero: data.call_number, id: data.id },
-      callId: data.id,
-    }
+    return { result: { sucesso: true, chamado_numero: data.call_number, id: data.id }, callId: data.id }
   }
 
-  if (name === 'listar_chamados') {
+  if (name === 'buscar_chamados') {
     const limit = Math.min(Number(args.limit ?? 5), 20)
-    let query = supabase
+    const texto = String(args.texto ?? '').trim()
+
+    // Search across multiple fields
+    const queries = await Promise.all([
+      // By contact name or call number or service
+      supabase
+        .from('calls')
+        .select('id, call_number, contact_name, contact_phone, contact_cpf, service_category, status, date, scheduled_date, scheduled_time, call_address, call_city, origin, driver')
+        .or(`contact_name.ilike.%${texto}%,call_number.ilike.%${texto}%,call_address.ilike.%${texto}%,call_city.ilike.%${texto}%,call_neighborhood.ilike.%${texto}%,contact_phone.ilike.%${texto}%,contact_cpf.ilike.%${texto}%`)
+        .order('created_at', { ascending: false })
+        .limit(limit),
+
+      // By OS number from service_orders
+      supabase
+        .from('service_orders')
+        .select('call_id, os_number')
+        .ilike('os_number', `%${texto}%`)
+        .limit(5),
+    ])
+
+    const directResults = queries[0].data ?? []
+    const osResults = queries[1].data ?? []
+
+    // Fetch calls for OS matches
+    const osCallIds = osResults.map((o: { call_id: string }) => o.call_id).filter(Boolean)
+    let osCallsData: typeof directResults = []
+    if (osCallIds.length > 0) {
+      const { data } = await supabase
+        .from('calls')
+        .select('id, call_number, contact_name, contact_phone, contact_cpf, service_category, status, date, scheduled_date, scheduled_time, call_address, call_city, origin, driver')
+        .in('id', osCallIds)
+      osCallsData = data ?? []
+    }
+
+    // Also filter by status if provided
+    let results = [...directResults, ...osCallsData]
+    // Deduplicate by id
+    const seen = new Set<string>()
+    results = results.filter(r => { if (seen.has(r.id)) return false; seen.add(r.id); return true })
+
+    if (args.status) results = results.filter(r => r.status === args.status)
+
+    return { result: results.slice(0, limit) }
+  }
+
+  if (name === 'deletar_chamado') {
+    const { error } = await supabase
       .from('calls')
-      .select('id, call_number, contact_name, service_category, status, date, scheduled_date, scheduled_time, driver')
-      .order('created_at', { ascending: false })
-      .limit(limit)
-    if (args.status) query = query.eq('status', args.status as string)
-    const { data, error } = await query
+      .delete()
+      .eq('id', args.id as string)
     if (error) return { result: { erro: error.message } }
-    return { result: data }
+    return { result: { sucesso: true, mensagem: `Chamado ${args.call_number} deletado com sucesso.` } }
   }
 
   if (name === 'criar_saida') {
@@ -210,7 +254,7 @@ async function executeTool(
   if (name === 'resumo_financeiro') {
     let startDate = today
     let endDate = today
-    const p = args.periodo as string
+    const p = String(args.periodo ?? 'mes')
     if (p === 'semana') {
       startDate = addDays(today, -7)
     } else if (p === 'mes') {
@@ -243,6 +287,7 @@ async function executeTool(
         aprovados: calls.filter(c => c.status === 'aprovado').length,
         agendados: calls.filter(c => c.status === 'agendado').length,
         nao_aprovados: calls.filter(c => c.status === 'nao_aprovou').length,
+        cancelados: calls.filter(c => c.status === 'cancelado').length,
         receita_bruta,
         total_despesas,
         receita_liquida: receita_bruta - total_despesas,
@@ -254,12 +299,12 @@ async function executeTool(
   if (name === 'listar_a_receber') {
     const { data, error } = await supabase
       .from('service_orders')
-      .select('id, date, total_value, remaining_amount, remaining_due_date, payment_status, client:clients(name), call:calls(contact_name)')
+      .select('id, date, total_value, remaining_amount, remaining_due_date, payment_status, client:clients(name), call:calls(contact_name, call_number)')
       .in('payment_status', ['pendente', 'pago_parcial'])
       .order('remaining_due_date', { ascending: true })
       .limit(10)
     if (error) return { result: { erro: error.message } }
-    return { result: data }
+    return { result: data ?? [] }
   }
 
   if (name === 'listar_saidas_pendentes') {
@@ -270,17 +315,7 @@ async function executeTool(
       .order('due_date', { ascending: true })
       .limit(10)
     if (error) return { result: { erro: error.message } }
-    return { result: data }
-  }
-
-  if (name === 'buscar_cliente') {
-    const { data, error } = await supabase
-      .from('clients')
-      .select('id, name, phone, city, address')
-      .ilike('name', `%${args.nome}%`)
-      .limit(5)
-    if (error) return { result: { erro: error.message } }
-    return { result: data }
+    return { result: data ?? [] }
   }
 
   return { result: { erro: 'Função desconhecida' } }
@@ -299,52 +334,61 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
 
-    const { data: profile } = await supabase.from('profiles').select('tenant_id').eq('id', user.id).single()
+    const { data: profile } = await supabase
+      .from('profiles').select('tenant_id').eq('id', user.id).single()
     if (!profile?.tenant_id) return NextResponse.json({ error: 'Perfil não encontrado' }, { status: 403 })
 
     const tenantId = profile.tenant_id
 
-    // Fetch tenant origins for the tools
     const { data: tenantData } = await supabase
-      .from('tenants')
-      .select('call_origins')
-      .eq('id', tenantId)
-      .single()
+      .from('tenants').select('call_origins').eq('id', tenantId).single()
     const origins: string[] = tenantData?.call_origins ?? []
 
     const today = localToday()
-
     const originsText = origins.length > 0
-      ? `Origens configuradas no sistema: ${origins.map(o => `${o} (${ORIGIN_LABELS[o] ?? o})`).join(', ')}`
-      : 'Origens comuns: indicacao, terceirizado'
+      ? origins.map(o => `${o} = ${ORIGIN_LABELS[o] ?? o}`).join(', ')
+      : 'indicacao, terceirizado'
 
     const systemPrompt = `Você é o Assistente IA do Connect Financeiro, sistema de gestão para empresas de desentupimento.
-Sempre responda em português brasileiro, de forma clara e direta.
+Responda sempre em português brasileiro, de forma direta e concisa.
 
-Data de hoje: ${today}
-Amanhã: ${addDays(today, 1)} | Depois de amanhã: ${addDays(today, 2)}
+Data de hoje: ${today} | Amanhã: ${addDays(today, 1)} | Depois: ${addDays(today, 2)}
+Origens do sistema: ${originsText}
+Categorias: Desentupimento, Hidrojateamento, Limpeza, Sucção, Aplicação de CO2, Reclamação, Outros
 
-${originsText}
+═══ REGRAS CRÍTICAS PARA CRIAR CHAMADO ═══
 
-Categorias de serviço: Desentupimento, Hidrojateamento, Limpeza, Sucção, Aplicação de CO2, Reclamação, Outros
-Status: "imediato" (agora), "agendado" (com data/hora), "aprovado" (aguardando OS)
+ANTES de chamar criar_chamado, você DEVE ter coletado EM TURNOS ANTERIORES:
+  1. Nome do cliente ✓
+  2. Serviço ✓
+  3. Status (imediato/agendado/aprovado) ✓
+  4. ORIGEM (obrigatória — pergunte se não informada)
 
-REGRAS IMPORTANTES para criar chamado:
-1. Se o usuário não informar a ORIGEM, pergunte: "Esse chamado veio de onde? (${origins.slice(0, 3).join(', ')}...)"
-2. Se o usuário não informar o TELEFONE, pergunte antes de criar
-3. Só crie o chamado depois de ter origem e telefone (ou o usuário disser que não tem)
-4. Após criar, confirme com o número do chamado gerado
+OPCIONAIS — pergunte de forma simpática mas NÃO BLOQUEIE se o usuário não quiser:
+  - Telefone: pergunte "Deseja adicionar telefone?" mas aceite "não"
+  - CPF/CNPJ: pergunte "Deseja adicionar CPF ou CNPJ?" mas aceite "não"
 
-Outras regras:
-- Use as funções para executar ações — nunca invente dados
+PROIBIDO:
+  ✗ Chamar criar_chamado e fazer perguntas no MESMO turno
+  ✗ Criar o chamado sem ter a origem
+  ✗ Criar o chamado sem confirmar que o usuário não quer adicionar mais nada
+
+FLUXO CORRETO:
+  Turno 1: usuário dá as infos → você verifica o que falta → faz TODAS as perguntas faltantes em UMA mensagem
+  Turno 2: usuário responde → se ainda falta algo, pergunta → senão CRIA o chamado
+  Turno 3: confirma criação + mostra número
+
+═══ OUTRAS REGRAS ═══
+- Para DELETAR: sempre use buscar_chamados primeiro, mostre o chamado encontrado e confirme com o usuário antes de deletar
+- Para BUSCA: use buscar_chamados com qualquer texto (nome, endereço, OS, número, CPF)
 - Formate valores como R$ X.XXX,XX
-- Se faltar info essencial, pergunte antes de executar`
+- Após criar chamado, informe o número gerado (ex: CH-00051)`
 
     const TOOLS = buildTools(origins)
 
     const messages: Groq.Chat.ChatCompletionMessageParam[] = [
       { role: 'system', content: systemPrompt },
-      ...history,
+      ...(Array.isArray(history) ? history : []),
       { role: 'user', content: message },
     ]
 
@@ -353,7 +397,7 @@ Outras regras:
       messages,
       tools: TOOLS,
       tool_choice: 'auto',
-      temperature: 0.3,
+      temperature: 0.2,
     })
 
     const assistantMessage = response.choices[0].message
@@ -361,23 +405,25 @@ Outras regras:
 
     if (toolCalls && toolCalls.length > 0) {
       const tc = toolCalls[0]
-      const args = JSON.parse(tc.function.arguments) as Record<string, unknown>
+      let args: Record<string, unknown> = {}
+      try {
+        args = JSON.parse(tc.function.arguments) as Record<string, unknown>
+      } catch {
+        return NextResponse.json({ reply: 'Ocorreu um erro ao processar o comando. Tente novamente.' })
+      }
+
       const { result: toolResult, callId } = await executeTool(tc.function.name, args, supabase, tenantId)
 
       const messagesWithTool: Groq.Chat.ChatCompletionMessageParam[] = [
         ...messages,
         assistantMessage,
-        {
-          role: 'tool',
-          tool_call_id: tc.id,
-          content: JSON.stringify(toolResult),
-        },
+        { role: 'tool', tool_call_id: tc.id, content: JSON.stringify(toolResult) },
       ]
 
       const response2 = await groq.chat.completions.create({
         model: MODEL,
         messages: messagesWithTool,
-        temperature: 0.3,
+        temperature: 0.2,
       })
 
       const reply = response2.choices[0].message.content ?? 'Feito!'
