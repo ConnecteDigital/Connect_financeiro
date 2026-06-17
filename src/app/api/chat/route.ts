@@ -149,6 +149,9 @@ async function executeTool(
   const today = localToday()
 
   if (name === 'criar_chamado') {
+    if (!args.origin) {
+      return { result: { erro: 'ORIGEM_OBRIGATORIA', instrucao: 'Você NÃO pode criar o chamado sem a origem. Pergunte ao usuário: "Esse chamado veio de onde?" e aguarde a resposta antes de tentar criar novamente.' } }
+    }
     const { data, error } = await supabase
       .from('calls')
       .insert({
