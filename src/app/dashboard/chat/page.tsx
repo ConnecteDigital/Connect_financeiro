@@ -10,6 +10,7 @@ interface Message {
   text: string
   functionCalled?: string
   callId?: string
+  quickReplies?: string[]
   timestamp: string
 }
 
@@ -46,7 +47,12 @@ const GREETING: Message = {
   timestamp: new Date().toISOString(),
 }
 
-function MessageBubble({ msg, primaryColor }: { msg: Message; primaryColor: string }) {
+function MessageBubble({ msg, primaryColor, onQuickReply, isLast }: {
+  msg: Message
+  primaryColor: string
+  onQuickReply?: (text: string) => void
+  isLast?: boolean
+}) {
   const isUser = msg.role === 'user'
   const time = new Date(msg.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 
@@ -73,6 +79,25 @@ function MessageBubble({ msg, primaryColor }: { msg: Message; primaryColor: stri
             : { background: 'var(--surface)', color: 'var(--text-primary)', borderBottomLeftRadius: 6, boxShadow: 'var(--shadow-sm)' }}>
           {msg.text}
         </div>
+
+        {/* Quick reply chips — só na última mensagem */}
+        {isLast && msg.quickReplies && msg.quickReplies.length > 0 && onQuickReply && (
+          <div className="flex flex-wrap gap-2 mt-1">
+            {msg.quickReplies.map(qr => (
+              <button
+                key={qr}
+                onClick={() => onQuickReply(qr)}
+                className="text-xs font-semibold px-3 py-1.5 rounded-xl border transition active:scale-95"
+                style={{
+                  borderColor: `rgba(var(--primary-rgb), 0.35)`,
+                  color: 'var(--primary)',
+                  background: `rgba(var(--primary-rgb), 0.06)`,
+                }}>
+                {qr}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Romaneio button */}
         {msg.callId && (
@@ -167,6 +192,7 @@ export default function ChatPage() {
         text: assistantText,
         functionCalled: data.functionCalled,
         callId: data.callId,
+        quickReplies: data.quickReplies,
         timestamp: new Date().toISOString(),
       }
       setMessages(prev => [...prev, assistantMsg])
@@ -246,7 +272,13 @@ export default function ChatPage() {
         )}
 
         {messages.map((msg, i) => (
-          <MessageBubble key={i} msg={msg} primaryColor={primaryColor} />
+          <MessageBubble
+            key={i}
+            msg={msg}
+            primaryColor={primaryColor}
+            isLast={i === messages.length - 1}
+            onQuickReply={!loading ? sendMessage : undefined}
+          />
         ))}
 
         {loading && (

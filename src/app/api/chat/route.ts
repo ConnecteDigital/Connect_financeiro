@@ -320,6 +320,27 @@ async function executeTool(
   return { result: { erro: 'Função desconhecida' } }
 }
 
+function detectQuickReplies(reply: string, origins: string[]): string[] | undefined {
+  const lower = reply.toLowerCase()
+  // Asking about origin
+  if (origins.length > 0 && (lower.includes('origem') || lower.includes('veio de') || lower.includes('site líder') || lower.includes('site poa') || lower.includes('indicaç'))) {
+    return origins.map(o => ORIGIN_LABELS[o] ?? o)
+  }
+  // Asking about phone
+  if (lower.includes('telefone') && (lower.includes('deseja') || lower.includes('quer') || lower.includes('adicionar'))) {
+    return ['Sim, tenho telefone', 'Não, obrigado']
+  }
+  // Asking about CPF/CNPJ
+  if ((lower.includes('cpf') || lower.includes('cnpj')) && (lower.includes('deseja') || lower.includes('quer') || lower.includes('adicionar'))) {
+    return ['Sim, tenho CPF/CNPJ', 'Não, obrigado']
+  }
+  // Delete confirmation
+  if (lower.includes('confirma') && (lower.includes('delet') || lower.includes('exclu') || lower.includes('remov'))) {
+    return ['Sim, deletar', 'Não, cancelar']
+  }
+  return undefined
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { message, history = [] } = await req.json()
@@ -372,10 +393,11 @@ PROIBIDO:
   ✗ Criar o chamado sem ter a origem
   ✗ Criar o chamado sem confirmar que o usuário não quer adicionar mais nada
 
-FLUXO CORRETO:
-  Turno 1: usuário dá as infos → você verifica o que falta → faz TODAS as perguntas faltantes em UMA mensagem
-  Turno 2: usuário responde → se ainda falta algo, pergunta → senão CRIA o chamado
-  Turno 3: confirma criação + mostra número
+FLUXO CORRETO — UMA pergunta por turno, nesta ordem:
+  Passo 1: se falta ORIGEM → pergunte SOMENTE a origem (nada mais)
+  Passo 2: após receber a origem → pergunte SOMENTE "Deseja adicionar um telefone para contato?"
+  Passo 3: após resposta do telefone → pergunte SOMENTE "Deseja adicionar CPF ou CNPJ?"
+  Passo 4: após resposta do CPF → CRIE o chamado imediatamente
 
 ═══ OUTRAS REGRAS ═══
 - Para DELETAR: sempre use buscar_chamados primeiro, mostre o chamado encontrado e confirme com o usuário antes de deletar
@@ -426,10 +448,13 @@ FLUXO CORRETO:
       })
 
       const reply = response2.choices[0].message.content ?? 'Feito!'
-      return NextResponse.json({ reply, functionCalled: tc.function.name, callId })
+      const quickReplies = detectQuickReplies(reply, origins)
+      return NextResponse.json({ reply, functionCalled: tc.function.name, callId, quickReplies })
     }
 
-    return NextResponse.json({ reply: assistantMessage.content ?? 'Como posso ajudar?' })
+    const reply = assistantMessage.content ?? 'Como posso ajudar?'
+    const quickReplies = detectQuickReplies(reply, origins)
+    return NextResponse.json({ reply, quickReplies })
   } catch (err: unknown) {
     console.error('Chat error:', err)
     const msg = err instanceof Error ? err.message : 'Erro interno'
