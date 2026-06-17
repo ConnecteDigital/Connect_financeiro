@@ -1,23 +1,33 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
-import { Send, Bot, User, Loader2, Sparkles, Plus } from 'lucide-react'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { Send, Bot, User, Loader2, Sparkles, Plus, FileText, Trash2 } from 'lucide-react'
+import Link from 'next/link'
 import { useTenant } from '@/lib/tenant-context'
 
 interface Message {
   role: 'user' | 'assistant'
   text: string
   functionCalled?: string
-  timestamp: Date
+  callId?: string
+  timestamp: string
 }
 
+interface HistoryItem {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+const STORAGE_KEY = 'connect_chat_messages'
+const HISTORY_KEY = 'connect_chat_history'
+
 const SUGGESTIONS = [
-  'Crie um chamado agendado para amanhã às 14h',
-  'Quantos chamados temos hoje?',
+  'Criar chamado agendado para amanhã',
   'Resumo financeiro deste mês',
-  'Liste as contas a pagar pendentes',
-  'Lançar despesa de combustível R$ 200',
   'Quem ainda não pagou?',
+  'Liste os últimos 5 chamados',
+  'Lançar despesa de combustível',
+  'Contas a pagar pendentes',
 ]
 
 const ACTION_LABELS: Record<string, string> = {
@@ -30,44 +40,52 @@ const ACTION_LABELS: Record<string, string> = {
   buscar_cliente: '✓ Cliente buscado',
 }
 
+const GREETING: Message = {
+  role: 'assistant',
+  text: 'Olá! Sou o Assistente IA do Connect Financeiro.\n\nPosso criar chamados, lançar saídas, consultar finanças e muito mais — só me falar o que precisa!',
+  timestamp: new Date().toISOString(),
+}
+
 function MessageBubble({ msg, primaryColor }: { msg: Message; primaryColor: string }) {
   const isUser = msg.role === 'user'
+  const time = new Date(msg.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+
   return (
     <div className={`flex gap-2.5 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
-      {/* Avatar */}
       <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
-        style={{
-          background: isUser ? primaryColor : 'var(--surface-secondary)',
-          boxShadow: isUser ? '0 2px 8px rgba(0,0,0,0.15)' : 'none',
-        }}>
+        style={{ background: isUser ? primaryColor : 'var(--surface-secondary)' }}>
         {isUser
           ? <User className="w-3.5 h-3.5 text-white" />
-          : <Bot className="w-3.5 h-3.5" style={{ color: 'var(--text-secondary)' }} />
-        }
+          : <Bot className="w-3.5 h-3.5" style={{ color: 'var(--text-secondary)' }} />}
       </div>
 
-      <div className={`flex flex-col gap-1 max-w-[82%] ${isUser ? 'items-end' : 'items-start'}`}>
-        {/* Function badge */}
+      <div className={`flex flex-col gap-1.5 max-w-[82%] ${isUser ? 'items-end' : 'items-start'}`}>
         {msg.functionCalled && (
           <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full text-emerald-700 bg-emerald-100">
             {ACTION_LABELS[msg.functionCalled] ?? `✓ ${msg.functionCalled}`}
           </span>
         )}
 
-        {/* Bubble */}
         <div
           className="px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap"
           style={isUser
             ? { background: primaryColor, color: '#fff', borderBottomRightRadius: 6 }
-            : { background: 'var(--surface)', color: 'var(--text-primary)', borderBottomLeftRadius: 6, boxShadow: 'var(--shadow-sm)' }
-          }>
+            : { background: 'var(--surface)', color: 'var(--text-primary)', borderBottomLeftRadius: 6, boxShadow: 'var(--shadow-sm)' }}>
           {msg.text}
         </div>
 
-        {/* Time */}
-        <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
-          {msg.timestamp.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-        </span>
+        {/* Romaneio button */}
+        {msg.callId && (
+          <Link
+            href={`/dashboard/chamados/${msg.callId}/romaneio`}
+            className="flex items-center gap-2 text-xs font-semibold px-3 py-2 rounded-xl transition active:scale-95"
+            style={{ background: 'var(--surface)', color: primaryColor, boxShadow: 'var(--shadow-sm)', border: `1px solid rgba(var(--primary-rgb), 0.2)` }}>
+            <FileText className="w-3.5 h-3.5" />
+            Ver Romaneio
+          </Link>
+        )}
+
+        <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>{time}</span>
       </div>
     </div>
   )
@@ -77,45 +95,70 @@ export default function ChatPage() {
   const { tenant } = useTenant()
   const primaryColor = tenant?.primary_color ?? '#f97316'
 
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: 'assistant',
-      text: `Olá! Sou o Assistente IA do Connect Financeiro. 👋\n\nPosso criar chamados, lançar saídas, consultar finanças e muito mais — só me falar o que precisa!`,
-      timestamp: new Date(),
-    },
-  ])
+  const [messages, setMessages] = useState<Message[]>([GREETING])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [hydrated, setHydrated] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const historyRef = useRef<{ role: 'user' | 'assistant'; content: string }[]>([])
+  const historyRef = useRef<HistoryItem[]>([])
+
+  // Load from localStorage on mount
+  useEffect(() => {
+    try {
+      const savedMessages = localStorage.getItem(STORAGE_KEY)
+      const savedHistory = localStorage.getItem(HISTORY_KEY)
+      if (savedMessages) {
+        const parsed = JSON.parse(savedMessages) as Message[]
+        if (parsed.length > 0) setMessages(parsed)
+      }
+      if (savedHistory) {
+        historyRef.current = JSON.parse(savedHistory) as HistoryItem[]
+      }
+    } catch { /* ignore */ }
+    setHydrated(true)
+  }, [])
+
+  // Save to localStorage on messages change
+  useEffect(() => {
+    if (!hydrated) return
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(messages))
+    } catch { /* ignore */ }
+  }, [messages, hydrated])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
 
+  const clearChat = useCallback(() => {
+    const greeting = { ...GREETING, timestamp: new Date().toISOString() }
+    setMessages([greeting])
+    historyRef.current = []
+    try {
+      localStorage.removeItem(STORAGE_KEY)
+      localStorage.removeItem(HISTORY_KEY)
+    } catch { /* ignore */ }
+  }, [])
+
   async function sendMessage(text: string) {
     const trimmed = text.trim()
     if (!trimmed || loading) return
 
-    const userMsg: Message = { role: 'user', text: trimmed, timestamp: new Date() }
+    const userMsg: Message = { role: 'user', text: trimmed, timestamp: new Date().toISOString() }
     setMessages(prev => [...prev, userMsg])
     setInput('')
     setLoading(true)
 
-    const newHistory = [
-      ...historyRef.current,
-      { role: 'user' as const, content: trimmed },
-    ]
+    const currentHistory = [...historyRef.current]
 
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: trimmed, history: historyRef.current }),
+        body: JSON.stringify({ message: trimmed, history: currentHistory }),
       })
       const data = await res.json()
-
       if (!res.ok) throw new Error(data.error ?? 'Erro desconhecido')
 
       const assistantText = data.reply ?? 'Desculpe, não consegui processar sua mensagem.'
@@ -123,20 +166,26 @@ export default function ChatPage() {
         role: 'assistant',
         text: assistantText,
         functionCalled: data.functionCalled,
-        timestamp: new Date(),
+        callId: data.callId,
+        timestamp: new Date().toISOString(),
       }
       setMessages(prev => [...prev, assistantMsg])
 
-      historyRef.current = [
-        ...newHistory,
-        { role: 'assistant' as const, content: assistantText },
+      const newHistory: HistoryItem[] = [
+        ...currentHistory,
+        { role: 'user', content: trimmed },
+        { role: 'assistant', content: assistantText },
       ]
+      historyRef.current = newHistory
+      try {
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(newHistory))
+      } catch { /* ignore */ }
     } catch (e: unknown) {
       const errMsg = e instanceof Error ? e.message : 'Erro ao conectar com o assistente'
       setMessages(prev => [...prev, {
         role: 'assistant',
         text: `Ops, ocorreu um erro: ${errMsg}`,
-        timestamp: new Date(),
+        timestamp: new Date().toISOString(),
       }])
     } finally {
       setLoading(false)
@@ -151,19 +200,10 @@ export default function ChatPage() {
     }
   }
 
-  function clearChat() {
-    setMessages([{
-      role: 'assistant',
-      text: `Conversa reiniciada! Como posso ajudar?`,
-      timestamp: new Date(),
-    }])
-    historyRef.current = []
-  }
-
   return (
     <div className="flex flex-col h-[calc(100dvh-var(--bottom-nav-height)-var(--safe-bottom)-80px)] lg:h-[calc(100dvh-64px)] max-w-2xl mx-auto">
 
-      {/* ── Header ── */}
+      {/* Header */}
       <div className="flex items-center justify-between px-1 pb-3 flex-shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl flex items-center justify-center"
@@ -172,21 +212,22 @@ export default function ChatPage() {
           </div>
           <div>
             <h1 className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>Assistente IA</h1>
-            <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Powered by Gemini</p>
+            <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Powered by Groq</p>
           </div>
         </div>
         <button
           onClick={clearChat}
           className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-xl transition"
-          style={{ color: 'var(--text-secondary)', background: 'var(--surface-secondary)' }}>
-          <Plus className="w-3.5 h-3.5" /> Nova conversa
+          style={{ color: 'var(--text-secondary)', background: 'var(--surface-secondary)' }}
+          title="Nova conversa">
+          {messages.length > 1
+            ? <><Trash2 className="w-3.5 h-3.5" /> Limpar</>
+            : <><Plus className="w-3.5 h-3.5" /> Nova</>}
         </button>
       </div>
 
-      {/* ── Messages ── */}
+      {/* Messages */}
       <div className="flex-1 overflow-y-auto space-y-4 pb-3">
-
-        {/* Suggestions (show only if only the greeting) */}
         {messages.length === 1 && (
           <div className="pt-1">
             <p className="text-xs font-medium mb-2.5" style={{ color: 'var(--text-tertiary)' }}>
@@ -194,15 +235,9 @@ export default function ChatPage() {
             </p>
             <div className="flex flex-wrap gap-2">
               {SUGGESTIONS.map(s => (
-                <button
-                  key={s}
-                  onClick={() => sendMessage(s)}
+                <button key={s} onClick={() => sendMessage(s)}
                   className="text-xs px-3 py-1.5 rounded-xl border font-medium transition active:scale-95"
-                  style={{
-                    borderColor: 'var(--border)',
-                    color: 'var(--text-secondary)',
-                    background: 'var(--surface)',
-                  }}>
+                  style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)', background: 'var(--surface)' }}>
                   {s}
                 </button>
               ))}
@@ -215,7 +250,7 @@ export default function ChatPage() {
         ))}
 
         {loading && (
-          <div className="flex gap-2.5 flex-row">
+          <div className="flex gap-2.5">
             <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
               style={{ background: 'var(--surface-secondary)' }}>
               <Bot className="w-3.5 h-3.5" style={{ color: 'var(--text-secondary)' }} />
@@ -231,13 +266,10 @@ export default function ChatPage() {
         <div ref={bottomRef} />
       </div>
 
-      {/* ── Input ── */}
+      {/* Input */}
       <div className="flex-shrink-0 pt-3">
-        <div className="flex items-end gap-2 rounded-2xl border p-2 transition-shadow focus-within:shadow-md"
-          style={{
-            background: 'var(--surface)',
-            borderColor: 'var(--border)',
-          }}>
+        <div className="flex items-end gap-2 rounded-2xl border p-2"
+          style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
           <textarea
             ref={inputRef}
             value={input}
@@ -251,11 +283,7 @@ export default function ChatPage() {
             rows={1}
             disabled={loading}
             className="flex-1 resize-none bg-transparent text-sm outline-none py-1 px-1 leading-relaxed"
-            style={{
-              color: 'var(--text-primary)',
-              maxHeight: 120,
-              minHeight: 36,
-            }}
+            style={{ color: 'var(--text-primary)', maxHeight: 120, minHeight: 36 }}
           />
           <button
             onClick={() => sendMessage(input)}
@@ -264,8 +292,7 @@ export default function ChatPage() {
             style={{ background: primaryColor }}>
             {loading
               ? <Loader2 className="w-4 h-4 text-white animate-spin" />
-              : <Send className="w-4 h-4 text-white" />
-            }
+              : <Send className="w-4 h-4 text-white" />}
           </button>
         </div>
         <p className="text-center text-[10px] mt-2" style={{ color: 'var(--text-tertiary)' }}>

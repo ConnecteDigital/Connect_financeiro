@@ -16,118 +16,134 @@ function addDays(date: string, days: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-const TOOLS: Groq.Chat.ChatCompletionTool[] = [
-  {
-    type: 'function',
-    function: {
-      name: 'criar_chamado',
-      description: 'Cria um novo chamado/atendimento no sistema. Use quando o usuário pedir para criar, lançar ou registrar um chamado, cliente ou atendimento.',
-      parameters: {
-        type: 'object',
-        properties: {
-          contact_name: { type: 'string', description: 'Nome do cliente ou contato' },
-          service_category: { type: 'string', description: 'Categoria do serviço. Valores válidos: Desentupimento, Hidrojateamento, Limpeza, Sucção, Aplicação de CO2, Reclamação, Outros' },
-          status: { type: 'string', description: 'Status: "imediato" (atendimento agora), "agendado" (com data/hora marcadas), "aprovado" (aprovado para execução)' },
-          scheduled_date: { type: 'string', description: 'Data do agendamento no formato YYYY-MM-DD. Obrigatório quando status=agendado.' },
-          scheduled_time: { type: 'string', description: 'Hora no formato HH:MM (ex: 14:30). Usar quando status=agendado.' },
-          notes: { type: 'string', description: 'Observações ou detalhes adicionais' },
-          driver: { type: 'string', description: 'Nome do técnico responsável' },
-          call_address: { type: 'string', description: 'Endereço do atendimento' },
-          call_neighborhood: { type: 'string', description: 'Bairro' },
-          call_city: { type: 'string', description: 'Cidade' },
-          contact_phone: { type: 'string', description: 'Telefone do cliente' },
-          solicitante: { type: 'string', description: 'Nome de quem fez a solicitação/ligou' },
+const ORIGIN_LABELS: Record<string, string> = {
+  site_lider: 'Site Líder',
+  site_poa: 'Site POA',
+  site_millenium: 'Site Millenium',
+  site_praja: 'Site Pra Já',
+  indicacao: 'Indicação',
+  terceirizado: 'Terceirizado',
+}
+
+function buildTools(origins: string[]): Groq.Chat.ChatCompletionTool[] {
+  const originDesc = origins.length > 0
+    ? `Valores válidos: ${origins.map(o => `"${o}" (${ORIGIN_LABELS[o] ?? o})`).join(', ')}`
+    : 'Ex: indicacao, site_lider, terceirizado'
+
+  return [
+    {
+      type: 'function',
+      function: {
+        name: 'criar_chamado',
+        description: 'Cria um novo chamado/atendimento no sistema. SEMPRE pergunte a origem e o telefone antes de criar, se não foram informados.',
+        parameters: {
+          type: 'object',
+          properties: {
+            contact_name: { type: 'string', description: 'Nome do cliente ou contato' },
+            service_category: { type: 'string', description: 'Categoria: Desentupimento, Hidrojateamento, Limpeza, Sucção, Aplicação de CO2, Reclamação, Outros' },
+            status: { type: 'string', description: '"imediato" (atendimento agora), "agendado" (com data/hora), "aprovado" (aguardando OS)' },
+            origin: { type: 'string', description: `Origem do chamado. ${originDesc}` },
+            scheduled_date: { type: 'string', description: 'Data YYYY-MM-DD. Obrigatório quando status=agendado.' },
+            scheduled_time: { type: 'string', description: 'Hora HH:MM. Usar quando status=agendado.' },
+            notes: { type: 'string', description: 'Observações ou detalhes adicionais' },
+            driver: { type: 'string', description: 'Nome do técnico responsável' },
+            call_address: { type: 'string', description: 'Endereço do atendimento' },
+            call_neighborhood: { type: 'string', description: 'Bairro' },
+            call_city: { type: 'string', description: 'Cidade' },
+            contact_phone: { type: 'string', description: 'Telefone do cliente' },
+            solicitante: { type: 'string', description: 'Nome de quem ligou/solicitou' },
+          },
+          required: ['contact_name', 'service_category', 'status', 'origin'],
         },
-        required: ['contact_name', 'service_category', 'status'],
       },
     },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'listar_chamados',
-      description: 'Lista os chamados recentes do sistema. Use quando o usuário perguntar sobre chamados, atendimentos ou quiser ver o que tem registrado.',
-      parameters: {
-        type: 'object',
-        properties: {
-          status: { type: 'string', description: 'Filtrar por status: imediato, agendado, aprovado, nao_aprovou, cancelado, nao_quis_visita. Omitir para todos.' },
-          limit: { type: 'number', description: 'Quantidade a retornar (padrão: 5, máximo: 20)' },
+    {
+      type: 'function',
+      function: {
+        name: 'listar_chamados',
+        description: 'Lista chamados recentes. Use quando o usuário perguntar sobre chamados ou atendimentos.',
+        parameters: {
+          type: 'object',
+          properties: {
+            status: { type: 'string', description: 'Filtrar: imediato, agendado, aprovado, nao_aprovou, cancelado, nao_quis_visita. Omitir para todos.' },
+            limit: { type: 'number', description: 'Quantidade (padrão 5, máximo 20)' },
+          },
+          required: [],
         },
-        required: [],
       },
     },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'criar_saida',
-      description: 'Lança uma despesa/saída financeira. Use quando o usuário quiser registrar gasto, despesa, conta a pagar, compra ou saída.',
-      parameters: {
-        type: 'object',
-        properties: {
-          description: { type: 'string', description: 'Descrição da despesa' },
-          amount: { type: 'number', description: 'Valor em reais (número sem R$)' },
-          category: { type: 'string', description: 'Categoria (ex: combustível, material, alimentação, salário, aluguel, manutenção, outros)' },
-          due_date: { type: 'string', description: 'Data de vencimento YYYY-MM-DD' },
-          type: { type: 'string', description: 'Tipo: "fixo" (recorrente) ou "variavel" (pontual)' },
-          notes: { type: 'string', description: 'Observações adicionais' },
+    {
+      type: 'function',
+      function: {
+        name: 'criar_saida',
+        description: 'Lança uma despesa/saída financeira.',
+        parameters: {
+          type: 'object',
+          properties: {
+            description: { type: 'string', description: 'Descrição da despesa' },
+            amount: { type: 'number', description: 'Valor em reais (número sem R$)' },
+            category: { type: 'string', description: 'Categoria (combustível, material, alimentação, salário, aluguel, manutenção, outros)' },
+            due_date: { type: 'string', description: 'Data de vencimento YYYY-MM-DD' },
+            type: { type: 'string', description: '"fixo" (recorrente) ou "variavel" (pontual)' },
+            notes: { type: 'string', description: 'Observações adicionais' },
+          },
+          required: ['description', 'amount', 'category', 'due_date', 'type'],
         },
-        required: ['description', 'amount', 'category', 'due_date', 'type'],
       },
     },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'resumo_financeiro',
-      description: 'Retorna resumo financeiro com receitas, despesas e chamados. Use quando o usuário perguntar sobre finanças, receitas, quanto ganhou, relatório ou desempenho.',
-      parameters: {
-        type: 'object',
-        properties: {
-          periodo: { type: 'string', description: 'Período: "hoje", "semana" (últimos 7 dias), "mes" (mês atual), "mes_passado"' },
+    {
+      type: 'function',
+      function: {
+        name: 'resumo_financeiro',
+        description: 'Retorna resumo financeiro. Use quando o usuário perguntar sobre receitas, despesas, desempenho ou relatório.',
+        parameters: {
+          type: 'object',
+          properties: {
+            periodo: { type: 'string', description: '"hoje", "semana" (7 dias), "mes" (mês atual), "mes_passado"' },
+          },
+          required: ['periodo'],
         },
-        required: ['periodo'],
       },
     },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'listar_a_receber',
-      description: 'Lista valores pendentes de recebimento. Use quando o usuário perguntar sobre a receber, inadimplência ou pagamentos pendentes.',
-      parameters: { type: 'object', properties: {}, required: [] },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'listar_saidas_pendentes',
-      description: 'Lista despesas/contas a pagar pendentes. Use quando o usuário perguntar sobre contas a pagar ou despesas pendentes.',
-      parameters: { type: 'object', properties: {}, required: [] },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'buscar_cliente',
-      description: 'Busca clientes pelo nome.',
-      parameters: {
-        type: 'object',
-        properties: {
-          nome: { type: 'string', description: 'Nome do cliente para buscar' },
-        },
-        required: ['nome'],
+    {
+      type: 'function',
+      function: {
+        name: 'listar_a_receber',
+        description: 'Lista valores pendentes de recebimento.',
+        parameters: { type: 'object', properties: {}, required: [] },
       },
     },
-  },
-]
+    {
+      type: 'function',
+      function: {
+        name: 'listar_saidas_pendentes',
+        description: 'Lista contas a pagar pendentes.',
+        parameters: { type: 'object', properties: {}, required: [] },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'buscar_cliente',
+        description: 'Busca clientes pelo nome.',
+        parameters: {
+          type: 'object',
+          properties: {
+            nome: { type: 'string', description: 'Nome para buscar' },
+          },
+          required: ['nome'],
+        },
+      },
+    },
+  ]
+}
 
 async function executeTool(
   name: string,
   args: Record<string, unknown>,
   supabase: Awaited<ReturnType<typeof createClient>>,
   tenantId: string,
-): Promise<unknown> {
+): Promise<{ result: unknown; callId?: string }> {
   const today = localToday()
 
   if (name === 'criar_chamado') {
@@ -138,6 +154,7 @@ async function executeTool(
         contact_name: args.contact_name,
         service_category: args.service_category,
         status: args.status,
+        origin: args.origin ?? null,
         date: today,
         scheduled_date: args.scheduled_date ?? null,
         scheduled_time: args.scheduled_time ?? null,
@@ -148,12 +165,14 @@ async function executeTool(
         call_city: args.call_city ?? null,
         contact_phone: args.contact_phone ?? null,
         solicitante: args.solicitante ?? null,
-        origin: 'chat_ia',
       })
       .select('id, call_number')
       .single()
-    if (error) return { erro: error.message }
-    return { sucesso: true, chamado_numero: data.call_number, id: data.id }
+    if (error) return { result: { erro: error.message } }
+    return {
+      result: { sucesso: true, chamado_numero: data.call_number, id: data.id },
+      callId: data.id,
+    }
   }
 
   if (name === 'listar_chamados') {
@@ -165,8 +184,8 @@ async function executeTool(
       .limit(limit)
     if (args.status) query = query.eq('status', args.status as string)
     const { data, error } = await query
-    if (error) return { erro: error.message }
-    return data
+    if (error) return { result: { erro: error.message } }
+    return { result: data }
   }
 
   if (name === 'criar_saida') {
@@ -184,8 +203,8 @@ async function executeTool(
       })
       .select('id, description, amount')
       .single()
-    if (error) return { erro: error.message }
-    return { sucesso: true, id: data.id, description: data.description, amount: data.amount }
+    if (error) return { result: { erro: error.message } }
+    return { result: { sucesso: true, id: data.id, description: data.description, amount: data.amount } }
   }
 
   if (name === 'resumo_financeiro') {
@@ -214,17 +233,21 @@ async function executeTool(
     const expenses = expensesRes.data ?? []
     const receita_bruta = orders.reduce((s, o) => s + (o.total_value || 0), 0)
     const total_despesas = expenses.reduce((s, e) => s + (e.amount || 0), 0)
-    const a_receber = orders.filter(o => ['pendente', 'pago_parcial'].includes(o.payment_status)).reduce((s, o) => s + (o.remaining_amount || o.total_value || 0), 0)
+    const a_receber = orders
+      .filter(o => ['pendente', 'pago_parcial'].includes(o.payment_status))
+      .reduce((s, o) => s + (o.remaining_amount || o.total_value || 0), 0)
     return {
-      periodo: `${startDate} a ${endDate}`,
-      total_chamados: calls.length,
-      aprovados: calls.filter(c => c.status === 'aprovado').length,
-      agendados: calls.filter(c => c.status === 'agendado').length,
-      nao_aprovados: calls.filter(c => c.status === 'nao_aprovou').length,
-      receita_bruta,
-      total_despesas,
-      receita_liquida: receita_bruta - total_despesas,
-      a_receber,
+      result: {
+        periodo: `${startDate} a ${endDate}`,
+        total_chamados: calls.length,
+        aprovados: calls.filter(c => c.status === 'aprovado').length,
+        agendados: calls.filter(c => c.status === 'agendado').length,
+        nao_aprovados: calls.filter(c => c.status === 'nao_aprovou').length,
+        receita_bruta,
+        total_despesas,
+        receita_liquida: receita_bruta - total_despesas,
+        a_receber,
+      },
     }
   }
 
@@ -235,8 +258,8 @@ async function executeTool(
       .in('payment_status', ['pendente', 'pago_parcial'])
       .order('remaining_due_date', { ascending: true })
       .limit(10)
-    if (error) return { erro: error.message }
-    return data
+    if (error) return { result: { erro: error.message } }
+    return { result: data }
   }
 
   if (name === 'listar_saidas_pendentes') {
@@ -246,8 +269,8 @@ async function executeTool(
       .eq('status', 'pendente')
       .order('due_date', { ascending: true })
       .limit(10)
-    if (error) return { erro: error.message }
-    return data
+    if (error) return { result: { erro: error.message } }
+    return { result: data }
   }
 
   if (name === 'buscar_cliente') {
@@ -256,11 +279,11 @@ async function executeTool(
       .select('id, name, phone, city, address')
       .ilike('name', `%${args.nome}%`)
       .limit(5)
-    if (error) return { erro: error.message }
-    return data
+    if (error) return { result: { erro: error.message } }
+    return { result: data }
   }
 
-  return { erro: 'Função desconhecida' }
+  return { result: { erro: 'Função desconhecida' } }
 }
 
 export async function POST(req: NextRequest) {
@@ -280,24 +303,44 @@ export async function POST(req: NextRequest) {
     if (!profile?.tenant_id) return NextResponse.json({ error: 'Perfil não encontrado' }, { status: 403 })
 
     const tenantId = profile.tenant_id
+
+    // Fetch tenant origins for the tools
+    const { data: tenantData } = await supabase
+      .from('tenants')
+      .select('call_origins')
+      .eq('id', tenantId)
+      .single()
+    const origins: string[] = tenantData?.call_origins ?? []
+
     const today = localToday()
 
+    const originsText = origins.length > 0
+      ? `Origens configuradas no sistema: ${origins.map(o => `${o} (${ORIGIN_LABELS[o] ?? o})`).join(', ')}`
+      : 'Origens comuns: indicacao, terceirizado'
+
     const systemPrompt = `Você é o Assistente IA do Connect Financeiro, sistema de gestão para empresas de desentupimento.
-Você ajuda a registrar chamados, lançar saídas, consultar finanças e ver relatórios usando as funções disponíveis.
 Sempre responda em português brasileiro, de forma clara e direta.
 
 Data de hoje: ${today}
-Quando o usuário disser "amanhã", use: ${addDays(today, 1)}
-Quando disser "depois de amanhã", use: ${addDays(today, 2)}
+Amanhã: ${addDays(today, 1)} | Depois de amanhã: ${addDays(today, 2)}
 
-Categorias de serviço válidas: Desentupimento, Hidrojateamento, Limpeza, Sucção, Aplicação de CO2, Reclamação, Outros
-Status de chamado: "imediato" (atendimento agora), "agendado" (com data/hora), "aprovado" (aguardando OS)
+${originsText}
 
-Regras:
-1. Use as funções para executar ações — nunca invente dados
-2. Após executar, confirme o que foi feito de forma concisa
-3. Formate valores como R$ X.XXX,XX
-4. Se faltar info essencial, pergunte apenas o necessário`
+Categorias de serviço: Desentupimento, Hidrojateamento, Limpeza, Sucção, Aplicação de CO2, Reclamação, Outros
+Status: "imediato" (agora), "agendado" (com data/hora), "aprovado" (aguardando OS)
+
+REGRAS IMPORTANTES para criar chamado:
+1. Se o usuário não informar a ORIGEM, pergunte: "Esse chamado veio de onde? (${origins.slice(0, 3).join(', ')}...)"
+2. Se o usuário não informar o TELEFONE, pergunte antes de criar
+3. Só crie o chamado depois de ter origem e telefone (ou o usuário disser que não tem)
+4. Após criar, confirme com o número do chamado gerado
+
+Outras regras:
+- Use as funções para executar ações — nunca invente dados
+- Formate valores como R$ X.XXX,XX
+- Se faltar info essencial, pergunte antes de executar`
+
+    const TOOLS = buildTools(origins)
 
     const messages: Groq.Chat.ChatCompletionMessageParam[] = [
       { role: 'system', content: systemPrompt },
@@ -319,7 +362,7 @@ Regras:
     if (toolCalls && toolCalls.length > 0) {
       const tc = toolCalls[0]
       const args = JSON.parse(tc.function.arguments) as Record<string, unknown>
-      const toolResult = await executeTool(tc.function.name, args, supabase, tenantId)
+      const { result: toolResult, callId } = await executeTool(tc.function.name, args, supabase, tenantId)
 
       const messagesWithTool: Groq.Chat.ChatCompletionMessageParam[] = [
         ...messages,
@@ -338,7 +381,7 @@ Regras:
       })
 
       const reply = response2.choices[0].message.content ?? 'Feito!'
-      return NextResponse.json({ reply, functionCalled: tc.function.name })
+      return NextResponse.json({ reply, functionCalled: tc.function.name, callId })
     }
 
     return NextResponse.json({ reply: assistantMessage.content ?? 'Como posso ajudar?' })
