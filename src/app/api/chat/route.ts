@@ -41,6 +41,10 @@ const ORIGIN_LABELS: Record<string, string> = {
 }
 
 function buildTools(origins: string[]): Groq.Chat.ChatCompletionTool[] {
+  const originKeys = origins.length > 0
+    ? `Chaves válidas (use EXATAMENTE uma delas): ${origins.map(o => `"${o}"`).join(', ')}`
+    : 'Ex: "indicacao", "terceirizado"'
+
   return [
     {
       type: 'function',
@@ -53,7 +57,7 @@ function buildTools(origins: string[]): Groq.Chat.ChatCompletionTool[] {
             contact_name: { type: 'string', description: 'Nome do cliente' },
             service_category: { type: 'string', description: 'Desentupimento, Hidrojateamento, Limpeza, Sucção, Aplicação de CO2, Reclamação, Outros' },
             status: { type: 'string', description: '"imediato", "agendado" ou "aprovado"' },
-            origin: { type: 'string', description: 'Valor EXATO que o usuário informou ao responder à pergunta de origem. NUNCA invente ou assuma — só preencha após o usuário ter respondido.' },
+            origin: { type: 'string', description: `Chave da origem respondida pelo usuário. ${originKeys}` },
             scheduled_date: { type: 'string', description: 'Data YYYY-MM-DD (quando agendado)' },
             scheduled_time: { type: 'string', description: 'Hora HH:MM (quando agendado)' },
             notes: { type: 'string', description: 'Observações' },
@@ -164,10 +168,19 @@ async function executeTool(
     if (!args.origin) {
       return { result: { erro: 'ORIGEM_OBRIGATORIA', instrucao: 'Você AINDA NÃO perguntou a origem ao usuário. Responda APENAS com a pergunta: "Esse chamado veio de onde?" e aguarde. Não crie o chamado.' } }
     }
-    // Reject if the model invented an origin not in the tenant's list
+    // Fuzzy-match origin: exact key → case-insensitive key → label match
     if (validOrigins.length > 0 && !validOrigins.includes(args.origin as string)) {
-      const list = validOrigins.map(o => `${ORIGIN_LABELS[o] ?? o} (${o})`).join(', ')
-      return { result: { erro: 'ORIGEM_INVALIDA', instrucao: `A origem "${args.origin}" não é válida. Origens disponíveis: ${list}. Pergunte ao usuário qual origem e aguarde a resposta.` } }
+      const lowerInput = (args.origin as string).toLowerCase().trim()
+      const matched = validOrigins.find(o =>
+        o.toLowerCase() === lowerInput ||
+        (ORIGIN_LABELS[o] ?? o).toLowerCase() === lowerInput
+      )
+      if (matched) {
+        args.origin = matched // fix key case
+      } else {
+        const list = validOrigins.map(o => `"${o}"`).join(', ')
+        return { result: { erro: 'ORIGEM_INVALIDA', instrucao: `A origem "${args.origin}" não existe. Chaves válidas: ${list}. Pergunte ao usuário qual origem e use a chave correta.` } }
+      }
     }
     const { data, error } = await supabase
       .from('calls')
@@ -243,6 +256,10 @@ async function executeTool(
   }
 
   if (name === 'deletar_chamado') {
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!UUID_RE.test(String(args.id ?? ''))) {
+      return { result: { erro: 'ID_INVALIDO', instrucao: 'Você precisa chamar buscar_chamados primeiro para obter o UUID real do chamado. NUNCA invente ou adivinhe o ID.' } }
+    }
     const { error } = await supabase
       .from('calls')
       .delete()

@@ -281,6 +281,20 @@ export default function ChatPage() {
           />
         ))}
 
+        {/* Aviso: resposta perdida ao navegar enquanto processava */}
+        {!loading && hydrated && messages.length > 1 && messages[messages.length - 1].role === 'user' && (
+          <div className="flex gap-2.5">
+            <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
+              style={{ background: 'var(--surface-secondary)' }}>
+              <Bot className="w-3.5 h-3.5" style={{ color: 'var(--text-secondary)' }} />
+            </div>
+            <div className="px-3.5 py-2.5 rounded-2xl rounded-bl-md text-sm"
+              style={{ background: 'var(--surface)', boxShadow: 'var(--shadow-sm)', color: 'var(--text-tertiary)' }}>
+              A resposta foi perdida ao navegar. Envie sua mensagem novamente.
+            </div>
+          </div>
+        )}
+
         {loading && (
           <div className="flex gap-2.5">
             <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
