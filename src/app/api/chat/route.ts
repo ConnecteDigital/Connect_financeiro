@@ -421,40 +421,54 @@ FLUXO CORRETO — UMA pergunta por turno, nesta ordem:
       temperature: 0.2,
     })
 
-    const assistantMessage = response.choices[0].message
-    const toolCalls = assistantMessage.tool_calls
+    // Loop de tool calls: permite múltiplas ações em sequência (ex: deletar 2 chamados)
+    let currentMessages = [...messages]
+    let assistantMessage = response.choices[0].message
+    let lastFunctionCalled = ''
+    let lastCallId: string | undefined
+    const MAX_TOOL_ROUNDS = 6
 
-    if (toolCalls && toolCalls.length > 0) {
+    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+      const toolCalls = assistantMessage.tool_calls
+      if (!toolCalls || toolCalls.length === 0) break
+
       const tc = toolCalls[0]
       let args: Record<string, unknown> = {}
       try {
         args = JSON.parse(tc.function.arguments) as Record<string, unknown>
       } catch {
-        return NextResponse.json({ reply: 'Ocorreu um erro ao processar o comando. Tente novamente.' })
+        break
       }
 
       const { result: toolResult, callId } = await executeTool(tc.function.name, args, supabase, tenantId)
+      lastFunctionCalled = tc.function.name
+      if (callId) lastCallId = callId
 
-      const messagesWithTool: Groq.Chat.ChatCompletionMessageParam[] = [
-        ...messages,
+      currentMessages = [
+        ...currentMessages,
         assistantMessage,
-        { role: 'tool', tool_call_id: tc.id, content: JSON.stringify(toolResult) },
+        { role: 'tool' as const, tool_call_id: tc.id, content: JSON.stringify(toolResult) },
       ]
 
-      const response2 = await groq.chat.completions.create({
+      const nextResponse = await groq.chat.completions.create({
         model: MODEL,
-        messages: messagesWithTool,
+        messages: currentMessages,
+        tools: TOOLS,
+        tool_choice: 'auto',
         temperature: 0.2,
       })
 
-      const reply = response2.choices[0].message.content ?? 'Feito!'
-      const quickReplies = detectQuickReplies(reply, origins)
-      return NextResponse.json({ reply, functionCalled: tc.function.name, callId, quickReplies })
+      assistantMessage = nextResponse.choices[0].message
     }
 
-    const reply = assistantMessage.content ?? 'Como posso ajudar?'
+    const reply = assistantMessage.content ?? 'Feito!'
     const quickReplies = detectQuickReplies(reply, origins)
-    return NextResponse.json({ reply, quickReplies })
+    return NextResponse.json({
+      reply,
+      functionCalled: lastFunctionCalled || undefined,
+      callId: lastCallId,
+      quickReplies,
+    })
   } catch (err: unknown) {
     console.error('Chat error:', err)
     const msg = err instanceof Error ? err.message : 'Erro interno'
