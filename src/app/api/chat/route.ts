@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Groq from 'groq-sdk'
 import { createClient } from '@/lib/supabase/server'
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY ?? '' })
+const groq = new Groq({ apiKey: process.env.GEMINI_API_KEY ?? '' })
 const MODEL = 'llama-3.3-70b-versatile'
 
 function localToday(): string {
@@ -268,8 +268,8 @@ export async function POST(req: NextRequest) {
     const { message, history = [] } = await req.json()
     if (!message?.trim()) return NextResponse.json({ error: 'Mensagem vazia' }, { status: 400 })
 
-    if (!process.env.GROQ_API_KEY) {
-      return NextResponse.json({ error: 'GROQ_API_KEY não configurada' }, { status: 500 })
+    if (!process.env.GEMINI_API_KEY) {
+      return NextResponse.json({ error: 'API key não configurada' }, { status: 500 })
     }
 
     const supabase = await createClient()
