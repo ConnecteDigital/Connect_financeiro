@@ -50,24 +50,31 @@ function buildTools(origins: string[]): Groq.Chat.ChatCompletionTool[] {
       type: 'function',
       function: {
         name: 'criar_chamado',
-        description: 'Cria um chamado. SÓ chame após o usuário ter respondido explicitamente à pergunta sobre origem em uma mensagem anterior. NUNCA chame se ainda não perguntou sobre origem.',
+        description: 'Cria um chamado (agendado ou aprovado). Para aprovado, também cria a Ordem de Serviço com valor e forma de pagamento.',
         parameters: {
           type: 'object',
           properties: {
-            contact_name: { type: 'string', description: 'Nome do cliente' },
+            contact_name: { type: 'string', description: 'Nome do cliente (nunca use placeholder)' },
             service_category: { type: 'string', description: 'Desentupimento, Hidrojateamento, Limpeza, Sucção, Aplicação de CO2, Reclamação, Outros' },
-            status: { type: 'string', description: '"imediato", "agendado" ou "aprovado"' },
-            origin: { type: 'string', description: `Chave da origem respondida pelo usuário. ${originKeys}` },
-            scheduled_date: { type: 'string', description: 'Data YYYY-MM-DD (quando agendado)' },
-            scheduled_time: { type: 'string', description: 'Hora HH:MM (quando agendado)' },
-            notes: { type: 'string', description: 'Observações' },
-            driver: { type: 'string', description: 'Técnico responsável' },
+            status: { type: 'string', description: '"agendado" ou "aprovado"' },
+            origin: { type: 'string', description: `Chave da origem confirmada pelo usuário. ${originKeys}` },
+            scheduled_date: { type: 'string', description: 'Data YYYY-MM-DD (obrigatório para agendado)' },
+            scheduled_time: { type: 'string', description: 'Hora HH:MM (obrigatório para agendado)' },
+            driver: { type: 'string', description: 'Técnico/motorista responsável' },
+            solicitante: { type: 'string', description: 'Quem ligou/solicitou' },
+            contact_phone: { type: 'string', description: 'Telefone' },
+            contact_cpf: { type: 'string', description: 'CPF ou CNPJ' },
             call_address: { type: 'string', description: 'Endereço' },
             call_neighborhood: { type: 'string', description: 'Bairro' },
             call_city: { type: 'string', description: 'Cidade' },
-            contact_phone: { type: 'string', description: 'Telefone (opcional)' },
-            contact_cpf: { type: 'string', description: 'CPF ou CNPJ (opcional)' },
-            solicitante: { type: 'string', description: 'Quem ligou/solicitou' },
+            notes: { type: 'string', description: 'Observações do chamado' },
+            // Campos extras para status "aprovado" — geram a OS
+            total_value: { type: 'number', description: 'Valor total do serviço em R$ (aprovado)' },
+            payment_method: { type: 'string', description: 'Forma de pagamento: dinheiro, cartao, pix, boleto (aprovado)' },
+            payment_status: { type: 'string', description: 'Status de pagamento: pago, pago_parcial, pendente (aprovado, padrão: pendente)' },
+            execution_type: { type: 'string', description: 'Tipo de execução: proprio, terceirizado, parceiro (aprovado, padrão: proprio)' },
+            vehicle: { type: 'string', description: 'Veículo utilizado (aprovado, opcional)' },
+            os_notes: { type: 'string', description: 'Observações da OS (aprovado, opcional)' },
           },
           required: ['contact_name', 'service_category', 'status', 'origin'],
         },
@@ -222,6 +229,25 @@ async function executeTool(
       .select('id, call_number')
       .single()
     if (error) return { result: { erro: error.message } }
+
+    // For "aprovado" status, also create the service order
+    if (args.status === 'aprovado' && args.total_value != null) {
+      const totalValue = Number(args.total_value) || 0
+      await supabase.from('service_orders').insert({
+        tenant_id: tenantId,
+        call_id: data.id,
+        date: today,
+        total_value: totalValue,
+        remaining_amount: totalValue,
+        payment_method: args.payment_method ?? null,
+        payment_status: (args.payment_status as string) ?? 'pendente',
+        execution_type: (args.execution_type as string) ?? 'proprio',
+        driver: args.driver ?? null,
+        vehicle: args.vehicle ?? null,
+        notes: args.os_notes ?? args.notes ?? null,
+      })
+    }
+
     return { result: { sucesso: true, chamado_numero: data.call_number, id: data.id }, callId: data.id }
   }
 
@@ -471,20 +497,27 @@ Mapeamento de serviços (use SEMPRE o nome exato, nunca coloque em notes):
 ═══════════════════════════════
 CRIAR CHAMADO — FLUXO INTELIGENTE
 ═══════════════════════════════
-CAMPOS OBRIGATÓRIOS: nome do cliente | origem | tipo de serviço | data e horário (se agendado)
-CAMPOS OPCIONAIS: técnico responsável | solicitante | telefone | CPF/CNPJ | endereço | observações
 
-REGRA 1 — Analise a mensagem do usuário e identifique quais obrigatórios JÁ foram informados.
-REGRA 2 — Se faltar algum obrigatório, pergunte TODOS os que faltam em uma única mensagem.
-  Exemplo: "Para criar o chamado, preciso de: nome do cliente, origem e tipo de serviço."
-REGRA 3 — Assim que tiver TODOS os obrigatórios, pergunte: "Deseja adicionar informações opcionais? (técnico, solicitante, telefone, CPF/CNPJ, endereço, observações)"
-REGRA 4 — Após a resposta do usuário sobre opcionais (sim ou não), CRIE o chamado com criar_chamado.
+── CHAMADO AGENDADO ──
+Obrigatórios: nome do cliente | origem | tipo de serviço | data e hora
+Opcionais: técnico | solicitante | telefone | CPF/CNPJ | endereço | observações
+
+── CHAMADO APROVADO ──
+Obrigatórios: nome do cliente | origem | tipo de serviço | valor do serviço (R$) | forma de pagamento (dinheiro/cartão/PIX/boleto)
+Opcionais: técnico/motorista | veículo | solicitante | telefone | CPF/CNPJ | endereço | tipo de execução (próprio/terceirizado/parceiro) | status de pagamento (pago/pago_parcial/pendente) | observações
+
+REGRA 1 — Analise a mensagem e identifique quais obrigatórios JÁ foram informados.
+REGRA 2 — Se faltar algum obrigatório, pergunte TODOS os que faltam em UMA só mensagem.
+  Exemplo agendado: "Para criar o chamado, ainda preciso de: nome do cliente e origem."
+  Exemplo aprovado: "Para criar o chamado aprovado, ainda preciso de: valor do serviço e forma de pagamento."
+REGRA 3 — Com TODOS os obrigatórios em mãos, pergunte em uma mensagem: "Deseja adicionar informações opcionais? (técnico, telefone, endereço, etc.)"
+REGRA 4 — Após resposta sobre opcionais (sim ou não), CRIE o chamado com criar_chamado.
 
 PROIBIDO:
-- Criar chamado sem todos os campos obrigatórios confirmados pelo usuário
+- Criar chamado sem todos os obrigatórios confirmados pelo usuário
 - Inventar ou assumir origem sem o usuário ter dito explicitamente
 - Preencher contact_name com "Cliente" ou qualquer placeholder
-- Perguntar campos um por um se vários estão faltando ao mesmo tempo
+- Perguntar campos um por um quando vários estão faltando
 
 ═══════════════════════════════
 OUTRAS AÇÕES
