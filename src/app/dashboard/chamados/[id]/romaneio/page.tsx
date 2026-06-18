@@ -71,8 +71,15 @@ function RomaneioContent({ id }: { id: string }) {
   if (!call) return <div className="flex items-center justify-center h-screen text-slate-500">Chamado não encontrado.</div>
 
   const companyName = tenant?.name ?? 'Empresa'
-  const logoUrl = tenant?.logo_url
-  const primaryColor = tenant?.primary_color ?? '#f97316'
+  const origin = call.origin as string | null
+  const ORIGIN_LABELS: Record<string, string> = {
+    site_lider: 'Site Líder', site_poa: 'Site POA', site_millenium: 'Site Millenium',
+    site_praja: 'Site Pra Já', indicacao: 'Indicação', terceirizado: 'Terceirizado',
+  }
+  const originBranding = origin ? (tenant?.origin_branding?.[origin] ?? null) : null
+  const siteName = origin ? (ORIGIN_LABELS[origin] ?? origin) : null
+  const logoUrl = originBranding?.logo_url ?? tenant?.logo_url
+  const primaryColor = originBranding?.color ?? tenant?.primary_color ?? '#f97316'
   const rgb = hexToRgb(primaryColor)
 
   const client = call.client
@@ -147,7 +154,8 @@ function RomaneioContent({ id }: { id: string }) {
                 <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>
                   Romaneio
                 </p>
-                <p style={{ color: '#fff', fontWeight: 800, fontSize: 16, lineHeight: 1.15 }}>{companyName}</p>
+                <p style={{ color: '#fff', fontWeight: 800, fontSize: 16, lineHeight: 1.15 }}>{siteName ?? companyName}</p>
+                {siteName && <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: 11, marginTop: 1 }}>{companyName}</p>}
               </div>
             </div>
 

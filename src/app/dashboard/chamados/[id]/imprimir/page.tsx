@@ -65,9 +65,17 @@ function ImprimirContent({ id }: { id: string }) {
   if (!so) return <div className="flex items-center justify-center h-screen text-slate-500">Este chamado não possui ordem de serviço.</div>
 
   const companyName = tenant?.name ?? 'Empresa'
-  const logoUrl = tenant?.logo_url
   const cnpj = tenant?.cnpj ?? ''
   const tenantPhone = tenant?.phone ?? ''
+  const ORIGIN_LABELS: Record<string, string> = {
+    site_lider: 'Site Líder', site_poa: 'Site POA', site_millenium: 'Site Millenium',
+    site_praja: 'Site Pra Já', indicacao: 'Indicação', terceirizado: 'Terceirizado',
+  }
+  const origin = call.origin as string | null
+  const originBranding = origin ? (tenant?.origin_branding?.[origin] ?? null) : null
+  const siteName = origin ? (ORIGIN_LABELS[origin] ?? origin) : null
+  const logoUrl = originBranding?.logo_url ?? tenant?.logo_url
+  const brandColor = originBranding?.color ?? null
 
   const client = call.client
   const clientName = client?.name ?? call.contact_name ?? '—'
@@ -114,18 +122,19 @@ function ImprimirContent({ id }: { id: string }) {
         {/* ── Header ── */}
         <div style={{ display: 'flex', border: B }}>
           {/* Logo */}
-          <div style={{ width: 120, borderRight: B, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 8, flexShrink: 0 }}>
+          <div style={{ width: 120, borderRight: B, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 8, flexShrink: 0, background: brandColor ? `${brandColor}18` : undefined }}>
             {logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={logoUrl} alt={companyName} loading="eager"
+              <img src={logoUrl} alt={siteName ?? companyName} loading="eager"
                 style={{ maxWidth: 100, maxHeight: 64, objectFit: 'contain' }} />
             ) : (
-              <p style={{ fontWeight: 900, fontSize: 16, textAlign: 'center' }}>{companyName}</p>
+              <p style={{ fontWeight: 900, fontSize: 16, textAlign: 'center', color: brandColor ?? '#000' }}>{siteName ?? companyName}</p>
             )}
           </div>
           {/* Company info */}
           <div style={{ flex: 1, padding: '8px 12px', textAlign: 'center', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-            {logoUrl && <p style={{ fontWeight: 700, fontSize: 13 }}>{companyName}</p>}
+            <p style={{ fontWeight: 700, fontSize: 13, color: brandColor ?? '#000' }}>{siteName ?? companyName}</p>
+            {siteName && <p style={{ fontSize: 11, color: '#666' }}>{companyName}</p>}
             {cnpj && <p style={{ fontSize: 11 }}>CNPJ: {cnpj}</p>}
             {tenantPhone && <p style={{ fontSize: 11 }}>Fone: {tenantPhone}</p>}
             {!cnpj && !tenantPhone && <p style={{ fontSize: 11 }}>Atendimento 24h · Domingos e Feriados</p>}
@@ -133,7 +142,7 @@ function ImprimirContent({ id }: { id: string }) {
           {/* OS number */}
           <div style={{ width: 130, borderLeft: B, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 8, flexShrink: 0 }}>
             <p style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Ordem de Serviço</p>
-            <p style={{ fontSize: 28, fontWeight: 900, lineHeight: 1.1 }}>{so.os_number}</p>
+            <p style={{ fontSize: 28, fontWeight: 900, lineHeight: 1.1, color: brandColor ?? '#000' }}>{so.os_number}</p>
             <p style={{ fontSize: 10 }}>{osDate}</p>
           </div>
         </div>
@@ -173,7 +182,7 @@ function ImprimirContent({ id }: { id: string }) {
         {/* ── Service items ── */}
         <table style={{ width: '100%', borderCollapse: 'collapse', borderTop: 'none' }}>
           <thead>
-            <tr style={{ background: '#f3f4f6' }}>
+            <tr style={{ background: brandColor ? `${brandColor}22` : '#f3f4f6' }}>
               <th style={{ border: B, padding: '3px 5px', textAlign: 'left', width: 50 }}>Quant.</th>
               <th style={{ border: B, padding: '3px 5px', textAlign: 'left' }}>Descrição</th>
               <th style={{ border: B, padding: '3px 5px', textAlign: 'right', width: 90 }}>R$ Unit.</th>
@@ -251,7 +260,7 @@ function ImprimirContent({ id }: { id: string }) {
             <TotalRow label="Total dos Serviços" value={BRL(totalServicos)} />
             <TotalRow label="Descontos" value={desconto > 0 ? `- ${BRL(desconto)}` : ''} />
             <TotalRow label="Impostos" value={impostos > 0 ? BRL(impostos) : ''} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 8px', background: '#111', color: '#fff', fontWeight: 900, fontSize: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 8px', background: brandColor ?? '#111', color: '#fff', fontWeight: 900, fontSize: 12 }}>
               <span>VALOR TOTAL</span>
               <span>{BRL(valorTotal)}</span>
             </div>
