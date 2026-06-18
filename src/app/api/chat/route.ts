@@ -155,17 +155,26 @@ function buildTools(origins: string[]): Groq.Chat.ChatCompletionTool[] {
   ]
 }
 
+function historyHasOriginQuestion(history: { role: string; content: string }[]): boolean {
+  const keywords = ['veio de onde', 'qual a origem', 'origem do chamado', 'de onde veio', 'informar a origem']
+  return history.some(m =>
+    m.role === 'assistant' &&
+    keywords.some(kw => (m.content ?? '').toLowerCase().includes(kw))
+  )
+}
+
 async function executeTool(
   name: string,
   args: Record<string, unknown>,
   supabase: Awaited<ReturnType<typeof createClient>>,
   tenantId: string,
   validOrigins: string[],
+  conversationHistory: { role: string; content: string }[],
 ): Promise<{ result: unknown; callId?: string }> {
   const today = localToday()
 
   if (name === 'criar_chamado') {
-    if (!args.origin) {
+    if (!args.origin || !historyHasOriginQuestion(conversationHistory)) {
       return { result: { erro: 'ORIGEM_OBRIGATORIA', instrucao: 'Você AINDA NÃO perguntou a origem ao usuário. Responda APENAS com a pergunta: "Esse chamado veio de onde?" e aguarde. Não crie o chamado.' } }
     }
     // Fuzzy-match origin: exact key → case-insensitive key → label match
@@ -495,7 +504,7 @@ Formate: R$ X.XXX,XX | Após criar chamado, informe o número (ex: CH-00051)`
         break
       }
 
-      const { result: toolResult, callId } = await executeTool(tc.function.name, args, supabase, tenantId, origins)
+      const { result: toolResult, callId } = await executeTool(tc.function.name, args, supabase, tenantId, origins, trimmedHistory as { role: string; content: string }[])
       lastFunctionCalled = tc.function.name
       if (callId) lastCallId = callId
 
