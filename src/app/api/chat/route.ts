@@ -525,11 +525,16 @@ export async function POST(req: NextRequest) {
     })
 
   } catch (err: unknown) {
-    console.error('Chat error:', err)
-    const status = (err as { status?: number })?.status
+    const gemErr = err as { status?: number; message?: string; statusText?: string }
+    console.error('Chat error status:', gemErr?.status, '| msg:', gemErr?.message)
+    const status = gemErr?.status
     if (status === 429) {
       return NextResponse.json({ error: 'Limite de uso atingido. Aguarde alguns minutos.' }, { status: 429 })
     }
-    return NextResponse.json({ error: err instanceof Error ? err.message : 'Erro interno' }, { status: 500 })
+    if (status === 400) {
+      return NextResponse.json({ error: `Chave de API inválida ou projeto sem faturamento configurado. (${gemErr?.message ?? ''})` }, { status: 500 })
+    }
+    const msg = gemErr?.message ?? (err instanceof Error ? err.message : 'Erro interno')
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 }
