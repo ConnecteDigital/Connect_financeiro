@@ -447,6 +447,18 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
       <BottomNav onMoreClick={() => setMoreOpen(o => !o)} moreOpen={moreOpen} visible={navVisible} />
       <MoreDrawer open={moreOpen} onClose={() => setMoreOpen(false)} />
 
+      {/* Connect IA floating button — visible on desktop (mobile uses bottom nav) */}
+      {!isPrintPage && (
+        <Link
+          href="/dashboard/chat"
+          className="hidden lg:flex fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full items-center justify-center shadow-2xl transition-all hover:scale-105 active:scale-95"
+          style={{ background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)', boxShadow: '0 8px 24px rgba(99,102,241,0.45)' }}
+          aria-label="Connect IA"
+          title="Connect IA">
+          <Sparkles className="w-6 h-6 text-white" />
+        </Link>
+      )}
+
       {showOnboarding && tenant && (
         <OnboardingWizard
           tenantId={tenant.id}

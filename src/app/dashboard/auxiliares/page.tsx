@@ -152,13 +152,46 @@ export default function ComissoesPage() {
       })
     }
 
+    // Check which legacy orders have already been paid via expenses
+    const legacyOrderIds = (legacyRows ?? []).map((r: any) => r.id)
+    let paidLegacyOrderIds = new Set<string>()
+    if (legacyOrderIds.length > 0) {
+      const { data: paidExpenses } = await supabase
+        .from('expenses')
+        .select('source_service_order_id')
+        .in('source_service_order_id', legacyOrderIds)
+        .eq('status', 'pago')
+      for (const e of (paidExpenses ?? [])) {
+        if (e.source_service_order_id) paidLegacyOrderIds.add(e.source_service_order_id)
+      }
+      // Also check by auxiliary_id + paid_date in period (fallback for older payments)
+      const auxIds = [...new Set((legacyRows ?? []).map((r: any) => r.auxiliary?.id).filter(Boolean))]
+      if (auxIds.length > 0) {
+        const { data: paidByAux } = await supabase
+          .from('expenses')
+          .select('auxiliary_id, paid_date')
+          .in('auxiliary_id', auxIds)
+          .eq('status', 'pago')
+          .gte('paid_date', startDate)
+          .lte('paid_date', endDate)
+        const paidAuxIds = new Set((paidByAux ?? []).map((e: any) => e.auxiliary_id))
+        for (const row of (legacyRows ?? [])) {
+          if (row.auxiliary?.id && paidAuxIds.has(row.auxiliary.id)) {
+            paidLegacyOrderIds.add(row.id)
+          }
+        }
+      }
+    }
+
     for (const row of (legacyRows ?? [])) {
       const aux = ensureAux(row.auxiliary)
       if (!aux) continue
       if (aux.orders.some(o => o.order_id === row.id)) continue
       const amount = Number(row.auxiliary_value ?? 0)
+      const paid = paidLegacyOrderIds.has(row.id)
       aux.total_earned += amount
-      aux.unpaid_earned += amount
+      if (paid) aux.paid_earned += amount
+      else aux.unpaid_earned += amount
       aux.call_count += 1
       aux.orders.push({
         order_id: row.id,
@@ -168,7 +201,7 @@ export default function ComissoesPage() {
         amount,
         contact_name: (row.call as any)?.contact_name ?? '—',
         client_name: (row.call as any)?.clients?.name,
-        paid: false,
+        paid,
       })
     }
 
@@ -208,7 +241,40 @@ export default function ComissoesPage() {
           .in('id', soaIds)
       }
 
-      // 2. Find and mark related expenses as paid (by auxiliary_id)
+      // 2. Handle legacy orders (no SOA): create one expense per order, using
+      //    source_service_order_id as dedup key so we never create duplicates
+      const legacyUnpaid = unpaidOrders.filter(o => !o.soa_id)
+      if (legacyUnpaid.length > 0) {
+        const { getMyTenantId } = await import('@/lib/db/tenant')
+        const tenant_id = await getMyTenantId()
+        const legacyOrderIds = legacyUnpaid.map(o => o.order_id)
+
+        // Check which legacy orders already have a paid expense (avoid duplicates)
+        const { data: alreadyPaid } = await supabase
+          .from('expenses')
+          .select('source_service_order_id')
+          .in('source_service_order_id', legacyOrderIds)
+          .eq('status', 'pago')
+        const alreadyPaidIds = new Set((alreadyPaid ?? []).map((e: any) => e.source_service_order_id))
+
+        const toCreate = legacyUnpaid.filter(o => !alreadyPaidIds.has(o.order_id))
+        for (const order of toCreate) {
+          await supabase.from('expenses').insert({
+            tenant_id,
+            description: `Comissão ${aux.name} — ${order.os_number}`,
+            category: 'Pessoal',
+            amount: order.amount,
+            type: 'avulso',
+            status: 'pago',
+            due_date: paymentDate,
+            paid_date: paymentDate,
+            auxiliary_id: aux.id,
+            source_service_order_id: order.order_id,
+          })
+        }
+      }
+
+      // 3. For SOA orders, also mark any pending expenses by auxiliary_id as paid
       const { data: expByAux } = await supabase
         .from('expenses')
         .select('id')
@@ -216,46 +282,11 @@ export default function ComissoesPage() {
         .eq('status', 'pendente')
         .gte('due_date', startDate)
         .lte('due_date', endDate)
-
       if (expByAux && expByAux.length > 0) {
         await supabase
           .from('expenses')
           .update({ status: 'pago', paid_date: paymentDate })
           .in('id', expByAux.map(e => e.id))
-      } else {
-        // Fallback: find by source_service_order_id
-        const orderIds = unpaidOrders.map(o => o.order_id)
-        if (orderIds.length > 0) {
-          const { data: expBySo } = await supabase
-            .from('expenses')
-            .select('id')
-            .in('source_service_order_id', orderIds)
-            .eq('status', 'pendente')
-            .ilike('description', `Comissão%${aux.name}%`)
-
-          if (expBySo && expBySo.length > 0) {
-            await supabase
-              .from('expenses')
-              .update({ status: 'pago', paid_date: paymentDate })
-              .in('id', expBySo.map(e => e.id))
-          } else {
-            // No existing expense found — create a summary payment entry
-            const { getMyTenantId } = await import('@/lib/db/tenant')
-            const tenant_id = await getMyTenantId()
-            await supabase.from('expenses').insert({
-              tenant_id,
-              description: `Pagamento comissão — ${aux.name}`,
-              category: 'Pessoal',
-              amount: total,
-              type: 'avulso',
-              status: 'pago',
-              due_date: paymentDate,
-              paid_date: paymentDate,
-              auxiliary_id: aux.id,
-              notes: `Período: ${startDate} a ${endDate} — ${unpaidOrders.length} chamado(s)`,
-            })
-          }
-        }
       }
 
       // 3. Show report

@@ -33,14 +33,26 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const supabase = createClient()
-    supabase
-      .from('tenants')
-      .select('id, slug, name, logo_url, primary_color, call_origins, enable_commissions, cnpj, phone')
-      .single()
-      .then(({ data }) => {
-        setTenant(data)
-        setLoading(false)
-      })
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) { setLoading(false); return }
+      supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single()
+        .then(({ data: profile }) => {
+          if (!profile?.tenant_id) { setLoading(false); return }
+          supabase
+            .from('tenants')
+            .select('id, slug, name, logo_url, primary_color, call_origins, enable_commissions, cnpj, phone')
+            .eq('id', profile.tenant_id)
+            .single()
+            .then(({ data }) => {
+              setTenant(data)
+              setLoading(false)
+            })
+        })
+    })
   }, [])
 
   function updateTenant(patch: Partial<Tenant>) {

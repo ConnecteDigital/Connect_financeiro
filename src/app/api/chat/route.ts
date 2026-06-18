@@ -260,11 +260,27 @@ async function executeTool(
     if (!UUID_RE.test(String(args.id ?? ''))) {
       return { result: { erro: 'ID_INVALIDO', instrucao: 'Você precisa chamar buscar_chamados primeiro para obter o UUID real do chamado. NUNCA invente ou adivinhe o ID.' } }
     }
+    // Verify the call belongs to this tenant before deleting
+    const { data: callCheck } = await supabase
+      .from('calls')
+      .select('id, call_number')
+      .eq('id', args.id as string)
+      .single()
+    if (!callCheck) {
+      return { result: { erro: 'CHAMADO_NAO_ENCONTRADO', instrucao: `Chamado com ID ${args.id} não foi encontrado. Use buscar_chamados para encontrar o ID correto.` } }
+    }
     const { error } = await supabase
       .from('calls')
       .delete()
       .eq('id', args.id as string)
     if (error) return { result: { erro: error.message } }
+    // Confirm deletion
+    const { data: stillExists } = await supabase
+      .from('calls')
+      .select('id')
+      .eq('id', args.id as string)
+      .maybeSingle()
+    if (stillExists) return { result: { erro: 'FALHA_DELECAO', instrucao: 'O chamado ainda existe após tentativa de deleção. Pode não ter permissão.' } }
     return { result: { sucesso: true, mensagem: `Chamado ${args.call_number} deletado com sucesso.` } }
   }
 

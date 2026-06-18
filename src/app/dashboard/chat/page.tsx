@@ -43,7 +43,7 @@ const ACTION_LABELS: Record<string, string> = {
 
 const GREETING: Message = {
   role: 'assistant',
-  text: 'Olá! Sou o Assistente IA do Connect Financeiro.\n\nPosso criar chamados, lançar saídas, consultar finanças e muito mais — só me falar o que precisa!',
+  text: 'Olá! Sou o Connect IA do Connect Financeiro.\n\nPosso criar chamados, lançar saídas, consultar finanças e muito mais — só me falar o que precisa!',
   timestamp: new Date().toISOString(),
 }
 
@@ -237,7 +237,7 @@ export default function ChatPage() {
             <Sparkles className="w-5 h-5" style={{ color: 'var(--primary)' }} />
           </div>
           <div>
-            <h1 className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>Assistente IA</h1>
+            <h1 className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>Connect IA</h1>
             <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Powered by Groq</p>
           </div>
         </div>
