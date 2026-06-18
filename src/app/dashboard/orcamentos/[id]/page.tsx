@@ -66,20 +66,22 @@ export default function OrcamentoDetailPage() {
   useEffect(() => {
     if (!id) return
     const supabase = createClient()
-    Promise.all([
-      supabase.from('quotes').select('*').eq('id', id).single(),
-      supabase.auth.getUser().then(({ data: { user } }) =>
-        user ? supabase.from('profiles').select('tenant_id').eq('id', user.id).single()
-          .then(({ data: p }) => p?.tenant_id
-            ? supabase.from('tenants').select('id, name, logo_url, primary_color, origin_branding').eq('id', p.tenant_id).single()
-            : { data: null })
-        : { data: null }
-      ),
-    ]).then(([qRes, tRes]) => {
-      if (qRes.data) setQuote(qRes.data)
-      if ((tRes as any).data) setTenantData((tRes as any).data)
+
+    async function load() {
+      const { data: qData } = await supabase.from('quotes').select('*').eq('id', id).single()
+      if (qData) setQuote(qData)
+
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: profile } = await supabase.from('profiles').select('tenant_id').eq('id', user.id).single()
+        if (profile?.tenant_id) {
+          const { data: t } = await supabase.from('tenants').select('id, name, logo_url, primary_color, origin_branding').eq('id', profile.tenant_id).single()
+          if (t) setTenantData(t as Tenant)
+        }
+      }
       setLoading(false)
-    })
+    }
+    load()
   }, [id])
 
   async function updateStatus(newStatus: string) {
