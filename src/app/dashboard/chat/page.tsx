@@ -238,7 +238,7 @@ export default function ChatPage() {
           </div>
           <div>
             <h1 className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>Connect IA</h1>
-            <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Powered by Groq</p>
+            <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Powered by Gemini</p>
           </div>
         </div>
         <button
