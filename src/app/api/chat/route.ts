@@ -438,6 +438,12 @@ Origens: ${originsText}
 SERVIÇOS (mapeie sempre — nunca coloque em notes):
 Desentupimento | Hidrojateamento | Limpeza (fossa/caixa gordura) | Sucção (esvaziar fossa) | Aplicação de CO2 | Reclamação | Outros
 
+MAPEAMENTO DE INTENÇÃO (MUITO IMPORTANTE):
+- "romaneio", "preciso de um romaneio", "gerar romaneio" → o usuário quer CRIAR UM CHAMADO (agendado). Romaneio é o comprovante que é gerado após criar o chamado.
+- "chamado", "agendamento", "preciso agendar", "tem um serviço" → criar chamado agendado
+- "aprovado", "fechar serviço", "cliente aprovou" → criar chamado aprovado
+- NUNCA interprete "romaneio" como saída financeira ou despesa.
+
 CRIAR CHAMADO AGENDADO:
 Obrigatórios: nome do cliente, origem, tipo de serviço, data e hora
 Opcionais: endereço, técnico, solicitante, telefone, CPF/CNPJ, observações
@@ -455,7 +461,7 @@ REGRAS:
 6. NUNCA invente ou assuma origem. NUNCA use "Cliente" como nome.
 
 DELETAR: busque primeiro, mostre resultado, confirme, depois delete.
-Formate valores: R$ X.XXX,XX | Após criar, informe o número (ex: CH-00051).`
+Formate valores: R$ X.XXX,XX | Após criar chamado, informe o número (ex: CH-00051) e que o romaneio está disponível.`
 }
 
 // ─── POST handler ──────────────────────────────────────────────────────────────
