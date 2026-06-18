@@ -155,12 +155,11 @@ function buildTools(origins: string[]): Groq.Chat.ChatCompletionTool[] {
   ]
 }
 
-function historyHasOriginQuestion(history: { role: string; content: string }[]): boolean {
-  const keywords = ['veio de onde', 'qual a origem', 'origem do chamado', 'de onde veio', 'informar a origem']
-  return history.some(m =>
-    m.role === 'assistant' &&
-    keywords.some(kw => (m.content ?? '').toLowerCase().includes(kw))
-  )
+function originAppearsInUserMessages(origin: string, history: { role: string; content: string }[]): boolean {
+  const userMessages = history.filter(m => m.role === 'user').map(m => (m.content ?? '').toLowerCase())
+  const originLower = origin.toLowerCase()
+  const label = (ORIGIN_LABELS[origin] ?? origin).toLowerCase()
+  return userMessages.some(msg => msg.includes(originLower) || msg.includes(label))
 }
 
 async function executeTool(
@@ -174,8 +173,17 @@ async function executeTool(
   const today = localToday()
 
   if (name === 'criar_chamado') {
-    if (!args.origin || !historyHasOriginQuestion(conversationHistory)) {
-      return { result: { erro: 'ORIGEM_OBRIGATORIA', instrucao: 'Você AINDA NÃO perguntou a origem ao usuário. Responda APENAS com a pergunta: "Esse chamado veio de onde?" e aguarde. Não crie o chamado.' } }
+    // Block placeholder names
+    const nameLower = String(args.contact_name ?? '').toLowerCase().trim()
+    if (!args.contact_name || nameLower === 'cliente' || nameLower === 'não informado' || nameLower === '') {
+      return { result: { erro: 'NOME_OBRIGATORIO', instrucao: 'O nome do cliente não foi informado pelo usuário. Pergunte o nome do cliente antes de criar o chamado.' } }
+    }
+    if (!args.origin) {
+      return { result: { erro: 'ORIGEM_OBRIGATORIA', instrucao: 'A origem não foi informada. Pergunte ao usuário: de onde veio esse chamado?' } }
+    }
+    // Origin must appear in conversation history (user must have mentioned it)
+    if (validOrigins.length > 0 && !originAppearsInUserMessages(args.origin as string, conversationHistory)) {
+      return { result: { erro: 'ORIGEM_NAO_CONFIRMADA', instrucao: `A origem "${args.origin}" não foi confirmada pelo usuário. Pergunte: "Esse chamado veio de onde? (${validOrigins.map(o => ORIGIN_LABELS[o] ?? o).join(' / ')})"` } }
     }
     // Fuzzy-match origin: exact key → case-insensitive key → label match
     if (validOrigins.length > 0 && !validOrigins.includes(args.origin as string)) {
@@ -448,28 +456,48 @@ export async function POST(req: NextRequest) {
       ? origins.map(o => ORIGIN_LABELS[o] ?? o).join(' / ')
       : 'Indicação / Terceirizado'
 
-    const systemPrompt = `Assistente IA do Connect Financeiro (desentupimento). Responda em pt-BR, direto e conciso.
+    const systemPrompt = `Você é o Connect IA, assistente do Connect Financeiro (empresa de desentupimento). Responda em pt-BR, direto e conciso.
 Hoje: ${today} | Amanhã: ${addDays(today, 1)}
-Origens: ${originsText}
-Serviços (mapear SEMPRE, NUNCA em notes): Desentupimento, Hidrojateamento, Limpeza, Sucção, Aplicação de CO2, Reclamação, Outros.
-Sucção = "sucção/sucação/sugar/tirar/esvaziar fossa". Limpeza = "caixa de gordura/limpeza de fossa".
+Origens disponíveis: ${originsText}
+Mapeamento de serviços (use SEMPRE o nome exato, nunca coloque em notes):
+- Desentupimento = qualquer desentupimento
+- Hidrojateamento = hidrojato/hidrojateamento
+- Limpeza = limpeza de fossa / caixa de gordura
+- Sucção = sucção / sugar / esvaziar fossa
+- Aplicação de CO2 = co2
+- Reclamação = reclamação
+- Outros = qualquer outro
 
-CRIAR CHAMADO — FLUXO OBRIGATÓRIO:
-1. Usuário pede chamado → responda APENAS: "Esse chamado veio de onde? (${originsLabels})"
-2. Usuário responde origem → pergunte APENAS: "Deseja adicionar um telefone para contato?"
-3. Usuário responde telefone → pergunte APENAS: "Deseja adicionar CPF ou CNPJ?"
-4. Usuário responde CPF → CRIE o chamado imediatamente com criar_chamado
+═══════════════════════════════
+CRIAR CHAMADO — FLUXO INTELIGENTE
+═══════════════════════════════
+CAMPOS OBRIGATÓRIOS: nome do cliente | origem | tipo de serviço | data e horário (se agendado)
+CAMPOS OPCIONAIS: técnico responsável | solicitante | telefone | CPF/CNPJ | endereço | observações
 
-PROIBIDO: criar chamado sem origem explícita do usuário | criar e perguntar no mesmo turno | inventar/assumir origem.
+REGRA 1 — Analise a mensagem do usuário e identifique quais obrigatórios JÁ foram informados.
+REGRA 2 — Se faltar algum obrigatório, pergunte TODOS os que faltam em uma única mensagem.
+  Exemplo: "Para criar o chamado, preciso de: nome do cliente, origem e tipo de serviço."
+REGRA 3 — Assim que tiver TODOS os obrigatórios, pergunte: "Deseja adicionar informações opcionais? (técnico, solicitante, telefone, CPF/CNPJ, endereço, observações)"
+REGRA 4 — Após a resposta do usuário sobre opcionais (sim ou não), CRIE o chamado com criar_chamado.
 
-DELETAR: use buscar_chamados primeiro, mostre o resultado, confirme antes de deletar.
-BUSCA: buscar_chamados aceita nome, endereço, número, CPF, OS.
-Formate: R$ X.XXX,XX | Após criar chamado, informe o número (ex: CH-00051)`
+PROIBIDO:
+- Criar chamado sem todos os campos obrigatórios confirmados pelo usuário
+- Inventar ou assumir origem sem o usuário ter dito explicitamente
+- Preencher contact_name com "Cliente" ou qualquer placeholder
+- Perguntar campos um por um se vários estão faltando ao mesmo tempo
+
+═══════════════════════════════
+OUTRAS AÇÕES
+═══════════════════════════════
+DELETAR: use buscar_chamados primeiro → mostre resultado → confirme → delete.
+BUSCA: buscar_chamados aceita nome, endereço, número (CH-XXXXX), CPF, número de OS.
+Formate valores: R$ X.XXX,XX
+Após criar chamado: informe o número (ex: CH-00051)`
 
     const TOOLS = buildTools(origins)
 
-    // Limit history to last 8 messages (4 turns) to keep token count low
-    const trimmedHistory = (Array.isArray(history) ? history : []).slice(-8)
+    // Limit history to last 16 messages (8 turns) — chamado flow needs more context
+    const trimmedHistory = (Array.isArray(history) ? history : []).slice(-16)
 
     const messages: Groq.Chat.ChatCompletionMessageParam[] = [
       { role: 'system', content: systemPrompt },
