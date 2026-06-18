@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Groq from 'groq-sdk'
+import { GoogleGenerativeAI, FunctionDeclarationSchema, SchemaType, Content } from '@google/generative-ai'
 import { createClient } from '@/lib/supabase/server'
 
-const groq = new Groq({ apiKey: process.env.GEMINI_API_KEY ?? '' })
-const MODEL = 'llama-3.1-8b-instant'
-const FALLBACK_MODEL = 'llama-3.3-70b-versatile'
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY ?? '')
+const MODEL = 'gemini-2.0-flash'
 
-type GMsg = Groq.Chat.ChatCompletionMessageParam
+type GMsg = { role: 'user' | 'assistant' | 'system' | 'tool'; content: string }
 
 const ORIGIN_LABELS: Record<string, string> = {
   site_lider: 'Site Líder',
@@ -28,140 +27,108 @@ function addDays(date: string, n: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-async function groqCall(msgs: GMsg[], tools: Groq.Chat.ChatCompletionTool[]): Promise<Groq.Chat.ChatCompletion> {
-  const params = { model: MODEL, messages: msgs, tools, tool_choice: 'auto' as const, temperature: 0.1, stream: false as const }
-  try {
-    return await groq.chat.completions.create(params)
-  } catch (err: unknown) {
-    if ((err as { status?: number })?.status === 429) {
-      return await groq.chat.completions.create({ ...params, model: FALLBACK_MODEL })
-    }
-    throw err
-  }
-}
-
 // ─── Tool definitions ─────────────────────────────────────────────────────────
 
-function buildTools(origins: string[]): Groq.Chat.ChatCompletionTool[] {
+function buildTools(origins: string[]): { functionDeclarations: { name: string; description: string; parameters: FunctionDeclarationSchema }[] }[] {
   const originKeys = origins.length
     ? `Use EXATAMENTE uma destas chaves: ${origins.map(o => `"${o}"`).join(', ')}`
     : 'Ex: "indicacao"'
 
-  return [
-    {
-      type: 'function',
-      function: {
+  return [{
+    functionDeclarations: [
+      {
         name: 'criar_chamado',
         description: 'Cria chamado no sistema. Chame SOMENTE quando tiver: contact_name (nome real do cliente), service_category, status, origin (chave confirmada pelo usuário).',
         parameters: {
-          type: 'object',
+          type: SchemaType.OBJECT,
           properties: {
-            contact_name:      { type: 'string', description: 'Nome real do cliente (nunca use placeholder)' },
-            service_category:  { type: 'string', description: 'Desentupimento | Hidrojateamento | Limpeza | Sucção | Aplicação de CO2 | Reclamação | Outros' },
-            status:            { type: 'string', description: '"agendado" ou "aprovado"' },
-            origin:            { type: 'string', description: `Chave confirmada pelo usuário. ${originKeys}` },
-            scheduled_date:    { type: 'string', description: 'YYYY-MM-DD (obrigatório se agendado)' },
-            scheduled_time:    { type: 'string', description: 'HH:MM (obrigatório se agendado)' },
-            call_address:      { type: 'string' },
-            call_neighborhood: { type: 'string' },
-            call_city:         { type: 'string' },
-            contact_phone:     { type: 'string' },
-            contact_cpf:       { type: 'string' },
-            driver:            { type: 'string', description: 'Técnico/motorista' },
-            solicitante:       { type: 'string' },
-            notes:             { type: 'string' },
-            // Aprovado extras → cria OS automaticamente
-            total_value:    { type: 'number', description: 'Valor R$ (aprovado)' },
-            payment_method: { type: 'string', description: 'dinheiro | cartao | pix | boleto (aprovado)' },
-            payment_status: { type: 'string', description: 'pago | pago_parcial | pendente (aprovado)' },
-            execution_type: { type: 'string', description: 'proprio | terceirizado | parceiro (aprovado)' },
-            vehicle:        { type: 'string' },
-            os_notes:       { type: 'string' },
+            contact_name:      { type: SchemaType.STRING, description: 'Nome real do cliente (nunca use placeholder)' },
+            service_category:  { type: SchemaType.STRING, description: 'Desentupimento | Hidrojateamento | Limpeza | Sucção | Aplicação de CO2 | Reclamação | Outros' },
+            status:            { type: SchemaType.STRING, description: 'agendado ou aprovado' },
+            origin:            { type: SchemaType.STRING, description: `Chave confirmada pelo usuário. ${originKeys}` },
+            scheduled_date:    { type: SchemaType.STRING, description: 'YYYY-MM-DD (obrigatório se agendado)' },
+            scheduled_time:    { type: SchemaType.STRING, description: 'HH:MM (obrigatório se agendado)' },
+            call_address:      { type: SchemaType.STRING },
+            call_neighborhood: { type: SchemaType.STRING },
+            call_city:         { type: SchemaType.STRING },
+            contact_phone:     { type: SchemaType.STRING },
+            contact_cpf:       { type: SchemaType.STRING },
+            driver:            { type: SchemaType.STRING, description: 'Técnico/motorista' },
+            solicitante:       { type: SchemaType.STRING },
+            notes:             { type: SchemaType.STRING },
+            total_value:       { type: SchemaType.NUMBER, description: 'Valor R$ (aprovado)' },
+            payment_method:    { type: SchemaType.STRING, description: 'dinheiro | cartao | pix | boleto (aprovado)' },
+            payment_status:    { type: SchemaType.STRING, description: 'pago | pago_parcial | pendente (aprovado)' },
+            execution_type:    { type: SchemaType.STRING, description: 'proprio | terceirizado | parceiro (aprovado)' },
+            vehicle:           { type: SchemaType.STRING },
+            os_notes:          { type: SchemaType.STRING },
           },
           required: ['contact_name', 'service_category', 'status', 'origin'],
         },
       },
-    },
-    {
-      type: 'function',
-      function: {
+      {
         name: 'buscar_chamados',
         description: 'Busca chamados por nome, número (CH-XXXXX), endereço, CPF, número de OS.',
         parameters: {
-          type: 'object',
+          type: SchemaType.OBJECT,
           properties: {
-            texto:  { type: 'string' },
-            status: { type: 'string', description: 'imediato | agendado | aprovado | nao_aprovou | cancelado' },
+            texto:  { type: SchemaType.STRING },
+            status: { type: SchemaType.STRING, description: 'imediato | agendado | aprovado | nao_aprovou | cancelado' },
           },
           required: ['texto'],
         },
       },
-    },
-    {
-      type: 'function',
-      function: {
+      {
         name: 'deletar_chamado',
         description: 'Deleta chamado. SEMPRE use buscar_chamados antes para confirmar o ID.',
         parameters: {
-          type: 'object',
+          type: SchemaType.OBJECT,
           properties: {
-            id:          { type: 'string', description: 'UUID do chamado' },
-            call_number: { type: 'string', description: 'Ex: CH-00049' },
+            id:          { type: SchemaType.STRING, description: 'UUID do chamado' },
+            call_number: { type: SchemaType.STRING, description: 'Ex: CH-00049' },
           },
           required: ['id', 'call_number'],
         },
       },
-    },
-    {
-      type: 'function',
-      function: {
+      {
         name: 'criar_saida',
         description: 'Lança despesa/saída financeira.',
         parameters: {
-          type: 'object',
+          type: SchemaType.OBJECT,
           properties: {
-            description: { type: 'string' },
-            amount:      { type: 'number' },
-            category:    { type: 'string', description: 'combustível | material | alimentação | salário | aluguel | manutenção | outros' },
-            due_date:    { type: 'string', description: 'YYYY-MM-DD' },
-            type:        { type: 'string', description: '"fixo" ou "variavel"' },
-            notes:       { type: 'string' },
+            description: { type: SchemaType.STRING },
+            amount:      { type: SchemaType.NUMBER },
+            category:    { type: SchemaType.STRING, description: 'combustível | material | alimentação | salário | aluguel | manutenção | outros' },
+            due_date:    { type: SchemaType.STRING, description: 'YYYY-MM-DD' },
+            type:        { type: SchemaType.STRING, description: 'fixo ou variavel' },
+            notes:       { type: SchemaType.STRING },
           },
           required: ['description', 'amount', 'category', 'due_date', 'type'],
         },
       },
-    },
-    {
-      type: 'function',
-      function: {
+      {
         name: 'resumo_financeiro',
         description: 'Resumo financeiro (chamados, receitas, despesas).',
         parameters: {
-          type: 'object',
+          type: SchemaType.OBJECT,
           properties: {
-            periodo: { type: 'string', description: '"hoje" | "semana" | "mes" | "mes_passado"' },
+            periodo: { type: SchemaType.STRING, description: 'hoje | semana | mes | mes_passado' },
           },
           required: ['periodo'],
         },
       },
-    },
-    {
-      type: 'function',
-      function: {
+      {
         name: 'listar_a_receber',
         description: 'Lista valores pendentes de recebimento de clientes.',
-        parameters: { type: 'object', properties: {}, required: [] },
+        parameters: { type: SchemaType.OBJECT, properties: {}, required: [] },
       },
-    },
-    {
-      type: 'function',
-      function: {
+      {
         name: 'listar_saidas_pendentes',
         description: 'Lista contas a pagar pendentes.',
-        parameters: { type: 'object', properties: {}, required: [] },
+        parameters: { type: SchemaType.OBJECT, properties: {}, required: [] },
       },
-    },
-  ]
+    ],
+  }]
 }
 
 // ─── Tool execution ───────────────────────────────────────────────────────────
@@ -492,29 +459,39 @@ export async function POST(req: NextRequest) {
     // Keep last 12 messages (6 turns) for context
     const trimmedHistory = (Array.isArray(history) ? history : []).slice(-12) as GMsg[]
 
-    const messages: GMsg[] = [
-      { role: 'system', content: systemPrompt },
-      ...trimmedHistory,
-      { role: 'user', content: message },
-    ]
+    // Convert history to Gemini Content[] format (skip system messages)
+    const geminiHistory: Content[] = trimmedHistory
+      .filter(m => m.role === 'user' || m.role === 'assistant')
+      .map(m => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: typeof m.content === 'string' ? m.content : '' }],
+      }))
+
+    const model = genAI.getGenerativeModel({
+      model: MODEL,
+      tools: TOOLS,
+      systemInstruction: systemPrompt,
+    })
+
+    const chat = model.startChat({ history: geminiHistory })
 
     // ── Round 1: first AI call ─────────────────────────────────────────────
-    const r1 = await groqCall(messages, TOOLS)
-    const msg1 = r1.choices[0].message
+    const r1 = await chat.sendMessage(message)
+    const resp1 = r1.response
+    const functionCalls = resp1.functionCalls()
 
-    // No tool call → return text directly (fastest path, 1 Groq call)
-    if (!msg1.tool_calls?.length) {
-      const reply = msg1.content ?? 'Como posso ajudar?'
+    // No tool call → return text directly (fastest path, 1 Gemini call)
+    if (!functionCalls?.length) {
+      const reply = resp1.text() || 'Como posso ajudar?'
       return NextResponse.json({ reply, quickReplies: detectQuickReplies(reply, origins) })
     }
 
-    const tc = msg1.tool_calls[0]
-    let args: Record<string, unknown> = {}
-    try { args = JSON.parse(tc.function.arguments) } catch { /* ignore */ }
+    const fc = functionCalls[0]
+    const args = (fc.args ?? {}) as Record<string, unknown>
 
-    const toolRes = await executeTool(tc.function.name, args, supabase, tenantId, origins, messages, message)
+    const toolRes = await executeTool(fc.name, args, supabase, tenantId, origins, trimmedHistory, message)
 
-    // If blocked → return blocked message directly (no second Groq call)
+    // If blocked → return blocked message directly (no second Gemini call)
     if (toolRes.blocked && toolRes.blockedMsg) {
       return NextResponse.json({
         reply: toolRes.blockedMsg,
@@ -523,13 +500,13 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Round 2: feed tool result back for final reply ─────────────────────
-    const msgs2: GMsg[] = [
-      ...messages,
-      msg1,
-      { role: 'tool' as const, tool_call_id: tc.id, content: JSON.stringify(toolRes.result) },
-    ]
-    const r2 = await groqCall(msgs2, TOOLS)
-    const reply = r2.choices[0].message.content ?? 'Feito!'
+    const r2 = await chat.sendMessage([{
+      functionResponse: {
+        name: fc.name,
+        response: toolRes.result as Record<string, unknown>,
+      },
+    }])
+    const reply = r2.response.text() || 'Feito!'
 
     const ACTION_LABELS: Record<string, string> = {
       criar_chamado:          'Chamado criado',
@@ -542,14 +519,15 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       reply,
-      functionCalled: tc.function.name in ACTION_LABELS ? tc.function.name : undefined,
+      functionCalled: fc.name in ACTION_LABELS ? fc.name : undefined,
       callId: toolRes.callId,
       quickReplies: detectQuickReplies(reply, origins),
     })
 
   } catch (err: unknown) {
     console.error('Chat error:', err)
-    if ((err as { status?: number })?.status === 429) {
+    const status = (err as { status?: number })?.status
+    if (status === 429) {
       return NextResponse.json({ error: 'Limite de uso atingido. Aguarde alguns minutos.' }, { status: 429 })
     }
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Erro interno' }, { status: 500 })

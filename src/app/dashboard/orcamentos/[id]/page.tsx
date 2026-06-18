@@ -1,10 +1,19 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, Printer, Check, X, Loader2, Edit } from 'lucide-react'
+import { ArrowLeft, Share2, Check, X, Loader2, Edit } from 'lucide-react'
+
+const ORIGIN_LABELS: Record<string, string> = {
+  site_lider: 'Site Líder',
+  site_poa: 'Site POA',
+  site_millenium: 'Site Millenium',
+  site_praja: 'Site Pra Já',
+  indicacao: 'Indicação',
+  terceirizado: 'Terceirizado',
+}
 
 interface QuoteItem {
   description: string
@@ -62,6 +71,8 @@ export default function OrcamentoDetailPage() {
   const [tenantData, setTenantData] = useState<Tenant | null>(null)
   const [loading, setLoading] = useState(true)
   const [updatingStatus, setUpdatingStatus] = useState(false)
+  const [sharing, setSharing] = useState(false)
+  const printRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!id) return
@@ -83,6 +94,45 @@ export default function OrcamentoDetailPage() {
     }
     load()
   }, [id])
+
+  async function handleShare() {
+    if (!printRef.current || sharing) return
+    setSharing(true)
+    const el = printRef.current!
+    el.style.display = 'block'
+    try {
+      const html2canvas = (await import('html2canvas')).default
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        allowTaint: false,
+        logging: false,
+      })
+      const blob: Blob | null = await new Promise(res => canvas.toBlob(res, 'image/png'))
+      if (!blob) throw new Error('Falha ao gerar imagem')
+      const number = quote?.quote_number ?? 'orcamento'
+      const file = new File([blob], `orcamento-${number}.png`, { type: 'image/png' })
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: `Orçamento ${number}` })
+      } else {
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `orcamento-${number}.png`
+        a.click()
+        URL.revokeObjectURL(url)
+      }
+    } catch (e: unknown) {
+      if ((e as { name?: string })?.name !== 'AbortError') {
+        console.error('Erro ao compartilhar orçamento:', e)
+        alert('Não foi possível compartilhar. Tente novamente.')
+      }
+    } finally {
+      el.style.display = ''
+      setSharing(false)
+    }
+  }
 
   async function updateStatus(newStatus: string) {
     if (!quote) return
@@ -136,10 +186,10 @@ export default function OrcamentoDetailPage() {
               <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{quote.client_name}</p>
             </div>
           </div>
-          <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition"
+          <button onClick={handleShare} disabled={sharing} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition"
             style={{ background: 'var(--surface-secondary)', color: 'var(--text-secondary)' }}>
-            <Printer className="w-4 h-4" />
-            <span className="hidden sm:inline">Imprimir</span>
+            {sharing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />}
+            <span className="hidden sm:inline">Compartilhar</span>
           </button>
         </div>
 
@@ -171,7 +221,7 @@ export default function OrcamentoDetailPage() {
               ['CPF/CNPJ', quote.client_cpf],
               ['Endereço', quote.client_address],
               ['Cidade', quote.client_city],
-              ['Origem', quote.origin],
+              ['Origem', quote.origin ? (ORIGIN_LABELS[quote.origin] ?? quote.origin) : null],
               ['Válido até', quote.valid_until ? new Date(quote.valid_until + 'T12:00:00').toLocaleDateString('pt-BR') : null],
             ].filter(([, v]) => v).map(([label, value]) => (
               <div key={String(label)}>
@@ -228,8 +278,8 @@ export default function OrcamentoDetailPage() {
         )}
       </div>
 
-      {/* Print layout */}
-      <div className="hidden print:block print-layout" style={{ fontFamily: 'Arial, sans-serif', color: '#1a1a1a', maxWidth: '800px', margin: '0 auto', padding: '32px' }}>
+      {/* Print layout — also used for html2canvas share */}
+      <div ref={printRef} className="hidden print:block print-layout" style={{ fontFamily: 'Arial, sans-serif', color: '#1a1a1a', maxWidth: '800px', margin: '0 auto', padding: '32px' }}>
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '32px', borderBottom: `3px solid ${brandColor}`, paddingBottom: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
@@ -239,7 +289,7 @@ export default function OrcamentoDetailPage() {
             )}
             <div>
               <h1 style={{ fontSize: '22px', fontWeight: 'bold', color: '#1a1a1a', margin: 0 }}>{tenantData?.name}</h1>
-              {quote.origin && <p style={{ fontSize: '12px', color: '#666', margin: '4px 0 0' }}>{quote.origin}</p>}
+              {quote.origin && <p style={{ fontSize: '12px', color: '#666', margin: '4px 0 0' }}>{ORIGIN_LABELS[quote.origin] ?? quote.origin}</p>}
             </div>
           </div>
           <div style={{ textAlign: 'right' }}>

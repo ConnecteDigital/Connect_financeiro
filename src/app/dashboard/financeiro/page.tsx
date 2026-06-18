@@ -84,8 +84,8 @@ export default function FinanceiroPage() {
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
       const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10)
       const [expRes, ceRes, soRes] = await Promise.all([
-        supabase.from('expenses').select('*').order('due_date', { ascending: false }),
-        supabase.from('cash_entries').select('*').order('due_date', { ascending: false }),
+        supabase.from('expenses').select('*').order('created_at', { ascending: false }),
+        supabase.from('cash_entries').select('*').order('created_at', { ascending: false }),
         // Receita de chamados aprovados (OS pagas/parciais no mês)
         supabase.from('service_orders').select('total_value, remaining_amount, payment_status').gte('date', monthStart).lte('date', monthEnd),
       ])

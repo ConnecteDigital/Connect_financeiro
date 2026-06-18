@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-  LayoutDashboard, PhoneCall, Users, TrendingDown,
+  LayoutDashboard, PhoneCall, Users,
   BarChart3, Settings, LogOut, Building2,
   Plus, MoreHorizontal, UserCog, Moon, Sun, Sparkles,
   Wallet, FileText,
@@ -27,7 +27,6 @@ const moreNav = [
   { href: '/dashboard/clientes',      label: 'Clientes',     icon: Users },
   { href: '/dashboard/fornecedores',  label: 'Fornecedores', icon: Building2 },
   { href: '/dashboard/auxiliares',    label: 'Comissões',    icon: UserCog },
-  { href: '/dashboard/saidas',        label: 'Saídas',       icon: TrendingDown },
   { href: '/dashboard/configuracoes', label: 'Configurações',icon: Settings },
 ]
 
