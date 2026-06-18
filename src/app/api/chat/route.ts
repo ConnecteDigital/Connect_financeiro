@@ -162,11 +162,23 @@ function buildTools(origins: string[]): Groq.Chat.ChatCompletionTool[] {
   ]
 }
 
-function originAppearsInUserMessages(origin: string, history: { role: string; content: string }[]): boolean {
-  const userMessages = history.filter(m => m.role === 'user').map(m => (m.content ?? '').toLowerCase())
+function originAppearsInConversation(origin: string, history: { role: string; content: string }[], currentMessage: string): boolean {
+  // Check both history AND the current user message (which isn't in history yet)
+  const allUserTexts = [
+    ...history.filter(m => m.role === 'user').map(m => m.content ?? ''),
+    currentMessage,
+  ].map(t => t.toLowerCase())
+
+  // Fuzzy: check origin key and label
   const originLower = origin.toLowerCase()
   const label = (ORIGIN_LABELS[origin] ?? origin).toLowerCase()
-  return userMessages.some(msg => msg.includes(originLower) || msg.includes(label))
+  // Also check without accent for label
+  const labelNoAccent = label.normalize('NFD').replace(/[̀-ͯ]/g, '')
+
+  return allUserTexts.some(msg => {
+    const msgNoAccent = msg.normalize('NFD').replace(/[̀-ͯ]/g, '')
+    return msg.includes(originLower) || msg.includes(label) || msgNoAccent.includes(labelNoAccent)
+  })
 }
 
 async function executeTool(
@@ -176,21 +188,22 @@ async function executeTool(
   tenantId: string,
   validOrigins: string[],
   conversationHistory: { role: string; content: string }[],
-): Promise<{ result: unknown; callId?: string }> {
+  currentMessage: string,
+): Promise<{ result: unknown; callId?: string; blocked?: boolean }> {
   const today = localToday()
 
   if (name === 'criar_chamado') {
     // Block placeholder names
     const nameLower = String(args.contact_name ?? '').toLowerCase().trim()
     if (!args.contact_name || nameLower === 'cliente' || nameLower === 'não informado' || nameLower === '') {
-      return { result: { erro: 'NOME_OBRIGATORIO', instrucao: 'O nome do cliente não foi informado pelo usuário. Pergunte o nome do cliente antes de criar o chamado.' } }
+      return { result: { erro: 'NOME_OBRIGATORIO', instrucao: 'O nome do cliente não foi informado pelo usuário. Pergunte o nome do cliente antes de criar o chamado.' }, blocked: true }
     }
     if (!args.origin) {
-      return { result: { erro: 'ORIGEM_OBRIGATORIA', instrucao: 'A origem não foi informada. Pergunte ao usuário: de onde veio esse chamado?' } }
+      return { result: { erro: 'ORIGEM_OBRIGATORIA', instrucao: 'A origem não foi informada. Pergunte ao usuário: de onde veio esse chamado?' }, blocked: true }
     }
-    // Origin must appear in conversation history (user must have mentioned it)
-    if (validOrigins.length > 0 && !originAppearsInUserMessages(args.origin as string, conversationHistory)) {
-      return { result: { erro: 'ORIGEM_NAO_CONFIRMADA', instrucao: `A origem "${args.origin}" não foi confirmada pelo usuário. Pergunte: "Esse chamado veio de onde? (${validOrigins.map(o => ORIGIN_LABELS[o] ?? o).join(' / ')})"` } }
+    // Origin must appear in conversation (history + current message)
+    if (validOrigins.length > 0 && !originAppearsInConversation(args.origin as string, conversationHistory, currentMessage)) {
+      return { result: { erro: 'ORIGEM_NAO_CONFIRMADA', instrucao: `A origem "${args.origin}" não foi confirmada pelo usuário. Pergunte: "Esse chamado veio de onde? (${validOrigins.map(o => ORIGIN_LABELS[o] ?? o).join(' / ')})"` }, blocked: true }
     }
     // Fuzzy-match origin: exact key → case-insensitive key → label match
     if (validOrigins.length > 0 && !validOrigins.includes(args.origin as string)) {
@@ -510,6 +523,7 @@ REGRA 1 — Analise a mensagem e identifique quais obrigatórios JÁ foram infor
 REGRA 2 — Se faltar algum obrigatório, pergunte TODOS os que faltam em UMA só mensagem.
   Exemplo agendado: "Para criar o chamado, ainda preciso de: nome do cliente e origem."
   Exemplo aprovado: "Para criar o chamado aprovado, ainda preciso de: valor do serviço e forma de pagamento."
+  Ao perguntar origem, use os RÓTULOS (ex: "Site Líder"), nunca as chaves internas (ex: "site_lider").
 REGRA 3 — Com TODOS os obrigatórios em mãos, pergunte em uma mensagem: "Deseja adicionar informações opcionais? (técnico, telefone, endereço, etc.)"
 REGRA 4 — Após resposta sobre opcionais (sim ou não), CRIE o chamado com criar_chamado.
 
@@ -565,8 +579,8 @@ Após criar chamado: informe o número (ex: CH-00051)`
         break
       }
 
-      const { result: toolResult, callId } = await executeTool(tc.function.name, args, supabase, tenantId, origins, trimmedHistory as { role: string; content: string }[])
-      lastFunctionCalled = tc.function.name
+      const { result: toolResult, callId, blocked } = await executeTool(tc.function.name, args, supabase, tenantId, origins, trimmedHistory as { role: string; content: string }[], message)
+      if (!blocked) lastFunctionCalled = tc.function.name
       if (callId) lastCallId = callId
 
       currentMessages = [
