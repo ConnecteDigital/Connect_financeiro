@@ -55,6 +55,7 @@ export default function FinanceiroPage() {
   const [activeTab, setActiveTab] = useState<Tab>('saidas')
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [cashEntries, setCashEntries] = useState<CashEntry[]>([])
+  const [serviceOrdersReceita, setServiceOrdersReceita] = useState(0)
   const [loading, setLoading] = useState(true)
 
   // Saidas filters
@@ -79,12 +80,24 @@ export default function FinanceiroPage() {
     setLoading(true)
     try {
       const supabase = createClient()
-      const [expRes, ceRes] = await Promise.all([
+      const now = new Date()
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10)
+      const [expRes, ceRes, soRes] = await Promise.all([
         supabase.from('expenses').select('*').order('due_date', { ascending: false }),
         supabase.from('cash_entries').select('*').order('due_date', { ascending: false }),
+        // Receita de chamados aprovados (OS pagas/parciais no mês)
+        supabase.from('service_orders').select('total_value, remaining_amount, payment_status').gte('date', monthStart).lte('date', monthEnd),
       ])
       if (expRes.data) setExpenses(expRes.data)
       if (ceRes.data) setCashEntries(ceRes.data)
+      if (soRes.data) {
+        const receita = soRes.data.reduce((s: number, o: { total_value: number; remaining_amount: number; payment_status: string }) => {
+          const paid = (o.total_value || 0) - (o.remaining_amount || 0)
+          return s + (o.payment_status === 'pago' ? (o.total_value || 0) : paid)
+        }, 0)
+        setServiceOrdersReceita(receita)
+      }
     } finally {
       setLoading(false)
     }
@@ -173,7 +186,8 @@ export default function FinanceiroPage() {
   const now = new Date()
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10)
-  const entradasMes = cashEntries.filter(e => e.direction === 'entrada' && e.due_date >= monthStart && e.due_date <= monthEnd && e.status === 'pago').reduce((s, e) => s + Number(e.amount), 0)
+  const entradasAvulsasMes = cashEntries.filter(e => e.direction === 'entrada' && e.due_date >= monthStart && e.due_date <= monthEnd && e.status === 'pago').reduce((s, e) => s + Number(e.amount), 0)
+  const entradasMes = serviceOrdersReceita + entradasAvulsasMes
   const saidasMes = expenses.filter(e => e.due_date >= monthStart && e.due_date <= monthEnd && e.status === 'pago').reduce((s, e) => s + Number(e.amount), 0)
   const saldoLiquido = entradasMes - saidasMes
   const in7days = new Date()
@@ -521,7 +535,7 @@ export default function FinanceiroPage() {
                     <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Entradas do Mês</p>
                   </div>
                   <p className="text-3xl font-bold text-emerald-600">{fmt(entradasMes)}</p>
-                  <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>Valores pagos em {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</p>
+                  <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>Chamados: {fmt(serviceOrdersReceita)} · Avulsas: {fmt(entradasAvulsasMes)}</p>
                 </div>
                 <div className="rounded-2xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
                   <div className="flex items-center gap-2 mb-3">
