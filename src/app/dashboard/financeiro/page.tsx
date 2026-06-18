@@ -238,15 +238,15 @@ export default function FinanceiroPage() {
           {activeTab === 'saidas' && (
             <div className="space-y-4">
               {/* Summary */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-2">
                 {[
                   { label: 'Total', value: totalExpenses, color: 'var(--text-primary)' },
                   { label: 'Pago', value: paidExpenses, color: '#10b981' },
                   { label: 'Pendente', value: pendingExpenses, color: '#f59e0b' },
                 ].map(card => (
-                  <div key={card.label} className="rounded-2xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-                    <p className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>{card.label}</p>
-                    <p className="text-lg font-bold mt-1" style={{ color: card.color }}>{fmt(card.value)}</p>
+                  <div key={card.label} className="rounded-2xl p-3" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                    <p className="text-xs font-medium truncate" style={{ color: 'var(--text-secondary)' }}>{card.label}</p>
+                    <p className="text-sm font-bold mt-1 leading-tight break-all" style={{ color: card.color }}>{fmt(card.value)}</p>
                   </div>
                 ))}
               </div>
@@ -534,7 +534,7 @@ export default function FinanceiroPage() {
                     <TrendingUp className="w-5 h-5 text-emerald-500" />
                     <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Entradas do Mês</p>
                   </div>
-                  <p className="text-3xl font-bold text-emerald-600">{fmt(entradasMes)}</p>
+                  <p className="text-2xl font-bold text-emerald-600 break-all">{fmt(entradasMes)}</p>
                   <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>Chamados: {fmt(serviceOrdersReceita)} · Avulsas: {fmt(entradasAvulsasMes)}</p>
                 </div>
                 <div className="rounded-2xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
@@ -542,7 +542,7 @@ export default function FinanceiroPage() {
                     <TrendingDown className="w-5 h-5 text-red-500" />
                     <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Saídas do Mês</p>
                   </div>
-                  <p className="text-3xl font-bold text-red-500">{fmt(saidasMes)}</p>
+                  <p className="text-2xl font-bold text-red-500 break-all">{fmt(saidasMes)}</p>
                   <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>Despesas pagas em {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</p>
                 </div>
                 <div className="rounded-2xl p-5 sm:col-span-2" style={{
@@ -553,7 +553,7 @@ export default function FinanceiroPage() {
                     <BarChart3 className="w-5 h-5" style={{ color: saldoLiquido >= 0 ? '#10b981' : '#ef4444' }} />
                     <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Saldo Líquido do Mês</p>
                   </div>
-                  <p className="text-4xl font-bold" style={{ color: saldoLiquido >= 0 ? '#10b981' : '#ef4444' }}>{fmt(saldoLiquido)}</p>
+                  <p className="text-3xl font-bold break-all" style={{ color: saldoLiquido >= 0 ? '#10b981' : '#ef4444' }}>{fmt(saldoLiquido)}</p>
                 </div>
                 <div className="rounded-2xl p-5 sm:col-span-2" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
                   <div className="flex items-center gap-2 mb-3">

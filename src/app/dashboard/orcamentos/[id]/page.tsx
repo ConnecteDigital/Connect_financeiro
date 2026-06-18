@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, Share2, Check, X, Loader2, Edit } from 'lucide-react'
+import { ArrowLeft, Share2, Check, X, Loader2 } from 'lucide-react'
 
 const ORIGIN_LABELS: Record<string, string> = {
   site_lider: 'Site Líder',
@@ -56,6 +56,14 @@ function fmt(n: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n)
 }
 
+function hexToRgb(hex: string): string {
+  const h = hex.startsWith('#') ? hex.slice(1) : 'f97316'
+  const r = parseInt(h.slice(0, 2), 16) || 249
+  const g = parseInt(h.slice(2, 4), 16) || 115
+  const b = parseInt(h.slice(4, 6), 16) || 22
+  return `${r}, ${g}, ${b}`
+}
+
 const STATUS_MAP: Record<string, { label: string; bg: string; color: string }> = {
   pendente: { label: 'Pendente', bg: 'rgba(245,158,11,0.12)', color: '#f59e0b' },
   aprovado: { label: 'Aprovado', bg: 'rgba(16,185,129,0.12)', color: '#10b981' },
@@ -72,16 +80,14 @@ export default function OrcamentoDetailPage() {
   const [loading, setLoading] = useState(true)
   const [updatingStatus, setUpdatingStatus] = useState(false)
   const [sharing, setSharing] = useState(false)
-  const printRef = useRef<HTMLDivElement>(null)
+  const shareCardRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!id) return
     const supabase = createClient()
-
     async function load() {
       const { data: qData } = await supabase.from('quotes').select('*').eq('id', id).single()
       if (qData) setQuote(qData)
-
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
         const { data: profile } = await supabase.from('profiles').select('tenant_id').eq('id', user.id).single()
@@ -96,13 +102,11 @@ export default function OrcamentoDetailPage() {
   }, [id])
 
   async function handleShare() {
-    if (!printRef.current || sharing) return
+    if (!shareCardRef.current || sharing) return
     setSharing(true)
-    const el = printRef.current!
-    el.style.display = 'block'
     try {
       const html2canvas = (await import('html2canvas')).default
-      const canvas = await html2canvas(el, {
+      const canvas = await html2canvas(shareCardRef.current, {
         scale: 2,
         backgroundColor: '#ffffff',
         useCORS: true,
@@ -129,7 +133,6 @@ export default function OrcamentoDetailPage() {
         alert('Não foi possível compartilhar. Tente novamente.')
       }
     } finally {
-      el.style.display = ''
       setSharing(false)
     }
   }
@@ -167,11 +170,21 @@ export default function OrcamentoDetailPage() {
   const originBranding = quote.origin ? (tenantData?.origin_branding?.[quote.origin] ?? null) : null
   const brandColor = originBranding?.color ?? tenantData?.primary_color ?? '#f97316'
   const brandLogo = originBranding?.logo_url ?? tenantData?.logo_url
+  const siteName = quote.origin ? (ORIGIN_LABELS[quote.origin] ?? quote.origin) : null
+  const rgb = hexToRgb(brandColor)
+
+  const clientFields = [
+    ['Nome', quote.client_name],
+    ['Telefone', quote.client_phone],
+    ['CPF/CNPJ', quote.client_cpf],
+    ['Endereço', quote.client_address],
+    ['Cidade', quote.client_city],
+  ].filter(([, v]) => v) as [string, string][]
 
   return (
     <>
       {/* Screen view */}
-      <div className="space-y-5 max-w-3xl mx-auto print:hidden">
+      <div className="space-y-5 max-w-3xl mx-auto">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <Link href="/dashboard/orcamentos" className="w-9 h-9 rounded-xl flex items-center justify-center transition"
@@ -179,14 +192,14 @@ export default function OrcamentoDetailPage() {
               <ArrowLeft className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
             </Link>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>{quote.quote_number ?? 'Orçamento'}</h1>
                 <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: status.bg, color: status.color }}>{status.label}</span>
               </div>
               <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{quote.client_name}</p>
             </div>
           </div>
-          <button onClick={handleShare} disabled={sharing} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition"
+          <button onClick={handleShare} disabled={sharing} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition flex-shrink-0"
             style={{ background: 'var(--surface-secondary)', color: 'var(--text-secondary)' }}>
             {sharing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />}
             <span className="hidden sm:inline">Compartilhar</span>
@@ -221,7 +234,7 @@ export default function OrcamentoDetailPage() {
               ['CPF/CNPJ', quote.client_cpf],
               ['Endereço', quote.client_address],
               ['Cidade', quote.client_city],
-              ['Origem', quote.origin ? (ORIGIN_LABELS[quote.origin] ?? quote.origin) : null],
+              ['Origem', siteName],
               ['Válido até', quote.valid_until ? new Date(quote.valid_until + 'T12:00:00').toLocaleDateString('pt-BR') : null],
             ].filter(([, v]) => v).map(([label, value]) => (
               <div key={String(label)}>
@@ -238,11 +251,11 @@ export default function OrcamentoDetailPage() {
           <div className="space-y-2">
             {(quote.items ?? []).map((item, idx) => (
               <div key={idx} className="flex items-center justify-between py-2 border-b last:border-0" style={{ borderColor: 'var(--border)' }}>
-                <div>
+                <div className="min-w-0 flex-1 mr-3">
                   <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{item.description}</p>
                   <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>{item.quantity}x {fmt(item.unit_price)}</p>
                 </div>
-                <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{fmt(item.quantity * item.unit_price)}</p>
+                <p className="text-sm font-semibold flex-shrink-0" style={{ color: 'var(--text-primary)' }}>{fmt(item.quantity * item.unit_price)}</p>
               </div>
             ))}
           </div>
@@ -278,9 +291,130 @@ export default function OrcamentoDetailPage() {
         )}
       </div>
 
-      {/* Print layout — also used for html2canvas share */}
-      <div ref={printRef} className="hidden print:block print-layout" style={{ fontFamily: 'Arial, sans-serif', color: '#1a1a1a', maxWidth: '800px', margin: '0 auto', padding: '32px' }}>
-        {/* Header */}
+      {/* Share card — off-screen, fixed width 500px, always rendered for html2canvas */}
+      <div
+        ref={shareCardRef}
+        style={{
+          position: 'fixed',
+          left: -9999,
+          top: 0,
+          width: 500,
+          background: '#ffffff',
+          fontFamily: 'system-ui, -apple-system, Arial, sans-serif',
+          borderRadius: 24,
+          overflow: 'hidden',
+          boxShadow: '0 8px 40px rgba(0,0,0,0.12)',
+        }}
+      >
+        {/* Colored header */}
+        <div style={{ background: brandColor, padding: '28px 24px 24px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
+            {/* Logo + name */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{
+                width: 52, height: 52, borderRadius: 14,
+                background: 'rgba(255,255,255,0.2)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                overflow: 'hidden', flexShrink: 0,
+              }}>
+                {brandLogo
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img src={brandLogo} alt="" style={{ width: 44, height: 44, objectFit: 'contain' }} />
+                  : <span style={{ fontWeight: 900, fontSize: 22, color: '#fff' }}>{(siteName ?? tenantData?.name ?? 'E').charAt(0)}</span>
+                }
+              </div>
+              <div>
+                <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2 }}>
+                  Orçamento
+                </p>
+                <p style={{ color: '#fff', fontWeight: 800, fontSize: 16, lineHeight: 1.15 }}>{siteName ?? tenantData?.name}</p>
+                {siteName && <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: 11, marginTop: 1 }}>{tenantData?.name}</p>}
+              </div>
+            </div>
+            {/* Quote number */}
+            <div style={{
+              background: 'rgba(255,255,255,0.18)', borderRadius: 16,
+              padding: '10px 16px', textAlign: 'center',
+            }}>
+              <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Número</p>
+              <p style={{ color: '#fff', fontSize: 20, fontWeight: 900, lineHeight: 1.1 }}>{quote.quote_number ?? 'ORC'}</p>
+            </div>
+          </div>
+          {/* Date chips */}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ background: 'rgba(255,255,255,0.18)', borderRadius: 100, padding: '5px 12px' }}>
+              <span style={{ color: '#fff', fontSize: 12, fontWeight: 700 }}>
+                {new Date(quote.created_at).toLocaleDateString('pt-BR')}
+              </span>
+            </div>
+            {quote.valid_until && (
+              <div style={{ background: 'rgba(255,255,255,0.18)', borderRadius: 100, padding: '5px 12px' }}>
+                <span style={{ color: '#fff', fontSize: 12, fontWeight: 700 }}>
+                  Válido até {new Date(quote.valid_until + 'T12:00:00').toLocaleDateString('pt-BR')}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Client info */}
+        <div style={{ padding: '20px 20px 8px', display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+          {clientFields.map(([label, value]) => (
+            <div key={label} style={{
+              background: `rgba(${rgb}, 0.05)`,
+              border: `1px solid rgba(${rgb}, 0.14)`,
+              borderRadius: 14, padding: '12px 14px',
+              width: 'calc(50% - 5px)', boxSizing: 'border-box',
+            }}>
+              <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', marginBottom: 3 }}>{label}</p>
+              <p style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{value}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Items */}
+        <div style={{ margin: '8px 20px' }}>
+          {/* Header row */}
+          <div style={{ display: 'flex', background: brandColor, borderRadius: '10px 10px 0 0', padding: '8px 12px' }}>
+            <span style={{ flex: 1, color: '#fff', fontSize: 11, fontWeight: 700 }}>Descrição</span>
+            <span style={{ width: 50, textAlign: 'center', color: '#fff', fontSize: 11, fontWeight: 700 }}>Qtd</span>
+            <span style={{ width: 90, textAlign: 'right', color: '#fff', fontSize: 11, fontWeight: 700 }}>Total</span>
+          </div>
+          {(quote.items ?? []).map((item, idx) => (
+            <div key={idx} style={{
+              display: 'flex', padding: '8px 12px',
+              background: idx % 2 === 0 ? '#fff' : `rgba(${rgb}, 0.03)`,
+              borderBottom: `1px solid rgba(${rgb}, 0.1)`,
+            }}>
+              <span style={{ flex: 1, fontSize: 12, color: '#1e293b' }}>{item.description}</span>
+              <span style={{ width: 50, textAlign: 'center', fontSize: 12, color: '#64748b' }}>{item.quantity}</span>
+              <span style={{ width: 90, textAlign: 'right', fontSize: 12, fontWeight: 600, color: '#1e293b' }}>{fmt(item.quantity * item.unit_price)}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Total */}
+        <div style={{ margin: '0 20px 20px', padding: '12px 14px', background: `rgba(${rgb}, 0.07)`, borderRadius: '0 0 12px 12px' }}>
+          {Number(quote.discount) > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#64748b', marginBottom: 4 }}>
+              <span>Desconto</span><span style={{ color: '#ef4444' }}>- {fmt(Number(quote.discount))}</span>
+            </div>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 900, color: brandColor }}>
+            <span>TOTAL</span><span>{fmt(Number(quote.total))}</span>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ margin: '0 20px 20px', background: `rgba(${rgb}, 0.06)`, borderRadius: 12, padding: '10px 14px', textAlign: 'center' }}>
+          <p style={{ fontSize: 11, color: `rgba(${rgb}, 0.9)`, fontWeight: 600 }}>
+            Este orçamento é válido por 30 dias a partir da data de emissão.
+          </p>
+        </div>
+      </div>
+
+      {/* Print layout */}
+      <div className="hidden print:block print-layout" style={{ fontFamily: 'Arial, sans-serif', color: '#1a1a1a', maxWidth: '800px', margin: '0 auto', padding: '32px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '32px', borderBottom: `3px solid ${brandColor}`, paddingBottom: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             {brandLogo && (
@@ -288,8 +422,8 @@ export default function OrcamentoDetailPage() {
               <img src={brandLogo} alt="Logo" style={{ height: '60px', objectFit: 'contain' }} />
             )}
             <div>
-              <h1 style={{ fontSize: '22px', fontWeight: 'bold', color: '#1a1a1a', margin: 0 }}>{tenantData?.name}</h1>
-              {quote.origin && <p style={{ fontSize: '12px', color: '#666', margin: '4px 0 0' }}>{ORIGIN_LABELS[quote.origin] ?? quote.origin}</p>}
+              <h1 style={{ fontSize: '22px', fontWeight: 'bold', color: '#1a1a1a', margin: 0 }}>{siteName ?? tenantData?.name}</h1>
+              {siteName && <p style={{ fontSize: '12px', color: '#666', margin: '4px 0 0' }}>{tenantData?.name}</p>}
             </div>
           </div>
           <div style={{ textAlign: 'right' }}>
@@ -298,21 +432,17 @@ export default function OrcamentoDetailPage() {
             {quote.valid_until && <p style={{ fontSize: '12px', color: '#666', margin: '2px 0 0' }}>Válido até: {new Date(quote.valid_until + 'T12:00:00').toLocaleDateString('pt-BR')}</p>}
           </div>
         </div>
-
-        {/* Client info */}
         <div style={{ marginBottom: '24px', padding: '16px', background: '#f8f8f8', borderRadius: '8px' }}>
           <h2 style={{ fontSize: '14px', fontWeight: 'bold', color: brandColor, marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Dados do Cliente</h2>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-            {[['Nome', quote.client_name], ['Telefone', quote.client_phone], ['CPF/CNPJ', quote.client_cpf], ['Endereço', quote.client_address], ['Cidade', quote.client_city]].filter(([, v]) => v).map(([l, v]) => (
-              <div key={String(l)}>
+            {clientFields.map(([l, v]) => (
+              <div key={l}>
                 <span style={{ fontSize: '11px', color: '#888', textTransform: 'uppercase' }}>{l}</span>
-                <p style={{ fontSize: '13px', fontWeight: '600', margin: '2px 0 0' }}>{String(v)}</p>
+                <p style={{ fontSize: '13px', fontWeight: '600', margin: '2px 0 0' }}>{v}</p>
               </div>
             ))}
           </div>
         </div>
-
-        {/* Items table */}
         <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '16px' }}>
           <thead>
             <tr style={{ background: brandColor }}>
@@ -333,8 +463,6 @@ export default function OrcamentoDetailPage() {
             ))}
           </tbody>
         </table>
-
-        {/* Totals */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '24px' }}>
           <div style={{ width: '240px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '13px', borderBottom: '1px solid #eee' }}>
@@ -355,15 +483,12 @@ export default function OrcamentoDetailPage() {
             </div>
           </div>
         </div>
-
         {quote.notes && (
           <div style={{ marginBottom: '24px', padding: '14px', border: '1px solid #ddd', borderRadius: '6px' }}>
             <h3 style={{ fontSize: '12px', fontWeight: 'bold', color: '#888', textTransform: 'uppercase', marginBottom: '6px' }}>Observações</h3>
             <p style={{ fontSize: '13px', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}>{quote.notes}</p>
           </div>
         )}
-
-        {/* Footer */}
         <div style={{ borderTop: `2px solid ${brandColor}`, paddingTop: '12px', textAlign: 'center', fontSize: '11px', color: '#888' }}>
           <p>Este orçamento é válido por 30 dias a partir da data de emissão.</p>
         </div>
