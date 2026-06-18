@@ -176,7 +176,7 @@ export default function ComissoesPage() {
           .lte('paid_date', endDate)
         const paidAuxIds = new Set((paidByAux ?? []).map((e: any) => e.auxiliary_id))
         for (const row of (legacyRows ?? [])) {
-          if (row.auxiliary?.id && paidAuxIds.has(row.auxiliary.id)) {
+          if ((row.auxiliary as any)?.id && paidAuxIds.has((row.auxiliary as any)?.id)) {
             paidLegacyOrderIds.add(row.id)
           }
         }
