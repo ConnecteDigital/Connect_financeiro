@@ -114,7 +114,7 @@ export default function OrcamentoDetailPage() {
   }
 
   const status = STATUS_MAP[quote.status] ?? STATUS_MAP.pendente
-  const originBranding = quote.origin && tenantData?.origin_branding?.[quote.origin]
+  const originBranding = quote.origin ? (tenantData?.origin_branding?.[quote.origin] ?? null) : null
   const brandColor = originBranding?.color ?? tenantData?.primary_color ?? '#f97316'
   const brandLogo = originBranding?.logo_url ?? tenantData?.logo_url
 
