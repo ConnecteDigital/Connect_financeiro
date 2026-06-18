@@ -7,6 +7,7 @@ import {
   LayoutDashboard, PhoneCall, Users, TrendingDown,
   BarChart3, Settings, LogOut, Building2,
   Plus, MoreHorizontal, UserCog, Moon, Sun, Sparkles,
+  Wallet, FileText,
 } from 'lucide-react'
 import { ConnectDigitalLogo } from '@/components/logos'
 import { useTenant } from '@/lib/tenant-context'
@@ -14,18 +15,20 @@ import { TenantProvider } from '@/lib/tenant-context'
 import OnboardingWizard from '@/components/OnboardingWizard'
 
 const mainNav = [
-  { href: '/dashboard',          label: 'Início',   icon: LayoutDashboard },
-  { href: '/dashboard/chamados', label: 'Chamados', icon: PhoneCall },
-  { href: '/dashboard/saidas',   label: 'Saídas',   icon: TrendingDown },
+  { href: '/dashboard',             label: 'Início',      icon: LayoutDashboard },
+  { href: '/dashboard/chamados',    label: 'Chamados',    icon: PhoneCall },
+  { href: '/dashboard/financeiro',  label: 'Financeiro',  icon: Wallet },
 ]
 
 const moreNav = [
-  { href: '/dashboard/chat',         label: 'Assistente',   icon: Sparkles },
-  { href: '/dashboard/relatorios',   label: 'Relatórios',   icon: BarChart3 },
-  { href: '/dashboard/clientes',     label: 'Clientes',     icon: Users },
-  { href: '/dashboard/fornecedores', label: 'Fornecedores', icon: Building2 },
-  { href: '/dashboard/auxiliares',   label: 'Comissões',    icon: UserCog },
-  { href: '/dashboard/configuracoes',label: 'Configurações',icon: Settings },
+  { href: '/dashboard/orcamentos',    label: 'Orçamentos',   icon: FileText },
+  { href: '/dashboard/chat',          label: 'Assistente',   icon: Sparkles },
+  { href: '/dashboard/relatorios',    label: 'Relatórios',   icon: BarChart3 },
+  { href: '/dashboard/clientes',      label: 'Clientes',     icon: Users },
+  { href: '/dashboard/fornecedores',  label: 'Fornecedores', icon: Building2 },
+  { href: '/dashboard/auxiliares',    label: 'Comissões',    icon: UserCog },
+  { href: '/dashboard/saidas',        label: 'Saídas',       icon: TrendingDown },
+  { href: '/dashboard/configuracoes', label: 'Configurações',icon: Settings },
 ]
 
 const allNav = [...mainNav, ...moreNav]

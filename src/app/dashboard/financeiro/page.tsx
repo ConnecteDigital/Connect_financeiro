@@ -1,0 +1,572 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import { useTenant } from '@/lib/tenant-context'
+import { Wallet, TrendingDown, TrendingUp, FileText, BarChart3, Plus, Loader2, Check, X, AlertCircle } from 'lucide-react'
+
+type Tab = 'saidas' | 'entradas' | 'boletos' | 'saldo'
+
+interface Expense {
+  id: string
+  description: string
+  amount: number
+  expense_type: string
+  status: string
+  due_date: string
+  paid_date?: string
+  created_at: string
+}
+
+interface CashEntry {
+  id: string
+  description: string
+  amount: number
+  direction: string
+  entry_type: string
+  status: string
+  due_date: string
+  paid_date?: string
+  boleto_code?: string
+  boleto_bank?: string
+  notes?: string
+  created_at: string
+}
+
+function fmt(n: number) {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n)
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const map: Record<string, { label: string; bg: string; color: string }> = {
+    pago: { label: 'Pago', bg: 'rgba(16,185,129,0.12)', color: '#10b981' },
+    pendente: { label: 'Pendente', bg: 'rgba(245,158,11,0.12)', color: '#f59e0b' },
+    cancelado: { label: 'Cancelado', bg: 'rgba(239,68,68,0.1)', color: '#ef4444' },
+  }
+  const s = map[status] ?? map.pendente
+  return (
+    <span className="text-xs font-medium px-2 py-0.5 rounded-full"
+      style={{ background: s.bg, color: s.color }}>{s.label}</span>
+  )
+}
+
+export default function FinanceiroPage() {
+  const { tenant } = useTenant()
+  const [activeTab, setActiveTab] = useState<Tab>('saidas')
+  const [expenses, setExpenses] = useState<Expense[]>([])
+  const [cashEntries, setCashEntries] = useState<CashEntry[]>([])
+  const [loading, setLoading] = useState(true)
+
+  // Saidas filters
+  const [saidasTypeFilter, setSaidasTypeFilter] = useState('todos')
+  const [saidasStatusFilter, setSaidasStatusFilter] = useState('todos')
+
+  // New entry form state
+  const [showEntradaForm, setShowEntradaForm] = useState(false)
+  const [showBoletoForm, setShowBoletoForm] = useState(false)
+  const [savingEntry, setSavingEntry] = useState(false)
+
+  const [newEntrada, setNewEntrada] = useState({ description: '', amount: '', entry_type: 'avulso', due_date: new Date().toISOString().slice(0, 10), status: 'pendente' as string })
+  const [newBoleto, setNewBoleto] = useState({ description: '', amount: '', direction: 'saida', boleto_bank: '', boleto_code: '', due_date: new Date().toISOString().slice(0, 10) })
+
+  useEffect(() => {
+    if (!tenant) return
+    loadData()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenant])
+
+  async function loadData() {
+    setLoading(true)
+    try {
+      const supabase = createClient()
+      const [expRes, ceRes] = await Promise.all([
+        supabase.from('expenses').select('*').order('due_date', { ascending: false }),
+        supabase.from('cash_entries').select('*').order('due_date', { ascending: false }),
+      ])
+      if (expRes.data) setExpenses(expRes.data)
+      if (ceRes.data) setCashEntries(ceRes.data)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleAddEntrada() {
+    if (!tenant || !newEntrada.description.trim() || !newEntrada.amount) return
+    setSavingEntry(true)
+    try {
+      const supabase = createClient()
+      const { data } = await supabase.from('cash_entries').insert({
+        tenant_id: tenant.id,
+        description: newEntrada.description.trim(),
+        amount: Number(newEntrada.amount),
+        direction: 'entrada',
+        entry_type: newEntrada.entry_type,
+        status: newEntrada.status,
+        due_date: newEntrada.due_date,
+      }).select().single()
+      if (data) {
+        setCashEntries(prev => [data, ...prev])
+        setNewEntrada({ description: '', amount: '', entry_type: 'avulso', due_date: new Date().toISOString().slice(0, 10), status: 'pendente' })
+        setShowEntradaForm(false)
+      }
+    } finally {
+      setSavingEntry(false)
+    }
+  }
+
+  async function handleAddBoleto() {
+    if (!tenant || !newBoleto.description.trim() || !newBoleto.amount) return
+    setSavingEntry(true)
+    try {
+      const supabase = createClient()
+      const { data } = await supabase.from('cash_entries').insert({
+        tenant_id: tenant.id,
+        description: newBoleto.description.trim(),
+        amount: Number(newBoleto.amount),
+        direction: newBoleto.direction,
+        entry_type: 'boleto',
+        status: 'pendente',
+        due_date: newBoleto.due_date,
+        boleto_bank: newBoleto.boleto_bank || null,
+        boleto_code: newBoleto.boleto_code || null,
+      }).select().single()
+      if (data) {
+        setCashEntries(prev => [data, ...prev])
+        setNewBoleto({ description: '', amount: '', direction: 'saida', boleto_bank: '', boleto_code: '', due_date: new Date().toISOString().slice(0, 10) })
+        setShowBoletoForm(false)
+      }
+    } finally {
+      setSavingEntry(false)
+    }
+  }
+
+  async function toggleExpenseStatus(exp: Expense) {
+    const nextStatus = exp.status === 'pago' ? 'pendente' : 'pago'
+    const supabase = createClient()
+    await supabase.from('expenses').update({ status: nextStatus, paid_date: nextStatus === 'pago' ? new Date().toISOString().slice(0, 10) : null }).eq('id', exp.id)
+    setExpenses(prev => prev.map(e => e.id === exp.id ? { ...e, status: nextStatus } : e))
+  }
+
+  async function toggleCashEntryStatus(ce: CashEntry) {
+    const nextStatus = ce.status === 'pago' ? 'pendente' : 'pago'
+    const supabase = createClient()
+    await supabase.from('cash_entries').update({ status: nextStatus, paid_date: nextStatus === 'pago' ? new Date().toISOString().slice(0, 10) : null }).eq('id', ce.id)
+    setCashEntries(prev => prev.map(e => e.id === ce.id ? { ...e, status: nextStatus } : e))
+  }
+
+  // Computed
+  const filteredExpenses = expenses.filter(e => {
+    const typeOk = saidasTypeFilter === 'todos' || e.expense_type === saidasTypeFilter
+    const statusOk = saidasStatusFilter === 'todos' || e.status === saidasStatusFilter
+    return typeOk && statusOk
+  })
+
+  const totalExpenses = filteredExpenses.reduce((s, e) => s + Number(e.amount), 0)
+  const paidExpenses = filteredExpenses.filter(e => e.status === 'pago').reduce((s, e) => s + Number(e.amount), 0)
+  const pendingExpenses = filteredExpenses.filter(e => e.status === 'pendente').reduce((s, e) => s + Number(e.amount), 0)
+
+  const entradas = cashEntries.filter(e => e.direction === 'entrada' && e.entry_type !== 'boleto')
+  const boletosPagar = cashEntries.filter(e => e.entry_type === 'boleto' && e.direction === 'saida')
+  const boletosReceber = cashEntries.filter(e => e.entry_type === 'boleto' && e.direction === 'entrada')
+
+  // Saldo tab - current month
+  const now = new Date()
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10)
+  const entradasMes = cashEntries.filter(e => e.direction === 'entrada' && e.due_date >= monthStart && e.due_date <= monthEnd && e.status === 'pago').reduce((s, e) => s + Number(e.amount), 0)
+  const saidasMes = expenses.filter(e => e.due_date >= monthStart && e.due_date <= monthEnd && e.status === 'pago').reduce((s, e) => s + Number(e.amount), 0)
+  const saldoLiquido = entradasMes - saidasMes
+  const in7days = new Date()
+  in7days.setDate(in7days.getDate() + 7)
+  const in7daysStr = in7days.toISOString().slice(0, 10)
+  const boletosVencer = cashEntries.filter(e => e.entry_type === 'boleto' && e.status === 'pendente' && e.due_date <= in7daysStr && e.due_date >= now.toISOString().slice(0, 10))
+
+  const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
+    { key: 'saidas', label: 'Saídas', icon: <TrendingDown className="w-4 h-4" /> },
+    { key: 'entradas', label: 'Entradas', icon: <TrendingUp className="w-4 h-4" /> },
+    { key: 'boletos', label: 'Boletos', icon: <FileText className="w-4 h-4" /> },
+    { key: 'saldo', label: 'Saldo', icon: <BarChart3 className="w-4 h-4" /> },
+  ]
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(var(--primary-rgb),0.1)' }}>
+          <Wallet className="w-5 h-5" style={{ color: 'var(--primary)' }} />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Financeiro</h1>
+          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Gerencie saídas, entradas, boletos e saldo</p>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 p-1 rounded-2xl" style={{ background: 'var(--surface-secondary)' }}>
+        {tabs.map(t => (
+          <button key={t.key} onClick={() => setActiveTab(t.key)}
+            className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium transition-all"
+            style={activeTab === t.key
+              ? { background: 'var(--surface)', color: 'var(--primary)', boxShadow: 'var(--shadow-sm)' }
+              : { color: 'var(--text-secondary)' }}>
+            {t.icon}
+            <span className="hidden sm:inline">{t.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--primary)' }} />
+        </div>
+      ) : (
+        <>
+          {/* SAÍDAS TAB */}
+          {activeTab === 'saidas' && (
+            <div className="space-y-4">
+              {/* Summary */}
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: 'Total', value: totalExpenses, color: 'var(--text-primary)' },
+                  { label: 'Pago', value: paidExpenses, color: '#10b981' },
+                  { label: 'Pendente', value: pendingExpenses, color: '#f59e0b' },
+                ].map(card => (
+                  <div key={card.label} className="rounded-2xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                    <p className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>{card.label}</p>
+                    <p className="text-lg font-bold mt-1" style={{ color: card.color }}>{fmt(card.value)}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Filters */}
+              <div className="flex flex-wrap gap-2">
+                {['todos', 'fixo', 'avulso'].map(f => (
+                  <button key={f} onClick={() => setSaidasTypeFilter(f)}
+                    className="px-3 py-1.5 rounded-xl text-xs font-medium transition"
+                    style={saidasTypeFilter === f
+                      ? { background: 'var(--primary)', color: '#fff' }
+                      : { background: 'var(--surface-secondary)', color: 'var(--text-secondary)' }}>
+                    {f === 'todos' ? 'Todos' : f === 'fixo' ? 'Fixo' : 'Avulso'}
+                  </button>
+                ))}
+                <div className="w-px self-stretch" style={{ background: 'var(--border)' }} />
+                {['todos', 'pago', 'pendente'].map(f => (
+                  <button key={f} onClick={() => setSaidasStatusFilter(f)}
+                    className="px-3 py-1.5 rounded-xl text-xs font-medium transition"
+                    style={saidasStatusFilter === f
+                      ? { background: 'var(--primary)', color: '#fff' }
+                      : { background: 'var(--surface-secondary)', color: 'var(--text-secondary)' }}>
+                    {f === 'todos' ? 'Todos' : f === 'pago' ? 'Pago' : 'Pendente'}
+                  </button>
+                ))}
+              </div>
+
+              {/* List */}
+              <div className="space-y-2">
+                {filteredExpenses.length === 0 && (
+                  <div className="text-center py-12" style={{ color: 'var(--text-tertiary)' }}>Nenhuma saída encontrada</div>
+                )}
+                {filteredExpenses.map(exp => (
+                  <div key={exp.id} className="rounded-2xl p-4 flex items-center gap-3"
+                    style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{exp.description}</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                        Venc: {new Date(exp.due_date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                        {exp.expense_type && <span className="ml-2 capitalize">{exp.expense_type}</span>}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <StatusBadge status={exp.status} />
+                      <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{fmt(Number(exp.amount))}</p>
+                      <button onClick={() => toggleExpenseStatus(exp)}
+                        className="w-8 h-8 rounded-xl flex items-center justify-center transition"
+                        style={{ background: exp.status === 'pago' ? 'rgba(16,185,129,0.1)' : 'var(--surface-secondary)' }}
+                        title={exp.status === 'pago' ? 'Marcar pendente' : 'Marcar pago'}>
+                        {exp.status === 'pago' ? <Check className="w-4 h-4 text-emerald-500" /> : <X className="w-4 h-4" style={{ color: 'var(--text-tertiary)' }} />}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ENTRADAS TAB */}
+          {activeTab === 'entradas' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{entradas.length} entradas</p>
+                <button onClick={() => setShowEntradaForm(v => !v)}
+                  className="btn-primary text-sm px-4 py-2.5 flex items-center gap-2">
+                  <Plus className="w-4 h-4" />
+                  Entrada avulsa
+                </button>
+              </div>
+
+              {showEntradaForm && (
+                <div className="rounded-2xl p-5 space-y-4" style={{ background: 'var(--surface)', border: '1px solid var(--primary)' }}>
+                  <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Nova Entrada</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Descrição*</label>
+                      <input type="text" value={newEntrada.description} onChange={e => setNewEntrada(p => ({ ...p, description: e.target.value }))}
+                        className="input-field py-2.5 text-sm" placeholder="Ex: Recebimento de serviço..." />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Valor*</label>
+                      <input type="number" step="0.01" value={newEntrada.amount} onChange={e => setNewEntrada(p => ({ ...p, amount: e.target.value }))}
+                        className="input-field py-2.5 text-sm" placeholder="0,00" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Data</label>
+                      <input type="date" value={newEntrada.due_date} onChange={e => setNewEntrada(p => ({ ...p, due_date: e.target.value }))}
+                        className="input-field py-2.5 text-sm" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Tipo</label>
+                      <select value={newEntrada.entry_type} onChange={e => setNewEntrada(p => ({ ...p, entry_type: e.target.value }))}
+                        className="input-field py-2.5 text-sm">
+                        <option value="avulso">Avulso</option>
+                        <option value="venda">Venda</option>
+                        <option value="servico">Serviço</option>
+                        <option value="outros">Outros</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Status</label>
+                      <select value={newEntrada.status} onChange={e => setNewEntrada(p => ({ ...p, status: e.target.value }))}
+                        className="input-field py-2.5 text-sm">
+                        <option value="pendente">Pendente</option>
+                        <option value="pago">Pago</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <button onClick={() => setShowEntradaForm(false)} className="px-4 py-2.5 rounded-xl text-sm font-medium"
+                      style={{ background: 'var(--surface-secondary)', color: 'var(--text-secondary)' }}>Cancelar</button>
+                    <button onClick={handleAddEntrada} disabled={savingEntry || !newEntrada.description.trim() || !newEntrada.amount}
+                      className="btn-primary text-sm px-5 py-2.5 flex items-center gap-2">
+                      {savingEntry ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                      Salvar
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                {entradas.length === 0 && (
+                  <div className="text-center py-12" style={{ color: 'var(--text-tertiary)' }}>Nenhuma entrada cadastrada</div>
+                )}
+                {entradas.map(ce => (
+                  <div key={ce.id} className="rounded-2xl p-4 flex items-center gap-3"
+                    style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{ce.description}</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                        {new Date(ce.due_date + 'T12:00:00').toLocaleDateString('pt-BR')} · {ce.entry_type}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <StatusBadge status={ce.status} />
+                      <p className="text-sm font-semibold text-emerald-600">{fmt(Number(ce.amount))}</p>
+                      <button onClick={() => toggleCashEntryStatus(ce)}
+                        className="w-8 h-8 rounded-xl flex items-center justify-center transition"
+                        style={{ background: ce.status === 'pago' ? 'rgba(16,185,129,0.1)' : 'var(--surface-secondary)' }}>
+                        {ce.status === 'pago' ? <Check className="w-4 h-4 text-emerald-500" /> : <X className="w-4 h-4" style={{ color: 'var(--text-tertiary)' }} />}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* BOLETOS TAB */}
+          {activeTab === 'boletos' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{boletosPagar.length + boletosReceber.length} boletos</p>
+                <button onClick={() => setShowBoletoForm(v => !v)}
+                  className="btn-primary text-sm px-4 py-2.5 flex items-center gap-2">
+                  <Plus className="w-4 h-4" />
+                  Novo Boleto
+                </button>
+              </div>
+
+              {showBoletoForm && (
+                <div className="rounded-2xl p-5 space-y-4" style={{ background: 'var(--surface)', border: '1px solid var(--primary)' }}>
+                  <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Novo Boleto</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Descrição*</label>
+                      <input type="text" value={newBoleto.description} onChange={e => setNewBoleto(p => ({ ...p, description: e.target.value }))}
+                        className="input-field py-2.5 text-sm" placeholder="Ex: Aluguel, Fornecedor..." />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Valor*</label>
+                      <input type="number" step="0.01" value={newBoleto.amount} onChange={e => setNewBoleto(p => ({ ...p, amount: e.target.value }))}
+                        className="input-field py-2.5 text-sm" placeholder="0,00" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Direção</label>
+                      <select value={newBoleto.direction} onChange={e => setNewBoleto(p => ({ ...p, direction: e.target.value }))}
+                        className="input-field py-2.5 text-sm">
+                        <option value="saida">A Pagar</option>
+                        <option value="entrada">A Receber</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Banco</label>
+                      <input type="text" value={newBoleto.boleto_bank} onChange={e => setNewBoleto(p => ({ ...p, boleto_bank: e.target.value }))}
+                        className="input-field py-2.5 text-sm" placeholder="Ex: Bradesco, Itaú..." />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Vencimento</label>
+                      <input type="date" value={newBoleto.due_date} onChange={e => setNewBoleto(p => ({ ...p, due_date: e.target.value }))}
+                        className="input-field py-2.5 text-sm" />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Código de Barras</label>
+                      <input type="text" value={newBoleto.boleto_code} onChange={e => setNewBoleto(p => ({ ...p, boleto_code: e.target.value }))}
+                        className="input-field py-2.5 text-sm" placeholder="000..." />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <button onClick={() => setShowBoletoForm(false)} className="px-4 py-2.5 rounded-xl text-sm font-medium"
+                      style={{ background: 'var(--surface-secondary)', color: 'var(--text-secondary)' }}>Cancelar</button>
+                    <button onClick={handleAddBoleto} disabled={savingEntry || !newBoleto.description.trim() || !newBoleto.amount}
+                      className="btn-primary text-sm px-5 py-2.5 flex items-center gap-2">
+                      {savingEntry ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                      Salvar
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Boletos a Pagar */}
+              <div>
+                <h3 className="text-sm font-semibold mb-2 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                  <TrendingDown className="w-4 h-4 text-red-500" /> Boletos a Pagar
+                </h3>
+                <div className="space-y-2">
+                  {boletosPagar.length === 0 && <p className="text-sm text-center py-6" style={{ color: 'var(--text-tertiary)' }}>Nenhum boleto a pagar</p>}
+                  {boletosPagar.map(ce => (
+                    <div key={ce.id} className="rounded-2xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                      <div className="flex items-center justify-between">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{ce.description}</p>
+                          <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                            Venc: {new Date(ce.due_date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                            {ce.boleto_bank && <span className="ml-2">{ce.boleto_bank}</span>}
+                          </p>
+                          {ce.boleto_code && <p className="text-xs mt-0.5 font-mono truncate" style={{ color: 'var(--text-tertiary)' }}>{ce.boleto_code}</p>}
+                        </div>
+                        <div className="flex items-center gap-3 flex-shrink-0 ml-3">
+                          <StatusBadge status={ce.status} />
+                          <p className="text-sm font-semibold text-red-500">{fmt(Number(ce.amount))}</p>
+                          <button onClick={() => toggleCashEntryStatus(ce)}
+                            className="w-8 h-8 rounded-xl flex items-center justify-center transition"
+                            style={{ background: ce.status === 'pago' ? 'rgba(16,185,129,0.1)' : 'var(--surface-secondary)' }}>
+                            {ce.status === 'pago' ? <Check className="w-4 h-4 text-emerald-500" /> : <X className="w-4 h-4" style={{ color: 'var(--text-tertiary)' }} />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Boletos a Receber */}
+              <div>
+                <h3 className="text-sm font-semibold mb-2 flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                  <TrendingUp className="w-4 h-4 text-emerald-500" /> Boletos a Receber
+                </h3>
+                <div className="space-y-2">
+                  {boletosReceber.length === 0 && <p className="text-sm text-center py-6" style={{ color: 'var(--text-tertiary)' }}>Nenhum boleto a receber</p>}
+                  {boletosReceber.map(ce => (
+                    <div key={ce.id} className="rounded-2xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                      <div className="flex items-center justify-between">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{ce.description}</p>
+                          <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                            Venc: {new Date(ce.due_date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                            {ce.boleto_bank && <span className="ml-2">{ce.boleto_bank}</span>}
+                          </p>
+                          {ce.boleto_code && <p className="text-xs mt-0.5 font-mono truncate" style={{ color: 'var(--text-tertiary)' }}>{ce.boleto_code}</p>}
+                        </div>
+                        <div className="flex items-center gap-3 flex-shrink-0 ml-3">
+                          <StatusBadge status={ce.status} />
+                          <p className="text-sm font-semibold text-emerald-600">{fmt(Number(ce.amount))}</p>
+                          <button onClick={() => toggleCashEntryStatus(ce)}
+                            className="w-8 h-8 rounded-xl flex items-center justify-center transition"
+                            style={{ background: ce.status === 'pago' ? 'rgba(16,185,129,0.1)' : 'var(--surface-secondary)' }}>
+                            {ce.status === 'pago' ? <Check className="w-4 h-4 text-emerald-500" /> : <X className="w-4 h-4" style={{ color: 'var(--text-tertiary)' }} />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* SALDO TAB */}
+          {activeTab === 'saldo' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="rounded-2xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <TrendingUp className="w-5 h-5 text-emerald-500" />
+                    <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Entradas do Mês</p>
+                  </div>
+                  <p className="text-3xl font-bold text-emerald-600">{fmt(entradasMes)}</p>
+                  <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>Valores pagos em {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</p>
+                </div>
+                <div className="rounded-2xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <TrendingDown className="w-5 h-5 text-red-500" />
+                    <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Saídas do Mês</p>
+                  </div>
+                  <p className="text-3xl font-bold text-red-500">{fmt(saidasMes)}</p>
+                  <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>Despesas pagas em {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</p>
+                </div>
+                <div className="rounded-2xl p-5 sm:col-span-2" style={{
+                  background: saldoLiquido >= 0 ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)',
+                  border: `1px solid ${saldoLiquido >= 0 ? 'rgba(16,185,129,0.25)' : 'rgba(239,68,68,0.25)'}`,
+                }}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <BarChart3 className="w-5 h-5" style={{ color: saldoLiquido >= 0 ? '#10b981' : '#ef4444' }} />
+                    <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Saldo Líquido do Mês</p>
+                  </div>
+                  <p className="text-4xl font-bold" style={{ color: saldoLiquido >= 0 ? '#10b981' : '#ef4444' }}>{fmt(saldoLiquido)}</p>
+                </div>
+                <div className="rounded-2xl p-5 sm:col-span-2" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <AlertCircle className="w-5 h-5 text-amber-500" />
+                    <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Boletos a Vencer (próximos 7 dias)</p>
+                  </div>
+                  {boletosVencer.length === 0 ? (
+                    <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>Nenhum boleto vencendo nos próximos 7 dias</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {boletosVencer.map(b => (
+                        <div key={b.id} className="flex items-center justify-between py-1.5">
+                          <div>
+                            <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{b.description}</p>
+                            <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Venc: {new Date(b.due_date + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
+                          </div>
+                          <p className="text-sm font-semibold" style={{ color: b.direction === 'saida' ? '#ef4444' : '#10b981' }}>{fmt(Number(b.amount))}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}

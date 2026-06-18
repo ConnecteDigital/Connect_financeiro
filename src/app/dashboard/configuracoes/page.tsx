@@ -100,6 +100,13 @@ export default function ConfiguracoesPage() {
   const [brandSaved, setBrandSaved] = useState(false)
   const logoInputRef = useRef<HTMLInputElement>(null)
 
+  // Identidade por Origem
+  const [originBranding, setOriginBranding] = useState<Record<string, { color: string; logo_url?: string }>>({})
+  const [savingOriginBrand, setSavingOriginBrand] = useState(false)
+  const [originBrandSaved, setOriginBrandSaved] = useState(false)
+  const [originLogoFiles, setOriginLogoFiles] = useState<Record<string, File>>({})
+  const [originLogoPreviews, setOriginLogoPreviews] = useState<Record<string, string>>({})
+
   useEffect(() => {
     if (!tenant) return
     if (tenant.call_origins) setOrigins(tenant.call_origins)
@@ -109,6 +116,7 @@ export default function ConfiguracoesPage() {
     setPhone(tenant.phone ?? '')
     setPrimaryColor(tenant.primary_color ?? '#f97316')
     setLogoPreview(tenant.logo_url ?? null)
+    if ((tenant as any)?.origin_branding) setOriginBranding((tenant as any).origin_branding)
   }, [tenant])
 
   useEffect(() => {
@@ -259,6 +267,50 @@ export default function ConfiguracoesPage() {
       setTimeout(() => setBrandSaved(false), 3000)
     } finally {
       setSavingBrand(false)
+    }
+  }
+
+  async function handleSaveOriginBranding() {
+    if (!tenant) return
+    setSavingOriginBrand(true)
+    try {
+      const supabase = createClient()
+      const finalBranding: Record<string, { color: string; logo_url?: string }> = { ...originBranding }
+
+      for (const [originKey, file] of Object.entries(originLogoFiles)) {
+        const timestamp = Date.now()
+        const path = `${tenant.id}/origin-${originKey}-${timestamp}.png`
+        const { error: upErr } = await supabase.storage
+          .from('tenant-logos')
+          .upload(path, file, { upsert: true })
+        if (upErr) {
+          console.error(`Falha no upload da logo para origem ${originKey}:`, upErr)
+          alert(`Não foi possível enviar a logo para a origem "${originKey}". Tente novamente.`)
+          return
+        }
+        const { data } = supabase.storage.from('tenant-logos').getPublicUrl(path)
+        finalBranding[originKey] = {
+          ...finalBranding[originKey],
+          logo_url: `${data.publicUrl}?v=${timestamp}`,
+        }
+      }
+
+      const { error } = await supabase
+        .from('tenants')
+        .update({ origin_branding: finalBranding })
+        .eq('id', tenant.id)
+      if (error) {
+        console.error('Falha ao salvar identidade por origem:', error)
+        alert('Não foi possível salvar. Verifique se a migration_v11.sql foi executada no Supabase.')
+        return
+      }
+      updateTenant({ origin_branding: finalBranding } as any)
+      setOriginBranding(finalBranding)
+      setOriginLogoFiles({})
+      setOriginBrandSaved(true)
+      setTimeout(() => setOriginBrandSaved(false), 3000)
+    } finally {
+      setSavingOriginBrand(false)
     }
   }
 
@@ -671,6 +723,91 @@ export default function ConfiguracoesPage() {
           <button onClick={handleSaveCompany} disabled={savingCompany} className="btn-primary text-sm px-5 py-2.5">
             {savingCompany ? <Loader2 className="w-4 h-4 animate-spin" /> : companySaved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
             {companySaved ? 'Salvo!' : 'Salvar'}
+          </button>
+        </div>
+      </div>
+
+      {/* Identidade por Origem */}
+      <div className="rounded-xl border p-6 space-y-4"
+        style={{ background: 'var(--surface)', borderColor: 'var(--border)', boxShadow: 'var(--shadow-sm)' }}>
+        <div className="flex items-center gap-2 border-b pb-3" style={{ borderColor: 'var(--border)' }}>
+          <Globe className="w-5 h-5" style={{ color: 'var(--primary)' }} />
+          <h2 className="font-semibold" style={{ color: 'var(--text-primary)' }}>Identidade por Origem</h2>
+        </div>
+        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+          Personalize logo e cor para cada origem de chamado.
+        </p>
+
+        <div className="space-y-4">
+          {origins.map(origin => (
+            <div key={origin} className="flex items-center gap-4 p-3 rounded-lg" style={{ background: 'var(--surface-secondary)' }}>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{origin}</p>
+              </div>
+              {/* Color picker */}
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Cor</span>
+                <div className="relative w-8 h-8 rounded-full overflow-hidden border-2" style={{ borderColor: 'var(--border)', background: originBranding[origin]?.color ?? '#f97316' }}>
+                  <input
+                    type="color"
+                    value={originBranding[origin]?.color ?? '#f97316'}
+                    onChange={e => {
+                      setOriginBranding(prev => ({ ...prev, [origin]: { ...prev[origin], color: e.target.value } }))
+                      setOriginBrandSaved(false)
+                    }}
+                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                  />
+                </div>
+              </label>
+              {/* Logo upload */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {(originLogoPreviews[origin] || originBranding[origin]?.logo_url) && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={originLogoPreviews[origin] ?? originBranding[origin]?.logo_url}
+                    alt={`Logo ${origin}`}
+                    className="w-10 h-10 rounded-lg object-contain border"
+                    style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
+                  />
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const input = document.getElementById(`origin-logo-${origin.replace(/\s+/g, '-')}`) as HTMLInputElement
+                    input?.click()
+                  }}
+                  className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition"
+                  style={{ background: 'rgba(var(--primary-rgb),0.1)', color: 'var(--primary)' }}>
+                  <Upload className="w-3.5 h-3.5" />
+                  Logo
+                </button>
+                <input
+                  id={`origin-logo-${origin.replace(/\s+/g, '-')}`}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={e => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    setOriginLogoFiles(prev => ({ ...prev, [origin]: file }))
+                    setOriginLogoPreviews(prev => ({ ...prev, [origin]: URL.createObjectURL(file) }))
+                    setOriginBrandSaved(false)
+                  }}
+                />
+              </div>
+            </div>
+          ))}
+          {origins.length === 0 && (
+            <p className="text-sm text-center py-4" style={{ color: 'var(--text-tertiary)' }}>
+              Nenhuma origem configurada. Adicione origens na seção "Origens dos Chamados" acima.
+            </p>
+          )}
+        </div>
+
+        <div className="flex justify-end">
+          <button onClick={handleSaveOriginBranding} disabled={savingOriginBrand} className="btn-primary text-sm px-5 py-2.5">
+            {savingOriginBrand ? <Loader2 className="w-4 h-4 animate-spin" /> : originBrandSaved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+            {originBrandSaved ? 'Salvo!' : 'Salvar Identidades'}
           </button>
         </div>
       </div>
