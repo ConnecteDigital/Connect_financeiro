@@ -63,10 +63,12 @@ export default function FinanceiroPage() {
   const [saidasStatusFilter, setSaidasStatusFilter] = useState('todos')
 
   // New entry form state
+  const [showSaidaForm, setShowSaidaForm] = useState(false)
   const [showEntradaForm, setShowEntradaForm] = useState(false)
   const [showBoletoForm, setShowBoletoForm] = useState(false)
   const [savingEntry, setSavingEntry] = useState(false)
 
+  const [newSaida, setNewSaida] = useState({ description: '', amount: '', category: 'outros', type: 'variavel', due_date: new Date().toISOString().slice(0, 10), status: 'pendente' as string })
   const [newEntrada, setNewEntrada] = useState({ description: '', amount: '', entry_type: 'avulso', due_date: new Date().toISOString().slice(0, 10), status: 'pendente' as string })
   const [newBoleto, setNewBoleto] = useState({ description: '', amount: '', direction: 'saida', boleto_bank: '', boleto_code: '', due_date: new Date().toISOString().slice(0, 10) })
 
@@ -100,6 +102,31 @@ export default function FinanceiroPage() {
       }
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleAddSaida() {
+    if (!tenant || !newSaida.description.trim() || !newSaida.amount) return
+    setSavingEntry(true)
+    try {
+      const supabase = createClient()
+      const { data } = await supabase.from('expenses').insert({
+        tenant_id: tenant.id,
+        description: newSaida.description.trim(),
+        amount: Number(newSaida.amount),
+        category: newSaida.category,
+        expense_type: newSaida.type,
+        type: newSaida.type,
+        status: newSaida.status,
+        due_date: newSaida.due_date,
+      }).select().single()
+      if (data) {
+        setExpenses(prev => [data, ...prev])
+        setNewSaida({ description: '', amount: '', category: 'outros', type: 'variavel', due_date: new Date().toISOString().slice(0, 10), status: 'pendente' })
+        setShowSaidaForm(false)
+      }
+    } finally {
+      setSavingEntry(false)
     }
   }
 
@@ -250,6 +277,77 @@ export default function FinanceiroPage() {
                   </div>
                 ))}
               </div>
+
+              {/* Add button */}
+              <div className="flex items-center justify-between">
+                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{filteredExpenses.length} saídas</p>
+                <button onClick={() => setShowSaidaForm(v => !v)}
+                  className="btn-primary text-sm px-4 py-2.5 flex items-center gap-2">
+                  <Plus className="w-4 h-4" />
+                  Nova Saída
+                </button>
+              </div>
+
+              {showSaidaForm && (
+                <div className="rounded-2xl p-5 space-y-4" style={{ background: 'var(--surface)', border: '1px solid var(--primary)' }}>
+                  <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Nova Saída</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Descrição*</label>
+                      <input type="text" value={newSaida.description} onChange={e => setNewSaida(p => ({ ...p, description: e.target.value }))}
+                        className="input-field py-2.5 text-sm" placeholder="Ex: Combustível, Aluguel..." />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Valor*</label>
+                      <input type="number" step="0.01" value={newSaida.amount} onChange={e => setNewSaida(p => ({ ...p, amount: e.target.value }))}
+                        className="input-field py-2.5 text-sm" placeholder="0,00" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Vencimento</label>
+                      <input type="date" value={newSaida.due_date} onChange={e => setNewSaida(p => ({ ...p, due_date: e.target.value }))}
+                        className="input-field py-2.5 text-sm" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Categoria</label>
+                      <select value={newSaida.category} onChange={e => setNewSaida(p => ({ ...p, category: e.target.value }))}
+                        className="input-field py-2.5 text-sm">
+                        <option value="combustivel">Combustível</option>
+                        <option value="material">Material</option>
+                        <option value="alimentacao">Alimentação</option>
+                        <option value="salario">Salário</option>
+                        <option value="aluguel">Aluguel</option>
+                        <option value="manutencao">Manutenção</option>
+                        <option value="outros">Outros</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Tipo</label>
+                      <select value={newSaida.type} onChange={e => setNewSaida(p => ({ ...p, type: e.target.value }))}
+                        className="input-field py-2.5 text-sm">
+                        <option value="variavel">Variável</option>
+                        <option value="fixo">Fixo</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Status</label>
+                      <select value={newSaida.status} onChange={e => setNewSaida(p => ({ ...p, status: e.target.value }))}
+                        className="input-field py-2.5 text-sm">
+                        <option value="pendente">Pendente</option>
+                        <option value="pago">Pago</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <button onClick={() => setShowSaidaForm(false)} className="px-4 py-2.5 rounded-xl text-sm font-medium"
+                      style={{ background: 'var(--surface-secondary)', color: 'var(--text-secondary)' }}>Cancelar</button>
+                    <button onClick={handleAddSaida} disabled={savingEntry || !newSaida.description.trim() || !newSaida.amount}
+                      className="btn-primary text-sm px-5 py-2.5 flex items-center gap-2">
+                      {savingEntry ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                      Salvar
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Filters */}
               <div className="flex flex-wrap gap-2">
