@@ -11,7 +11,7 @@ interface Expense {
   id: string
   description: string
   amount: number
-  expense_type: string
+  type: string
   status: string
   due_date: string
   paid_date?: string
@@ -68,7 +68,7 @@ export default function FinanceiroPage() {
   const [showBoletoForm, setShowBoletoForm] = useState(false)
   const [savingEntry, setSavingEntry] = useState(false)
 
-  const [newSaida, setNewSaida] = useState({ description: '', amount: '', category: 'outros', type: 'variavel', due_date: new Date().toISOString().slice(0, 10), status: 'pendente' as string })
+  const [newSaida, setNewSaida] = useState({ description: '', amount: '', category: 'outros', type: 'avulso', due_date: new Date().toISOString().slice(0, 10), status: 'pendente' as string })
   const [newEntrada, setNewEntrada] = useState({ description: '', amount: '', entry_type: 'avulso', due_date: new Date().toISOString().slice(0, 10), status: 'pendente' as string })
   const [newBoleto, setNewBoleto] = useState({ description: '', amount: '', direction: 'saida', boleto_bank: '', boleto_code: '', due_date: new Date().toISOString().slice(0, 10) })
 
@@ -115,7 +115,6 @@ export default function FinanceiroPage() {
         description: newSaida.description.trim(),
         amount: Number(newSaida.amount),
         category: newSaida.category,
-        expense_type: newSaida.type,
         type: newSaida.type,
         status: newSaida.status,
         due_date: newSaida.due_date,
@@ -196,7 +195,7 @@ export default function FinanceiroPage() {
 
   // Computed
   const filteredExpenses = expenses.filter(e => {
-    const typeOk = saidasTypeFilter === 'todos' || e.expense_type === saidasTypeFilter
+    const typeOk = saidasTypeFilter === 'todos' || e.type === saidasTypeFilter
     const statusOk = saidasStatusFilter === 'todos' || e.status === saidasStatusFilter
     return typeOk && statusOk
   })
@@ -324,7 +323,7 @@ export default function FinanceiroPage() {
                       <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Tipo</label>
                       <select value={newSaida.type} onChange={e => setNewSaida(p => ({ ...p, type: e.target.value }))}
                         className="input-field py-2.5 text-sm">
-                        <option value="variavel">Variável</option>
+                        <option value="avulso">Avulso</option>
                         <option value="fixo">Fixo</option>
                       </select>
                     </div>
@@ -384,7 +383,7 @@ export default function FinanceiroPage() {
                       <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{exp.description}</p>
                       <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
                         Venc: {new Date(exp.due_date + 'T12:00:00').toLocaleDateString('pt-BR')}
-                        {exp.expense_type && <span className="ml-2 capitalize">{exp.expense_type}</span>}
+                        {exp.type && <span className="ml-2 capitalize">{exp.type}</span>}
                       </p>
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0">
