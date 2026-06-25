@@ -3,7 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 
-const MASTER_EMAILS = ['connectefinanceiro@gmail.com']
+const MASTER_EMAILS = (process.env.MASTER_EMAILS ?? 'connectefinanceiro@gmail.com').split(',').map(e => e.trim())
 
 function adminClient() {
   return createSupabaseClient(

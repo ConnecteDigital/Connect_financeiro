@@ -334,6 +334,8 @@ function MobileHeader({ visible, theme, onToggleTheme }: { visible: boolean; the
   )
 }
 
+// Master check is done client-side only for showing the nav item.
+// Actual authorization is enforced server-side in the API routes.
 const MASTER_EMAIL = 'connectefinanceiro@gmail.com'
 
 /* ── Inner layout (uses tenant context) ─────────────────────── */
