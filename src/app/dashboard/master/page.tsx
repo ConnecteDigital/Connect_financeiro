@@ -131,7 +131,10 @@ export default function MasterDashboard() {
         router.replace('/dashboard')
         return
       }
-      if (!res.ok) throw new Error('Erro ao carregar dados')
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(`[${res.status}] ${body.error ?? 'Erro ao carregar dados'}`)
+      }
       const json = await res.json()
       setData(json.summaries)
       setMonth(json.month)
