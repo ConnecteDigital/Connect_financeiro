@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useTenant } from '@/lib/tenant-context'
-import { Wallet, TrendingDown, TrendingUp, FileText, BarChart3, Plus, Loader2, Check, X, AlertCircle } from 'lucide-react'
+import { Wallet, TrendingDown, TrendingUp, FileText, BarChart3, Plus, Loader2, Check, AlertCircle, Trash2 } from 'lucide-react'
 
 type Tab = 'saidas' | 'entradas' | 'boletos' | 'saldo'
 
@@ -186,11 +186,25 @@ export default function FinanceiroPage() {
     setExpenses(prev => prev.map(e => e.id === exp.id ? { ...e, status: nextStatus } : e))
   }
 
+  async function deleteExpense(id: string) {
+    if (!confirm('Excluir esta saída?')) return
+    const supabase = createClient()
+    await supabase.from('expenses').delete().eq('id', id)
+    setExpenses(prev => prev.filter(e => e.id !== id))
+  }
+
   async function toggleCashEntryStatus(ce: CashEntry) {
     const nextStatus = ce.status === 'pago' ? 'pendente' : 'pago'
     const supabase = createClient()
     await supabase.from('cash_entries').update({ status: nextStatus, paid_date: nextStatus === 'pago' ? new Date().toISOString().slice(0, 10) : null }).eq('id', ce.id)
     setCashEntries(prev => prev.map(e => e.id === ce.id ? { ...e, status: nextStatus } : e))
+  }
+
+  async function deleteCashEntry(id: string) {
+    if (!confirm('Excluir este registro?')) return
+    const supabase = createClient()
+    await supabase.from('cash_entries').delete().eq('id', id)
+    setCashEntries(prev => prev.filter(e => e.id !== id))
   }
 
   // Computed
@@ -377,23 +391,34 @@ export default function FinanceiroPage() {
                   <div className="text-center py-12" style={{ color: 'var(--text-tertiary)' }}>Nenhuma saída encontrada</div>
                 )}
                 {filteredExpenses.map(exp => (
-                  <div key={exp.id} className="rounded-2xl p-4 flex items-center gap-3"
+                  <div key={exp.id} className="rounded-2xl p-4"
                     style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{exp.description}</p>
-                      <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-                        Venc: {new Date(exp.due_date + 'T12:00:00').toLocaleDateString('pt-BR')}
-                        {exp.type && <span className="ml-2 capitalize">{exp.type}</span>}
-                      </p>
+                    <div className="flex items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{exp.description}</p>
+                        <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                          Venc: {new Date(exp.due_date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                          {exp.type && <span className="ml-2 capitalize opacity-70">{exp.type}</span>}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{fmt(Number(exp.amount))}</p>
+                        <button onClick={() => deleteExpense(exp.id)}
+                          className="w-8 h-8 rounded-xl flex items-center justify-center transition hover:bg-red-50"
+                          title="Excluir">
+                          <Trash2 className="w-4 h-4 text-red-400" />
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3 flex-shrink-0">
-                      <StatusBadge status={exp.status} />
-                      <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{fmt(Number(exp.amount))}</p>
-                      <button onClick={() => toggleExpenseStatus(exp)}
-                        className="w-8 h-8 rounded-xl flex items-center justify-center transition"
-                        style={{ background: exp.status === 'pago' ? 'rgba(16,185,129,0.1)' : 'var(--surface-secondary)' }}
-                        title={exp.status === 'pago' ? 'Marcar pendente' : 'Marcar pago'}>
-                        {exp.status === 'pago' ? <Check className="w-4 h-4 text-emerald-500" /> : <X className="w-4 h-4" style={{ color: 'var(--text-tertiary)' }} />}
+                    <div className="flex items-center gap-2 mt-3">
+                      <button
+                        onClick={() => toggleExpenseStatus(exp)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition"
+                        style={exp.status === 'pago'
+                          ? { background: 'rgba(16,185,129,0.12)', color: '#10b981' }
+                          : { background: 'rgba(245,158,11,0.12)', color: '#f59e0b' }}>
+                        <Check className="w-3.5 h-3.5" />
+                        {exp.status === 'pago' ? 'Pago — clique para pendente' : 'Pendente — clique para pago'}
                       </button>
                     </div>
                   </div>
@@ -469,21 +494,32 @@ export default function FinanceiroPage() {
                   <div className="text-center py-12" style={{ color: 'var(--text-tertiary)' }}>Nenhuma entrada cadastrada</div>
                 )}
                 {entradas.map(ce => (
-                  <div key={ce.id} className="rounded-2xl p-4 flex items-center gap-3"
+                  <div key={ce.id} className="rounded-2xl p-4"
                     style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{ce.description}</p>
-                      <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-                        {new Date(ce.due_date + 'T12:00:00').toLocaleDateString('pt-BR')} · {ce.entry_type}
-                      </p>
+                    <div className="flex items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{ce.description}</p>
+                        <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                          {new Date(ce.due_date + 'T12:00:00').toLocaleDateString('pt-BR')} · {ce.entry_type}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <p className="text-sm font-bold text-emerald-600">{fmt(Number(ce.amount))}</p>
+                        <button onClick={() => deleteCashEntry(ce.id)}
+                          className="w-8 h-8 rounded-xl flex items-center justify-center transition hover:bg-red-50"
+                          title="Excluir">
+                          <Trash2 className="w-4 h-4 text-red-400" />
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3 flex-shrink-0">
-                      <StatusBadge status={ce.status} />
-                      <p className="text-sm font-semibold text-emerald-600">{fmt(Number(ce.amount))}</p>
+                    <div className="flex items-center gap-2 mt-3">
                       <button onClick={() => toggleCashEntryStatus(ce)}
-                        className="w-8 h-8 rounded-xl flex items-center justify-center transition"
-                        style={{ background: ce.status === 'pago' ? 'rgba(16,185,129,0.1)' : 'var(--surface-secondary)' }}>
-                        {ce.status === 'pago' ? <Check className="w-4 h-4 text-emerald-500" /> : <X className="w-4 h-4" style={{ color: 'var(--text-tertiary)' }} />}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition"
+                        style={ce.status === 'pago'
+                          ? { background: 'rgba(16,185,129,0.12)', color: '#10b981' }
+                          : { background: 'rgba(245,158,11,0.12)', color: '#f59e0b' }}>
+                        <Check className="w-3.5 h-3.5" />
+                        {ce.status === 'pago' ? 'Recebido — clique para pendente' : 'Pendente — clique para recebido'}
                       </button>
                     </div>
                   </div>
@@ -563,24 +599,33 @@ export default function FinanceiroPage() {
                   {boletosPagar.length === 0 && <p className="text-sm text-center py-6" style={{ color: 'var(--text-tertiary)' }}>Nenhum boleto a pagar</p>}
                   {boletosPagar.map(ce => (
                     <div key={ce.id} className="rounded-2xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-start gap-3">
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{ce.description}</p>
+                          <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{ce.description}</p>
                           <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
                             Venc: {new Date(ce.due_date + 'T12:00:00').toLocaleDateString('pt-BR')}
                             {ce.boleto_bank && <span className="ml-2">{ce.boleto_bank}</span>}
                           </p>
                           {ce.boleto_code && <p className="text-xs mt-0.5 font-mono truncate" style={{ color: 'var(--text-tertiary)' }}>{ce.boleto_code}</p>}
                         </div>
-                        <div className="flex items-center gap-3 flex-shrink-0 ml-3">
-                          <StatusBadge status={ce.status} />
-                          <p className="text-sm font-semibold text-red-500">{fmt(Number(ce.amount))}</p>
-                          <button onClick={() => toggleCashEntryStatus(ce)}
-                            className="w-8 h-8 rounded-xl flex items-center justify-center transition"
-                            style={{ background: ce.status === 'pago' ? 'rgba(16,185,129,0.1)' : 'var(--surface-secondary)' }}>
-                            {ce.status === 'pago' ? <Check className="w-4 h-4 text-emerald-500" /> : <X className="w-4 h-4" style={{ color: 'var(--text-tertiary)' }} />}
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <p className="text-sm font-bold text-red-500">{fmt(Number(ce.amount))}</p>
+                          <button onClick={() => deleteCashEntry(ce.id)}
+                            className="w-8 h-8 rounded-xl flex items-center justify-center transition hover:bg-red-50"
+                            title="Excluir">
+                            <Trash2 className="w-4 h-4 text-red-400" />
                           </button>
                         </div>
+                      </div>
+                      <div className="flex items-center gap-2 mt-3">
+                        <button onClick={() => toggleCashEntryStatus(ce)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition"
+                          style={ce.status === 'pago'
+                            ? { background: 'rgba(16,185,129,0.12)', color: '#10b981' }
+                            : { background: 'rgba(245,158,11,0.12)', color: '#f59e0b' }}>
+                          <Check className="w-3.5 h-3.5" />
+                          {ce.status === 'pago' ? 'Pago — clique para pendente' : 'Pendente — clique para pago'}
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -596,24 +641,33 @@ export default function FinanceiroPage() {
                   {boletosReceber.length === 0 && <p className="text-sm text-center py-6" style={{ color: 'var(--text-tertiary)' }}>Nenhum boleto a receber</p>}
                   {boletosReceber.map(ce => (
                     <div key={ce.id} className="rounded-2xl p-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-start gap-3">
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{ce.description}</p>
+                          <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{ce.description}</p>
                           <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
                             Venc: {new Date(ce.due_date + 'T12:00:00').toLocaleDateString('pt-BR')}
                             {ce.boleto_bank && <span className="ml-2">{ce.boleto_bank}</span>}
                           </p>
                           {ce.boleto_code && <p className="text-xs mt-0.5 font-mono truncate" style={{ color: 'var(--text-tertiary)' }}>{ce.boleto_code}</p>}
                         </div>
-                        <div className="flex items-center gap-3 flex-shrink-0 ml-3">
-                          <StatusBadge status={ce.status} />
-                          <p className="text-sm font-semibold text-emerald-600">{fmt(Number(ce.amount))}</p>
-                          <button onClick={() => toggleCashEntryStatus(ce)}
-                            className="w-8 h-8 rounded-xl flex items-center justify-center transition"
-                            style={{ background: ce.status === 'pago' ? 'rgba(16,185,129,0.1)' : 'var(--surface-secondary)' }}>
-                            {ce.status === 'pago' ? <Check className="w-4 h-4 text-emerald-500" /> : <X className="w-4 h-4" style={{ color: 'var(--text-tertiary)' }} />}
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <p className="text-sm font-bold text-emerald-600">{fmt(Number(ce.amount))}</p>
+                          <button onClick={() => deleteCashEntry(ce.id)}
+                            className="w-8 h-8 rounded-xl flex items-center justify-center transition hover:bg-red-50"
+                            title="Excluir">
+                            <Trash2 className="w-4 h-4 text-red-400" />
                           </button>
                         </div>
+                      </div>
+                      <div className="flex items-center gap-2 mt-3">
+                        <button onClick={() => toggleCashEntryStatus(ce)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition"
+                          style={ce.status === 'pago'
+                            ? { background: 'rgba(16,185,129,0.12)', color: '#10b981' }
+                            : { background: 'rgba(245,158,11,0.12)', color: '#f59e0b' }}>
+                          <Check className="w-3.5 h-3.5" />
+                          {ce.status === 'pago' ? 'Recebido — clique para pendente' : 'Pendente — clique para recebido'}
+                        </button>
                       </div>
                     </div>
                   ))}
