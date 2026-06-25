@@ -7,7 +7,7 @@ import {
   LayoutDashboard, PhoneCall, Users,
   BarChart3, Settings, LogOut, Building2,
   Plus, MoreHorizontal, UserCog, Moon, Sun, Sparkles,
-  Wallet, FileText,
+  Wallet, FileText, ShieldCheck,
 } from 'lucide-react'
 import { ConnectDigitalLogo } from '@/components/logos'
 import { useTenant } from '@/lib/tenant-context'
@@ -150,8 +150,12 @@ function BottomNav({ onMoreClick, moreOpen, visible }: { onMoreClick: () => void
 }
 
 /* ── "Mais" drawer (slide up) ───────────────────────────────── */
-function MoreDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+function MoreDrawer({ open, onClose, isMaster }: { open: boolean; onClose: () => void; isMaster: boolean }) {
   const pathname = usePathname()
+
+  const drawerNav = isMaster
+    ? [...moreNav, { href: '/dashboard/master', label: 'Painel Master', icon: ShieldCheck }]
+    : moreNav
 
   return (
     <>
@@ -171,7 +175,7 @@ function MoreDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
         }}>
         <div className="w-10 h-1 bg-zinc-200 rounded-full mx-auto mt-3 mb-4" />
         <div className="px-4 pb-2 grid grid-cols-4 gap-3">
-          {moreNav.map(({ href, label, icon: Icon }) => {
+          {drawerNav.map(({ href, label, icon: Icon }) => {
             const active = pathname.startsWith(href)
             return (
               <Link key={href} href={href} onClick={onClose}
@@ -199,7 +203,7 @@ function MoreDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
 }
 
 /* ── Desktop sidebar ─────────────────────────────────────────── */
-function Sidebar({ theme, onToggleTheme }: { theme: 'light' | 'dark'; onToggleTheme: () => void }) {
+function Sidebar({ theme, onToggleTheme, isMaster }: { theme: 'light' | 'dark'; onToggleTheme: () => void; isMaster: boolean }) {
   const pathname = usePathname()
   const { tenant } = useTenant()
 
@@ -208,6 +212,10 @@ function Sidebar({ theme, onToggleTheme }: { theme: 'light' | 'dark'; onToggleTh
       ? pathname === '/dashboard'
       : pathname.startsWith(href)
   }
+
+  const sidebarNav = isMaster
+    ? [...allNav, { href: '/dashboard/master', label: 'Painel Master', icon: ShieldCheck }]
+    : allNav
 
   return (
     <aside className="hidden lg:flex flex-col w-64 flex-shrink-0"
@@ -231,7 +239,7 @@ function Sidebar({ theme, onToggleTheme }: { theme: 'light' | 'dark'; onToggleTh
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
-        {allNav.map(({ href, label, icon: Icon }) => {
+        {sidebarNav.map(({ href, label, icon: Icon }) => {
           const active = isActive(href)
           return (
             <Link key={href} href={href}
@@ -326,12 +334,15 @@ function MobileHeader({ visible, theme, onToggleTheme }: { visible: boolean; the
   )
 }
 
+const MASTER_EMAIL = 'connectefinanceiro@gmail.com'
+
 /* ── Inner layout (uses tenant context) ─────────────────────── */
 function DashboardInner({ children }: { children: React.ReactNode }) {
   const [moreOpen, setMoreOpen] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [navVisible, setNavVisible] = useState(true)
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
+  const [isMaster, setIsMaster] = useState(false)
   const { tenant } = useTenant()
   const pathname = usePathname()
   const mainRef = useRef<HTMLElement>(null)
@@ -341,6 +352,15 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
   const isPrintPage = pathname.includes('/imprimir')
   // Documentos (OS, romaneio) são sempre claros, mesmo no modo escuro
   const forceLight = isPrintPage || pathname.includes('/romaneio')
+
+  // Detect master user
+  useEffect(() => {
+    import('@/lib/supabase/client').then(({ createClient }) => {
+      createClient().auth.getUser().then(({ data: { user } }) => {
+        if (user?.email === MASTER_EMAIL) setIsMaster(true)
+      })
+    })
+  }, [])
 
   // Show onboarding only on first visit
   useEffect(() => {
@@ -429,7 +449,7 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: 'var(--background)' }}>
-      <Sidebar theme={theme} onToggleTheme={toggleTheme} />
+      <Sidebar theme={theme} onToggleTheme={toggleTheme} isMaster={isMaster} />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <MobileHeader visible={navVisible} theme={theme} onToggleTheme={toggleTheme} />
@@ -447,7 +467,7 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
       </div>
 
       <BottomNav onMoreClick={() => setMoreOpen(o => !o)} moreOpen={moreOpen} visible={navVisible} />
-      <MoreDrawer open={moreOpen} onClose={() => setMoreOpen(false)} />
+      <MoreDrawer open={moreOpen} onClose={() => setMoreOpen(false)} isMaster={isMaster} />
 
       {/* Connect IA floating button — visible on desktop (mobile uses bottom nav) */}
       {!isPrintPage && (
