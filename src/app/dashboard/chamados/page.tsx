@@ -38,6 +38,7 @@ export default function ChamadosPage() {
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<Status>('todos')
+  const [originFilter, setOriginFilter] = useState('todos')
   const [calls, setCalls] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
@@ -71,6 +72,27 @@ export default function ChamadosPage() {
     } catch (e) { console.error(e) }
     finally { setLoading(false) }
   }, [statusFilter, debouncedSearch])
+
+  // Contagem por origem (sobre todos os chamados carregados, antes do filtro de origem)
+  const originCounts = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const c of calls) {
+      const o = c.origin ?? 'sem_origem'
+      map[o] = (map[o] || 0) + 1
+    }
+    return map
+  }, [calls])
+
+  // Origens presentes nos chamados atuais
+  const presentOrigins = useMemo(() => {
+    return Object.keys(originCounts).filter(o => o !== 'sem_origem')
+  }, [originCounts])
+
+  // Filtro de origem aplicado client-side (já que getCalls carregou tudo)
+  const filteredCalls = useMemo(() => {
+    if (originFilter === 'todos') return calls
+    return calls.filter(c => (c.origin ?? '') === originFilter)
+  }, [calls, originFilter])
 
   useEffect(() => { load() }, [load])
 
@@ -133,7 +155,7 @@ export default function ChamadosPage() {
           className="w-full pl-9 pr-4 py-2.5 bg-white border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 shadow-sm" />
       </div>
 
-      {/* Filters - horizontal scroll on mobile */}
+      {/* Status filters */}
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
         {filters.map(f => (
           <button key={f.value} onClick={() => setStatusFilter(f.value)}
@@ -146,6 +168,32 @@ export default function ChamadosPage() {
           </button>
         ))}
       </div>
+
+      {/* Origin filters — só aparece se houver origens */}
+      {presentOrigins.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
+          <button onClick={() => setOriginFilter('todos')}
+            className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
+              originFilter === 'todos'
+                ? 'bg-zinc-800 text-white border-zinc-800'
+                : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400'
+            }`}>
+            Todas origens
+            <span className="text-[10px] opacity-70">({calls.length})</span>
+          </button>
+          {presentOrigins.map(origin => (
+            <button key={origin} onClick={() => setOriginFilter(origin)}
+              className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
+                originFilter === origin
+                  ? 'bg-zinc-800 text-white border-zinc-800'
+                  : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400'
+              }`}>
+              {getOriginLabel(origin)}
+              <span className="text-[10px] opacity-70">({originCounts[origin]})</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Cards */}
       {loading ? (
@@ -243,7 +291,7 @@ export default function ChamadosPage() {
             </div>
           )}
         </div>
-      ) : calls.length === 0 ? (
+      ) : filteredCalls.length === 0 ? (
         <div className="bg-white rounded-2xl border border-zinc-100 p-12 text-center">
           <p className="text-zinc-400 text-sm">Nenhum chamado encontrado</p>
           <Link href="/dashboard/chamados/novo" className="text-orange-500 text-sm font-medium mt-2 inline-block">
@@ -252,7 +300,7 @@ export default function ChamadosPage() {
         </div>
       ) : (
         <div className="space-y-2.5">
-          {calls.map(c => {
+          {filteredCalls.map(c => {
             const so = c.service_orders?.[0]
             const cfg = statusConfig[c.status]
             const StatusIcon = cfg?.icon || Clock

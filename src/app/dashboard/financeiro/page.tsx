@@ -12,6 +12,7 @@ interface Expense {
   description: string
   amount: number
   type: string
+  category?: string
   status: string
   due_date: string
   paid_date?: string
@@ -216,12 +217,31 @@ export default function FinanceiroPage() {
     setCashEntries(prev => prev.filter(e => e.id !== id))
   }
 
+  const [saidasCategoryFilter, setSaidasCategoryFilter] = useState('todos')
+
+  const CATEGORY_LABELS: Record<string, string> = {
+    combustivel: 'Combustível', material: 'Material', alimentacao: 'Alimentação',
+    salario: 'Salário', aluguel: 'Aluguel', manutencao: 'Manutenção', outros: 'Outros',
+  }
+
   // Computed
   const filteredExpenses = expenses.filter(e => {
     const typeOk = saidasTypeFilter === 'todos' || e.type === saidasTypeFilter
     const statusOk = saidasStatusFilter === 'todos' || e.status === saidasStatusFilter
-    return typeOk && statusOk
+    const categoryOk = saidasCategoryFilter === 'todos' || e.category === saidasCategoryFilter
+    return typeOk && statusOk && categoryOk
   })
+
+  // Totais por categoria (sobre todas as despesas sem filtro de categoria)
+  const categoryTotals = expenses.reduce((acc, e) => {
+    const cat = e.category ?? 'outros'
+    acc[cat] = (acc[cat] || 0) + Number(e.amount)
+    return acc
+  }, {} as Record<string, number>)
+
+  const presentCategories = Object.entries(categoryTotals)
+    .filter(([, v]) => v > 0)
+    .sort((a, b) => b[1] - a[1])
 
   const totalExpenses = filteredExpenses.reduce((s, e) => s + Number(e.amount), 0)
   const paidExpenses = filteredExpenses.filter(e => e.status === 'pago').reduce((s, e) => s + Number(e.amount), 0)
@@ -371,6 +391,24 @@ export default function FinanceiroPage() {
                 </div>
               )}
 
+              {/* Resumo por categoria */}
+              {presentCategories.length > 0 && (
+                <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 no-scrollbar">
+                  {presentCategories.map(([cat, total]) => (
+                    <button key={cat} onClick={() => setSaidasCategoryFilter(saidasCategoryFilter === cat ? 'todos' : cat)}
+                      className="flex-shrink-0 flex flex-col items-start px-3 py-2 rounded-xl text-left transition"
+                      style={saidasCategoryFilter === cat
+                        ? { background: 'var(--primary)', color: '#fff' }
+                        : { background: 'var(--surface-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}>
+                      <span className="text-[10px] font-semibold uppercase tracking-wide opacity-70">
+                        {CATEGORY_LABELS[cat] ?? cat}
+                      </span>
+                      <span className="text-sm font-bold mt-0.5">{fmt(total)}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {/* Filters */}
               <div className="flex flex-wrap gap-2">
                 {['todos', 'fixo', 'avulso'].map(f => (
@@ -392,6 +430,13 @@ export default function FinanceiroPage() {
                     {f === 'todos' ? 'Todos' : f === 'pago' ? 'Pago' : 'Pendente'}
                   </button>
                 ))}
+                {saidasCategoryFilter !== 'todos' && (
+                  <button onClick={() => setSaidasCategoryFilter('todos')}
+                    className="px-3 py-1.5 rounded-xl text-xs font-medium transition"
+                    style={{ background: 'var(--surface-secondary)', color: 'var(--text-secondary)' }}>
+                    × {CATEGORY_LABELS[saidasCategoryFilter] ?? saidasCategoryFilter}
+                  </button>
+                )}
               </div>
 
               {/* List */}
