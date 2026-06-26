@@ -14,7 +14,7 @@ export async function getDashboardStatsRange(startDate: string, endDate: string)
       .lte('date', weekEnd),
     supabase
       .from('service_orders')
-      .select('total_value, payment_status, amount_paid, remaining_amount, outsource_fuel_cost, outsource_meal_cost, outsource_truck_cost, outsource_other_cost, service_type')
+      .select('total_value, payment_status, amount_paid, remaining_amount, outsource_fuel_cost, outsource_meal_cost, outsource_truck_cost, outsource_other_cost, service_type, outsource_profit_pct')
       .gte('date', weekStart)
       .lte('date', weekEnd),
     supabase
@@ -37,9 +37,13 @@ export async function getDashboardStatsRange(startDate: string, endDate: string)
   const gross_revenue = orders.reduce((s, o) => s + (o.total_value || 0), 0)
 
   const total_costs = orders.reduce((s, o) => {
-    const outsource = (o.outsource_fuel_cost || 0) + (o.outsource_meal_cost || 0) +
+    const operational = (o.outsource_fuel_cost || 0) + (o.outsource_meal_cost || 0) +
       (o.outsource_truck_cost || 0) + (o.outsource_other_cost || 0)
-    return s + outsource
+    // Para serviços terceirizados, o custo do parceiro é a parte que fica com o terceiro
+    const partnerCost = (o.service_type === 'terceirizado_saida')
+      ? (o.total_value || 0) * (1 - (o.outsource_profit_pct ?? 50) / 100)
+      : 0
+    return s + operational + partnerCost
   }, 0)
 
   const total_expenses = expenses.reduce((s, e) => s + (e.amount || 0), 0)

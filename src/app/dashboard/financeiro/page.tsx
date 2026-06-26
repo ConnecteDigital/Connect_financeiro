@@ -89,18 +89,23 @@ export default function FinanceiroPage() {
         supabase.from('expenses').select('*').order('created_at', { ascending: false }),
         supabase.from('cash_entries').select('*').order('created_at', { ascending: false }),
         // Receita de chamados aprovados (OS pagas/parciais no mês)
-        supabase.from('service_orders').select('total_value, remaining_amount, payment_status, outsource_fuel_cost, outsource_meal_cost, outsource_truck_cost, outsource_other_cost').gte('date', monthStart).lte('date', monthEnd),
+        supabase.from('service_orders').select('total_value, remaining_amount, payment_status, service_type, outsource_profit_pct, outsource_fuel_cost, outsource_meal_cost, outsource_truck_cost, outsource_other_cost').gte('date', monthStart).lte('date', monthEnd),
       ])
       if (expRes.data) setExpenses(expRes.data)
       if (ceRes.data) setCashEntries(ceRes.data)
       if (soRes.data) {
         const receita = soRes.data.reduce((s: number, o: {
           total_value: number; remaining_amount: number; payment_status: string
+          service_type: string; outsource_profit_pct: number
           outsource_fuel_cost: number; outsource_meal_cost: number; outsource_truck_cost: number; outsource_other_cost: number
         }) => {
-          const outsourceCost = (o.outsource_fuel_cost || 0) + (o.outsource_meal_cost || 0) + (o.outsource_truck_cost || 0) + (o.outsource_other_cost || 0)
-          const grossReceived = o.payment_status === 'pago' ? (o.total_value || 0) : (o.total_value || 0) - (o.remaining_amount || 0)
-          return s + Math.max(0, grossReceived - outsourceCost)
+          const gross = o.payment_status === 'pago' ? (o.total_value || 0) : (o.total_value || 0) - (o.remaining_amount || 0)
+          // Para terceirizado, a empresa só fica com a % definida (ex: 50%)
+          const partnerCost = (o.service_type === 'terceirizado_saida')
+            ? gross * (1 - (o.outsource_profit_pct ?? 50) / 100)
+            : 0
+          const operational = (o.outsource_fuel_cost || 0) + (o.outsource_meal_cost || 0) + (o.outsource_truck_cost || 0) + (o.outsource_other_cost || 0)
+          return s + Math.max(0, gross - partnerCost - operational)
         }, 0)
         setServiceOrdersReceita(receita)
       }
