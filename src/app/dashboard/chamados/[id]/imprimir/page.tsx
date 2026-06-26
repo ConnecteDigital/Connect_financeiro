@@ -5,7 +5,7 @@ import { use } from 'react'
 import Link from 'next/link'
 import { getCall } from '@/lib/db/calls'
 import { useTenant } from '@/lib/tenant-context'
-import { ArrowLeft, Share2, Loader2 } from 'lucide-react'
+import { ArrowLeft, Share2, Loader2, FileImage, FileText } from 'lucide-react'
 
 const BRL = (v: number | string) =>
   `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
@@ -16,45 +16,84 @@ function ImprimirContent({ id }: { id: string }) {
   const { tenant } = useTenant()
   const [call, setCall] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [sharing, setSharing] = useState(false)
+  const [sharing, setSharing] = useState<'png' | 'pdf' | null>(null)
   const sheetRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     getCall(id).then(setCall).catch(console.error).finally(() => setLoading(false))
   }, [id])
 
-  async function handleShare() {
+  async function buildCanvas() {
+    const html2canvas = (await import('html2canvas')).default
+    return html2canvas(sheetRef.current!, {
+      scale: 2,
+      backgroundColor: '#ffffff',
+      useCORS: true,
+      logging: false,
+    })
+  }
+
+  async function handleSharePng() {
     if (!sheetRef.current || sharing) return
-    setSharing(true)
+    setSharing('png')
     try {
-      const html2canvas = (await import('html2canvas')).default
-      const canvas = await html2canvas(sheetRef.current, {
-        scale: 2,
-        backgroundColor: '#ffffff',
-        useCORS: true,
-        logging: false,
-      })
+      const canvas = await buildCanvas()
       const blob: Blob | null = await new Promise(res => canvas.toBlob(res, 'image/png'))
       if (!blob) throw new Error('Falha ao gerar imagem')
       const osNumber = call?.service_orders?.[0]?.os_number ?? 'OS'
-      const file = new File([blob], `${osNumber}.png`, { type: 'image/png' })
+      const file = new File([blob], `OS-${osNumber}.png`, { type: 'image/png' })
       if (navigator.canShare?.({ files: [file] })) {
         await navigator.share({ files: [file], title: `Ordem de Serviço ${osNumber}` })
       } else {
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
-        a.href = url
-        a.download = `${osNumber}.png`
-        a.click()
+        a.href = url; a.download = `OS-${osNumber}.png`; a.click()
         URL.revokeObjectURL(url)
       }
     } catch (e: any) {
-      if (e?.name !== 'AbortError') {
-        console.error(e)
-        alert('Não foi possível compartilhar. Tente novamente.')
-      }
+      if (e?.name !== 'AbortError') alert('Não foi possível compartilhar a imagem.')
     } finally {
-      setSharing(false)
+      setSharing(null)
+    }
+  }
+
+  async function handleSharePdf() {
+    if (!sheetRef.current || sharing) return
+    setSharing('pdf')
+    try {
+      const canvas = await buildCanvas()
+      const { jsPDF } = await import('jspdf')
+      const imgData = canvas.toDataURL('image/png')
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+      const pageW = pdf.internal.pageSize.getWidth()
+      const pageH = pdf.internal.pageSize.getHeight()
+      const ratio = canvas.height / canvas.width
+      const imgW = pageW
+      const imgH = imgW * ratio
+      // Se a imagem for maior que uma página, adiciona páginas extras
+      let y = 0
+      let remaining = imgH
+      while (remaining > 0) {
+        pdf.addImage(imgData, 'PNG', 0, -y, imgW, imgH)
+        remaining -= pageH
+        y += pageH
+        if (remaining > 0) pdf.addPage()
+      }
+      const osNumber = call?.service_orders?.[0]?.os_number ?? 'OS'
+      const pdfBlob = pdf.output('blob')
+      const file = new File([pdfBlob], `OS-${osNumber}.pdf`, { type: 'application/pdf' })
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: `Ordem de Serviço ${osNumber}` })
+      } else {
+        const url = URL.createObjectURL(pdfBlob)
+        const a = document.createElement('a')
+        a.href = url; a.download = `OS-${osNumber}.pdf`; a.click()
+        URL.revokeObjectURL(url)
+      }
+    } catch (e: any) {
+      if (e?.name !== 'AbortError') alert('Não foi possível gerar o PDF.')
+    } finally {
+      setSharing(null)
     }
   }
 
@@ -306,15 +345,23 @@ function ImprimirContent({ id }: { id: string }) {
       {/* Espaço para o botão fixo não cobrir o fim da folha */}
       <div className="print:hidden" style={{ height: 96 }} />
 
-      {/* Botão compartilhar fixo no rodapé */}
-      <div className="print:hidden fixed bottom-6 inset-x-0 flex justify-center z-50">
+      {/* Botões de compartilhar fixos no rodapé */}
+      <div className="print:hidden fixed bottom-6 inset-x-0 flex justify-center gap-3 z-50">
         <button
-          onClick={handleShare}
-          disabled={sharing}
-          className="flex items-center gap-2.5 text-white font-semibold px-8 py-4 rounded-2xl shadow-2xl transition active:scale-95 disabled:opacity-70"
-          style={{ backgroundColor: '#16a34a', boxShadow: '0 8px 24px rgba(22,163,74,0.45)' }}>
-          {sharing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Share2 className="w-5 h-5" />}
-          {sharing ? 'Gerando...' : 'Compartilhar'}
+          onClick={handleSharePng}
+          disabled={!!sharing}
+          className="flex items-center gap-2 text-white font-semibold px-6 py-3.5 rounded-2xl shadow-2xl transition active:scale-95 disabled:opacity-70"
+          style={{ backgroundColor: '#16a34a', boxShadow: '0 8px 24px rgba(22,163,74,0.40)' }}>
+          {sharing === 'png' ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileImage className="w-5 h-5" />}
+          {sharing === 'png' ? 'Gerando...' : 'Imagem'}
+        </button>
+        <button
+          onClick={handleSharePdf}
+          disabled={!!sharing}
+          className="flex items-center gap-2 text-white font-semibold px-6 py-3.5 rounded-2xl shadow-2xl transition active:scale-95 disabled:opacity-70"
+          style={{ backgroundColor: '#2563eb', boxShadow: '0 8px 24px rgba(37,99,235,0.40)' }}>
+          {sharing === 'pdf' ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileText className="w-5 h-5" />}
+          {sharing === 'pdf' ? 'Gerando...' : 'PDF'}
         </button>
       </div>
 
