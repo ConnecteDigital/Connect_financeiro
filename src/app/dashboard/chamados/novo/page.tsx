@@ -51,6 +51,7 @@ export default function NovoChamadoPage() {
   const router = useRouter()
   const { tenant } = useTenant()
   const commissionsEnabled = tenant?.enable_commissions ?? false
+  const isSimplified = tenant?.call_form_config?.simplified === true
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [clients, setClients] = useState<any[]>([])
@@ -433,6 +434,127 @@ export default function NovoChamadoPage() {
   }
 
   const inputCls = 'w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400'
+
+  async function handleSimplifiedSubmit(targetStatus: 'aberto' | 'aprovado') {
+    if (!origin) { setError('Selecione a origem do chamado.'); return }
+    if (!contactName.trim()) { setError('Informe o nome do contato.'); return }
+    setSaving(true); setError('')
+    try {
+      const call = await createCall({
+        date: callDate,
+        client_id: null,
+        contact_name: contactName || null,
+        contact_phone: contactPhone || null,
+        origin,
+        status: targetStatus,
+        notes: null,
+        service_category: null,
+        scheduled_date: null,
+        scheduled_time: null,
+        call_address: null,
+        call_city: null,
+        call_neighborhood: null,
+        contact_cpf: null,
+        solicitante: solicitante || null,
+        driver: null,
+      })
+      if (targetStatus === 'aprovado') {
+        router.push(`/dashboard/chamados/${call.id}/nova-os`)
+      } else {
+        router.push(`/dashboard/chamados/${call.id}`)
+      }
+    } catch (err: any) {
+      console.error(err)
+      setError('Erro ao salvar chamado. Tente novamente.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (isSimplified) {
+    return (
+      <div className="max-w-lg mx-auto space-y-6">
+        <div className="flex items-center gap-3">
+          <Link href="/dashboard/chamados" className="p-2 hover:bg-slate-100 rounded-lg transition text-slate-500">
+            <ArrowLeft className="w-5 h-5" />
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800">Novo Chamado</h1>
+            <p className="text-slate-500 text-sm">Registre um novo chamado recebido</p>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-5">
+          {/* Origem */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Origem *</label>
+            <div className="flex flex-wrap gap-2">
+              {callOrigins.map(o => (
+                <button key={o.value} type="button" onClick={() => setOrigin(o.value)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition ${origin === o.value ? 'bg-orange-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Data */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Data do Chamado *</label>
+            <input type="date" required value={callDate} onChange={e => setCallDate(e.target.value)} className={inputCls} />
+          </div>
+
+          {/* Contato */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="sm:col-span-2">
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Nome do Contato *</label>
+              <input type="text" value={contactName} onChange={e => setContactName(e.target.value)}
+                placeholder="Ex: João Silva" className={inputCls} />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Telefone</label>
+              <input type="tel" value={contactPhone} onChange={e => setContactPhone(e.target.value)}
+                placeholder="(51) 99999-9999" className={inputCls} />
+            </div>
+          </div>
+
+          {/* Solicitante */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              Solicitante
+              <span className="text-slate-400 font-normal ml-1">(quem ligou para pedir o serviço)</span>
+            </label>
+            <input type="text" value={solicitante} onChange={e => setSolicitante(e.target.value)}
+              placeholder="Ex: Maria (esposa do João), síndico..." className={inputCls} />
+          </div>
+
+          {error && <p className="text-sm text-red-500">{error}</p>}
+
+          {/* Action buttons */}
+          <div className="flex flex-col gap-3 pt-2">
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => handleSimplifiedSubmit('aberto')}
+              className="w-full py-3 rounded-xl text-sm font-semibold bg-slate-700 text-white hover:bg-slate-800 transition disabled:opacity-60 flex items-center justify-center gap-2"
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              Salvar Chamado
+            </button>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => handleSimplifiedSubmit('aprovado')}
+              className="w-full py-3 rounded-xl text-sm font-semibold bg-orange-500 text-white hover:bg-orange-600 transition disabled:opacity-60 flex items-center justify-center gap-2"
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              Criar OS
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <form onSubmit={handleSubmit} className="max-w-4xl mx-auto space-y-6">

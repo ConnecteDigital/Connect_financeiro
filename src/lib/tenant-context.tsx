@@ -14,6 +14,7 @@ export interface Tenant {
   cnpj: string | null
   phone: string | null
   origin_branding: Record<string, { color?: string; logo_url?: string }> | null
+  call_form_config: { simplified?: boolean } | null
 }
 
 interface TenantContextValue {
@@ -45,7 +46,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
           if (!profile?.tenant_id) { setLoading(false); return }
           supabase
             .from('tenants')
-            .select('id, slug, name, logo_url, primary_color, call_origins, enable_commissions, cnpj, phone, origin_branding')
+            .select('id, slug, name, logo_url, primary_color, call_origins, enable_commissions, cnpj, phone, origin_branding, call_form_config')
             .eq('id', profile.tenant_id)
             .single()
             .then(({ data }) => {
