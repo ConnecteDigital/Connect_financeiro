@@ -48,6 +48,7 @@ export default function ChamadosPage() {
   const [actionModal, setActionModal] = useState<{ callId: string; type: 'approve' | 'refuse' } | null>(null)
   const [actionNotes, setActionNotes] = useState('')
   const [actionRefuseReason, setActionRefuseReason] = useState('nao_aprovou')
+  const [actionRefuseNotes, setActionRefuseNotes] = useState('')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Agrupa os chamados por dia do serviço (usa a data agendada; sem ela, a data do chamado)
@@ -110,10 +111,10 @@ export default function ChamadosPage() {
     }
   }
 
-  async function handleQuickRefuse(callId: string, reason: string) {
+  async function handleQuickRefuse(callId: string, reason: string, notes?: string) {
     setUpdatingId(callId)
     try {
-      await updateCall(callId, { status: reason })
+      await updateCall(callId, { status: reason, ...(notes ? { notes } : {}) })
       setActionModal(null)
       await load()
     } catch (e) {
@@ -348,7 +349,7 @@ export default function ChamadosPage() {
                       className="py-2 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 disabled:opacity-50 transition">
                       ✓ Aprovado?
                     </button>
-                    <button onClick={() => { setActionModal({ callId: c.id, type: 'refuse' }); setActionRefuseReason('nao_aprovou') }} disabled={updatingId === c.id}
+                    <button onClick={() => { setActionModal({ callId: c.id, type: 'refuse' }); setActionRefuseReason('nao_aprovou'); setActionRefuseNotes('') }} disabled={updatingId === c.id}
                       className="py-2 rounded-lg text-xs font-semibold bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 disabled:opacity-50 transition">
                       ✗ Recusado?
                     </button>
@@ -408,12 +409,22 @@ export default function ChamadosPage() {
                     </label>
                   ))}
                 </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-500 mb-1.5">Descrição / Motivo (opcional)</label>
+                  <textarea
+                    value={actionRefuseNotes}
+                    onChange={e => setActionRefuseNotes(e.target.value)}
+                    rows={3}
+                    className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 resize-none"
+                    placeholder="Ex: cliente achou o valor alto, já tem outro orçamento..."
+                  />
+                </div>
                 <div className="flex gap-3">
                   <button onClick={() => setActionModal(null)}
                     className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition">
                     Cancelar
                   </button>
-                  <button onClick={() => handleQuickRefuse(actionModal.callId, actionRefuseReason)}
+                  <button onClick={() => handleQuickRefuse(actionModal.callId, actionRefuseReason, actionRefuseNotes || undefined)}
                     disabled={updatingId === actionModal.callId}
                     className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-red-500 text-white hover:bg-red-600 disabled:opacity-50 transition">
                     Confirmar
