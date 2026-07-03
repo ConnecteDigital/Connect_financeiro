@@ -132,7 +132,6 @@ export default function FinanceiroPage() {
       if (data) {
         setExpenses(prev => [data, ...prev])
         setNewSaida({ description: '', amount: '', category: 'outros', type: 'variavel', due_date: new Date().toISOString().slice(0, 10), status: 'pendente' })
-        setShowSaidaForm(false)
       }
     } finally {
       setSavingEntry(false)
@@ -156,7 +155,6 @@ export default function FinanceiroPage() {
       if (data) {
         setCashEntries(prev => [data, ...prev])
         setNewEntrada({ description: '', amount: '', entry_type: 'avulso', due_date: new Date().toISOString().slice(0, 10), status: 'pendente' })
-        setShowEntradaForm(false)
       }
     } finally {
       setSavingEntry(false)
@@ -182,7 +180,6 @@ export default function FinanceiroPage() {
       if (data) {
         setCashEntries(prev => [data, ...prev])
         setNewBoleto({ description: '', amount: '', direction: 'saida', boleto_bank: '', boleto_code: '', due_date: new Date().toISOString().slice(0, 10) })
-        setShowBoletoForm(false)
       }
     } finally {
       setSavingEntry(false)
