@@ -4,7 +4,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, Share2, Check, X, Loader2 } from 'lucide-react'
+import { ArrowLeft, Share2, Check, X, Loader2, Edit2 } from 'lucide-react'
+import { createCall } from '@/lib/db/calls'
 
 const ORIGIN_LABELS: Record<string, string> = {
   site_lider: 'Site Líder',
@@ -149,6 +150,28 @@ export default function OrcamentoDetailPage() {
     }
   }
 
+  async function handleApprove() {
+    if (!quote) return
+    setUpdatingStatus(true)
+    try {
+      const supabase = createClient()
+      const call = await createCall({
+        date: new Date().toISOString().slice(0, 10),
+        contact_name: quote.client_name,
+        contact_phone: quote.client_phone || null,
+        origin: quote.origin || null,
+        status: 'aprovado',
+        notes: quote.notes || null,
+        service_category: quote.service_category || null,
+      })
+      await supabase.from('quotes').update({ status: 'aprovado', call_id: call.id, updated_at: new Date().toISOString() }).eq('id', quote.id)
+      router.push(`/dashboard/chamados/${call.id}/editar`)
+    } catch (e) {
+      console.error(e)
+      setUpdatingStatus(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -199,17 +222,25 @@ export default function OrcamentoDetailPage() {
               <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{quote.client_name}</p>
             </div>
           </div>
-          <button onClick={handleShare} disabled={sharing} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition flex-shrink-0"
-            style={{ background: 'var(--surface-secondary)', color: 'var(--text-secondary)' }}>
-            {sharing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />}
-            <span className="hidden sm:inline">Compartilhar</span>
-          </button>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Link href={`/dashboard/orcamentos/${quote.id}/editar`}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition"
+              style={{ background: 'var(--surface-secondary)', color: 'var(--text-secondary)' }}>
+              <Edit2 className="w-4 h-4" />
+              <span className="hidden sm:inline">Editar</span>
+            </Link>
+            <button onClick={handleShare} disabled={sharing} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition"
+              style={{ background: 'var(--surface-secondary)', color: 'var(--text-secondary)' }}>
+              {sharing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />}
+              <span className="hidden sm:inline">Compartilhar</span>
+            </button>
+          </div>
         </div>
 
         {/* Status actions */}
         {quote.status === 'pendente' && (
           <div className="flex gap-3">
-            <button onClick={() => updateStatus('aprovado')} disabled={updatingStatus}
+            <button onClick={handleApprove} disabled={updatingStatus}
               className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-semibold transition"
               style={{ background: 'rgba(16,185,129,0.1)', color: '#10b981', border: '1px solid rgba(16,185,129,0.25)' }}>
               {updatingStatus ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}

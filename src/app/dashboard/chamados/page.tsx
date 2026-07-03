@@ -45,6 +45,9 @@ export default function ChamadosPage() {
   const [view, setView] = useState<'lista' | 'calendario'>('lista')
   const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1) })
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
+  const [actionModal, setActionModal] = useState<{ callId: string; type: 'approve' | 'refuse' } | null>(null)
+  const [actionNotes, setActionNotes] = useState('')
+  const [actionRefuseReason, setActionRefuseReason] = useState('nao_aprovou')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Agrupa os chamados por dia do serviço (usa a data agendada; sem ela, a data do chamado)
@@ -96,10 +99,10 @@ export default function ChamadosPage() {
 
   useEffect(() => { load() }, [load])
 
-  async function handleQuickApprove(callId: string) {
+  async function handleQuickApprove(callId: string, notes?: string) {
     setUpdatingId(callId)
     try {
-      await updateCall(callId, { status: 'aprovado' })
+      await updateCall(callId, { status: 'aprovado', ...(notes ? { notes } : {}) })
       router.push(`/dashboard/chamados/${callId}/editar`)
     } catch (e) {
       console.error(e)
@@ -107,10 +110,11 @@ export default function ChamadosPage() {
     }
   }
 
-  async function handleQuickRefuse(callId: string) {
+  async function handleQuickRefuse(callId: string, reason: string) {
     setUpdatingId(callId)
     try {
-      await updateCall(callId, { status: 'nao_aprovou' })
+      await updateCall(callId, { status: reason })
+      setActionModal(null)
       await load()
     } catch (e) {
       console.error(e)
@@ -340,11 +344,11 @@ export default function ChamadosPage() {
                 </Link>
                 {c.status === 'agendado' && (
                   <div className="grid grid-cols-2 gap-2 px-4 pb-4">
-                    <button onClick={() => handleQuickApprove(c.id)} disabled={updatingId === c.id}
+                    <button onClick={() => { setActionModal({ callId: c.id, type: 'approve' }); setActionNotes('') }} disabled={updatingId === c.id}
                       className="py-2 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 disabled:opacity-50 transition">
                       ✓ Aprovado?
                     </button>
-                    <button onClick={() => handleQuickRefuse(c.id)} disabled={updatingId === c.id}
+                    <button onClick={() => { setActionModal({ callId: c.id, type: 'refuse' }); setActionRefuseReason('nao_aprovou') }} disabled={updatingId === c.id}
                       className="py-2 rounded-lg text-xs font-semibold bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 disabled:opacity-50 transition">
                       ✗ Recusado?
                     </button>
@@ -353,6 +357,71 @@ export default function ChamadosPage() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Action Modal */}
+      {actionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backdropFilter: 'blur(4px)', background: 'rgba(0,0,0,0.4)' }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            {actionModal.type === 'approve' ? (
+              <>
+                <h2 className="text-lg font-bold text-zinc-900">Chamado Aprovado</h2>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-500 mb-1.5">Observação (opcional)</label>
+                  <textarea
+                    value={actionNotes}
+                    onChange={e => setActionNotes(e.target.value)}
+                    rows={3}
+                    className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 resize-none"
+                    placeholder="Adicione uma observação..."
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={() => setActionModal(null)}
+                    className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition">
+                    Cancelar
+                  </button>
+                  <button onClick={() => { setActionModal(null); handleQuickApprove(actionModal.callId, actionNotes || undefined) }}
+                    disabled={updatingId === actionModal.callId}
+                    className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50 transition">
+                    Confirmar Aprovação
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h2 className="text-lg font-bold text-zinc-900">Chamado Recusado</h2>
+                <div className="space-y-2">
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">Motivo</label>
+                  {[
+                    { value: 'nao_aprovou', label: 'Não aprovou' },
+                    { value: 'nao_quis_visita', label: 'Não quis visita' },
+                  ].map(opt => (
+                    <label key={opt.value} className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition hover:bg-zinc-50"
+                      style={{ borderColor: actionRefuseReason === opt.value ? '#f97316' : '#e4e4e7' }}>
+                      <input type="radio" name="refuseReason" value={opt.value}
+                        checked={actionRefuseReason === opt.value}
+                        onChange={() => setActionRefuseReason(opt.value)}
+                        className="accent-orange-500" />
+                      <span className="text-sm font-medium text-zinc-700">{opt.label}</span>
+                    </label>
+                  ))}
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={() => setActionModal(null)}
+                    className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition">
+                    Cancelar
+                  </button>
+                  <button onClick={() => handleQuickRefuse(actionModal.callId, actionRefuseReason)}
+                    disabled={updatingId === actionModal.callId}
+                    className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-red-500 text-white hover:bg-red-600 disabled:opacity-50 transition">
+                    Confirmar
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>
