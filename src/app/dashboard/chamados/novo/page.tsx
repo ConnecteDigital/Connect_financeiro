@@ -435,7 +435,7 @@ export default function NovoChamadoPage() {
 
   const inputCls = 'w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400'
 
-  async function handleSimplifiedSubmit(targetStatus: 'aberto' | 'aprovado') {
+  async function handleSimplifiedSubmit(targetStatus: 'agendado' | 'aprovado') {
     if (!origin) { setError('Selecione a origem do chamado.'); return }
     if (!contactName.trim()) { setError('Informe o nome do contato.'); return }
     setSaving(true); setError('')
@@ -535,7 +535,7 @@ export default function NovoChamadoPage() {
             <button
               type="button"
               disabled={saving}
-              onClick={() => handleSimplifiedSubmit('aberto')}
+              onClick={() => handleSimplifiedSubmit('agendado')}
               className="w-full py-3 rounded-xl text-sm font-semibold bg-slate-700 text-white hover:bg-slate-800 transition disabled:opacity-60 flex items-center justify-center gap-2"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
