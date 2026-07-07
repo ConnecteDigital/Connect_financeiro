@@ -52,6 +52,8 @@ export default function NovoChamadoPage() {
   const { tenant } = useTenant()
   const commissionsEnabled = tenant?.enable_commissions ?? false
   const isSimplified = tenant?.call_form_config?.simplified === true
+  const [selectedCategory, setSelectedCategory] = useState('')
+  const serviceCategory = selectedCategory
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [clients, setClients] = useState<any[]>([])
@@ -448,7 +450,7 @@ export default function NovoChamadoPage() {
         origin,
         status: targetStatus,
         notes: null,
-        service_category: null,
+        service_category: serviceCategory || null,
         scheduled_date: null,
         scheduled_time: null,
         call_address: callAddress || null,
@@ -533,6 +535,19 @@ export default function NovoChamadoPage() {
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Endereço</label>
             <input type="text" value={callAddress} onChange={e => setCallAddress(e.target.value)}
               placeholder="Rua, número, bairro, cidade..." className={inputCls} />
+          </div>
+
+          {/* Tipo de Serviço */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Tipo de Serviço</label>
+            <div className="flex flex-wrap gap-2">
+              {SERVICE_CATEGORIES.map(cat => (
+                <button key={cat} type="button" onClick={() => setSelectedCategory(prev => prev === cat ? '' : cat)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${selectedCategory === cat ? 'bg-orange-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                  {cat}
+                </button>
+              ))}
+            </div>
           </div>
 
           {error && <p className="text-sm text-red-500">{error}</p>}

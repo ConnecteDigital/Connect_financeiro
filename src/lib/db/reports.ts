@@ -123,3 +123,79 @@ export async function getAvailableCategories() {
   const cats = [...new Set((data ?? []).map((d: any) => d.service_category).filter(Boolean))]
   return cats as string[]
 }
+
+export async function getExpensesReport(
+  startDate: string,
+  endDate: string,
+  filters?: { category?: string; supplierId?: string; status?: string }
+) {
+  const supabase = createClient()
+  let q = supabase
+    .from('expenses')
+    .select('*, supplier:suppliers(id,name)')
+    .gte('due_date', startDate)
+    .lte('due_date', endDate)
+    .order('due_date', { ascending: false })
+
+  if (filters?.category && filters.category !== 'todos') q = q.eq('category', filters.category)
+  if (filters?.supplierId && filters.supplierId !== 'todos') q = q.eq('supplier_id', filters.supplierId)
+  if (filters?.status && filters.status !== 'todos') q = q.eq('status', filters.status)
+
+  const { data } = await q
+  const expenses = data ?? []
+
+  const total = expenses.reduce((s: number, e: any) => s + Number(e.amount || 0), 0)
+  const paid = expenses.filter((e: any) => e.status === 'pago').reduce((s: number, e: any) => s + Number(e.amount || 0), 0)
+  const pending = expenses.filter((e: any) => e.status !== 'pago').reduce((s: number, e: any) => s + Number(e.amount || 0), 0)
+
+  const catMap: Record<string, number> = {}
+  expenses.forEach((e: any) => { catMap[e.category || 'outros'] = (catMap[e.category || 'outros'] || 0) + Number(e.amount || 0) })
+  const byCategory = Object.entries(catMap).map(([cat, total]) => ({ cat, total })).sort((a, b) => b.total - a.total)
+
+  const suppMap: Record<string, { name: string; total: number }> = {}
+  expenses.forEach((e: any) => {
+    const key = e.supplier?.id ?? 'sem-fornecedor'
+    const name = e.supplier?.name ?? 'Sem fornecedor'
+    if (!suppMap[key]) suppMap[key] = { name, total: 0 }
+    suppMap[key].total += Number(e.amount || 0)
+  })
+  const bySupplier = Object.values(suppMap).sort((a, b) => b.total - a.total)
+
+  return { expenses, total, paid, pending, byCategory, bySupplier }
+}
+
+export async function getCashEntriesReport(
+  startDate: string,
+  endDate: string,
+  filters?: { clientId?: string; status?: string }
+) {
+  const supabase = createClient()
+  let q = supabase
+    .from('cash_entries')
+    .select('*, client:clients(id,name)')
+    .eq('direction', 'entrada')
+    .gte('due_date', startDate)
+    .lte('due_date', endDate)
+    .order('due_date', { ascending: false })
+
+  if (filters?.clientId && filters.clientId !== 'todos') q = q.eq('client_id', filters.clientId)
+  if (filters?.status && filters.status !== 'todos') q = q.eq('status', filters.status)
+
+  const { data } = await q
+  const entries = data ?? []
+
+  const total = entries.reduce((s: number, e: any) => s + Number(e.amount || 0), 0)
+  const paid = entries.filter((e: any) => e.status === 'pago').reduce((s: number, e: any) => s + Number(e.amount || 0), 0)
+  const pending = entries.filter((e: any) => e.status !== 'pago').reduce((s: number, e: any) => s + Number(e.amount || 0), 0)
+
+  const clientMap: Record<string, { name: string; total: number }> = {}
+  entries.forEach((e: any) => {
+    const key = e.client?.id ?? 'sem-cliente'
+    const name = e.client?.name ?? 'Sem cliente'
+    if (!clientMap[key]) clientMap[key] = { name, total: 0 }
+    clientMap[key].total += Number(e.amount || 0)
+  })
+  const byClient = Object.values(clientMap).sort((a, b) => b.total - a.total)
+
+  return { entries, total, paid, pending, byClient }
+}
