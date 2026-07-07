@@ -15,7 +15,6 @@ import { SERVICE_CATEGORIES } from '@/lib/service-config'
 
 const fmt = (v: number) => `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
 
-const EXPENSE_CATEGORIES = ['aluguel', 'agua', 'luz', 'internet', 'telefone', 'combustivel', 'manutencao', 'salario', 'impostos', 'material', 'outros']
 
 const today = new Date()
 const defaultRange: DateRange = {
@@ -49,15 +48,20 @@ export default function RelatoriosPage() {
   const [loading, setLoading] = useState(true)
   const [suppliers, setSuppliers] = useState<any[]>([])
   const [clients, setClients] = useState<any[]>([])
+  const [expenseCategories, setExpenseCategories] = useState<string[]>([])
 
   const { origins: tenantOrigins } = useCallOrigins()
   const { tenant } = useTenant()
 
-  // Load suppliers once
+  // Load suppliers, clients, and expense categories once
   useEffect(() => {
     const supabase = createClient()
     supabase.from('suppliers').select('id,name').then(({ data }) => setSuppliers(data ?? []))
     getClients().then(setClients).catch(() => {})
+    supabase.from('expenses').select('category').then(({ data }) => {
+      const cats = [...new Set((data ?? []).map((d: any) => d.category).filter(Boolean))].sort()
+      setExpenseCategories(cats as string[])
+    })
   }, [])
 
   const load = useCallback(async () => {
@@ -305,7 +309,7 @@ export default function RelatoriosPage() {
                 <select value={saidaCategory} onChange={e => setSaidaCategory(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
                   <option value="todos">Todas as categorias</option>
-                  {EXPENSE_CATEGORIES.map(c => (
+                  {expenseCategories.map(c => (
                     <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
                   ))}
                 </select>
