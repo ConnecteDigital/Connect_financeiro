@@ -100,6 +100,150 @@ function ImprimirContent({ id }: { id: string }) {
   if (loading) return <div className="flex items-center justify-center h-screen text-slate-500">Carregando...</div>
   if (!call) return <div className="flex items-center justify-center h-screen text-slate-500">Chamado não encontrado.</div>
 
+  const isSimplified = tenant?.call_form_config?.simplified === true
+
+  // ── Millenium romaneio (simplified tenants) ──
+  if (isSimplified) {
+    const logoUrl = tenant?.logo_url
+    const callNumber = call.id?.slice(-6)?.toUpperCase() ?? '—'
+    const callDateRaw = call.date ? new Date(call.date + 'T12:00:00') : null
+    const callDateStr = callDateRaw ? callDateRaw.toLocaleDateString('pt-BR') : '___/___/______'
+    const callTime = call.scheduled_time ?? ''
+    const clientName = call.contact_name ?? call.client?.name ?? ''
+    const address = call.call_address ?? call.client?.address ?? ''
+    const problem = call.service_category ?? ''
+    const cpf = call.contact_cpf ?? call.client?.cpf_cnpj ?? ''
+    const phone = call.contact_phone ?? call.client?.phone ?? ''
+    const STATUS_LABELS = ['Agendado', 'Realizado', 'Orçamento', 'Chamado']
+    const STATUS_MAP: Record<string, string> = {
+      agendado: 'Agendado', aprovado: 'Realizado', orcamento: 'Orçamento', aberto: 'Chamado',
+    }
+    const activeStatus = STATUS_MAP[call.status ?? ''] ?? null
+
+    const navy = '#1a2e5a'
+    const lineStyle: React.CSSProperties = { borderBottom: `1.5px solid ${navy}`, minHeight: 28, marginBottom: 10 }
+    const labelStyle: React.CSSProperties = { fontWeight: 800, fontSize: 13, color: navy, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 2 }
+
+    return (
+      <>
+        <div className="print:hidden flex items-center max-w-xl mx-auto pt-3 pb-2 px-3">
+          <Link href={`/dashboard/chamados/${id}`}
+            className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition">
+            <ArrowLeft className="w-4 h-4" /> Voltar
+          </Link>
+        </div>
+
+        <div
+          ref={sheetRef}
+          className="os-sheet bg-white mx-auto"
+          style={{ maxWidth: 600, fontFamily: 'Arial, sans-serif', color: navy, padding: 32, minHeight: 700 }}
+        >
+          {/* Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
+            {/* Logo */}
+            <div style={{ width: 160 }}>
+              {logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={logoUrl} alt={tenant?.name ?? 'Logo'} loading="eager"
+                  style={{ maxWidth: 150, maxHeight: 70, objectFit: 'contain' }} />
+              ) : (
+                <span style={{ fontWeight: 900, fontSize: 20, color: navy }}>{tenant?.name ?? ''}</span>
+              )}
+            </div>
+            {/* CHAMADO / DATA / HORÁRIO */}
+            <div style={{ textAlign: 'right', fontSize: 12, color: navy }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end', marginBottom: 4 }}>
+                <span style={{ fontWeight: 800, textTransform: 'uppercase' }}>Chamado:</span>
+                <span style={{ borderBottom: `1.5px solid ${navy}`, minWidth: 80, display: 'inline-block', paddingBottom: 1 }}>{callNumber}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end', marginBottom: 4 }}>
+                <span style={{ fontWeight: 800, textTransform: 'uppercase' }}>Data:</span>
+                <span style={{ borderBottom: `1.5px solid ${navy}`, minWidth: 110, display: 'inline-block', paddingBottom: 1 }}>{callDateStr}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+                <span style={{ fontWeight: 800, textTransform: 'uppercase' }}>Horário:</span>
+                <span style={{ borderBottom: `1.5px solid ${navy}`, minWidth: 70, display: 'inline-block', paddingBottom: 1 }}>{callTime}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Body fields */}
+          <div style={{ marginBottom: 8 }}>
+            <p style={labelStyle}>Cliente</p>
+            <div style={{ ...lineStyle, fontSize: 13, paddingBottom: 2 }}>{clientName}</div>
+          </div>
+
+          <div style={{ marginBottom: 8 }}>
+            <p style={labelStyle}>Localização</p>
+            <div style={{ ...lineStyle, fontSize: 13, paddingBottom: 2 }}>{address}</div>
+            <div style={{ ...lineStyle }} />
+          </div>
+
+          <div style={{ marginBottom: 8 }}>
+            <p style={labelStyle}>Problema</p>
+            <div style={{ ...lineStyle, fontSize: 13, paddingBottom: 2 }}>{problem}</div>
+            <div style={{ ...lineStyle }} />
+          </div>
+
+          <div style={{ marginBottom: 8 }}>
+            <p style={labelStyle}>CPF</p>
+            <div style={{ ...lineStyle, fontSize: 13, paddingBottom: 2 }}>{cpf}</div>
+          </div>
+
+          <div style={{ marginBottom: 32 }}>
+            <p style={labelStyle}>Telefone para Contato</p>
+            <div style={{ ...lineStyle, fontSize: 13, paddingBottom: 2 }}>{phone}</div>
+          </div>
+
+          {/* Status circles */}
+          <div style={{ display: 'flex', justifyContent: 'space-around', marginTop: 16 }}>
+            {STATUS_LABELS.map(label => {
+              const active = label === activeStatus
+              return (
+                <div key={label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                  <div style={{
+                    width: 52, height: 52, borderRadius: '50%',
+                    border: `2.5px solid ${navy}`,
+                    background: active ? navy : 'transparent',
+                  }} />
+                  <span style={{ fontWeight: 700, fontSize: 12, color: navy, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{label}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className="print:hidden" style={{ height: 96 }} />
+
+        <div className="print:hidden fixed bottom-6 inset-x-0 flex justify-center gap-3 z-50">
+          <button onClick={handleSharePng} disabled={!!sharing}
+            className="flex items-center gap-2 text-white font-semibold px-6 py-3.5 rounded-2xl shadow-2xl transition active:scale-95 disabled:opacity-70"
+            style={{ backgroundColor: '#16a34a', boxShadow: '0 8px 24px rgba(22,163,74,0.40)' }}>
+            {sharing === 'png' ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileImage className="w-5 h-5" />}
+            {sharing === 'png' ? 'Gerando...' : 'Imagem'}
+          </button>
+          <button onClick={handleSharePdf} disabled={!!sharing}
+            className="flex items-center gap-2 text-white font-semibold px-6 py-3.5 rounded-2xl shadow-2xl transition active:scale-95 disabled:opacity-70"
+            style={{ backgroundColor: '#2563eb', boxShadow: '0 8px 24px rgba(37,99,235,0.40)' }}>
+            {sharing === 'pdf' ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileText className="w-5 h-5" />}
+            {sharing === 'pdf' ? 'Gerando...' : 'PDF'}
+          </button>
+        </div>
+
+        <style>{`
+          @media print {
+            @page { margin: 10mm; size: A4; }
+            html, body { background: white !important; }
+            .print\\:hidden { display: none !important; }
+            aside, nav, header { display: none !important; }
+            main { padding: 0 !important; margin: 0 !important; }
+            .os-sheet { max-width: 100% !important; }
+          }
+        `}</style>
+      </>
+    )
+  }
+
   const so = call.service_orders?.[0]
   if (!so) return <div className="flex items-center justify-center h-screen text-slate-500">Este chamado não possui ordem de serviço.</div>
 
