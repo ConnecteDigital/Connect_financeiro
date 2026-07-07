@@ -131,7 +131,7 @@ export default function FinanceiroPage() {
       }).select().single()
       if (data) {
         setExpenses(prev => [data, ...prev])
-        setNewSaida({ description: '', amount: '', category: 'outros', type: 'variavel', due_date: new Date().toISOString().slice(0, 10), status: 'pendente' })
+        setNewSaida({ description: '', amount: '', category: 'outros', type: 'avulso', due_date: new Date().toISOString().slice(0, 10), status: 'pendente' })
       }
     } finally {
       setSavingEntry(false)

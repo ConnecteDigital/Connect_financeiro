@@ -451,7 +451,7 @@ export default function NovoChamadoPage() {
         service_category: null,
         scheduled_date: null,
         scheduled_time: null,
-        call_address: null,
+        call_address: callAddress || null,
         call_city: null,
         call_neighborhood: null,
         contact_cpf: null,
@@ -526,6 +526,13 @@ export default function NovoChamadoPage() {
             </label>
             <input type="text" value={solicitante} onChange={e => setSolicitante(e.target.value)}
               placeholder="Ex: Maria (esposa do João), síndico..." className={inputCls} />
+          </div>
+
+          {/* Endereço */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Endereço</label>
+            <input type="text" value={callAddress} onChange={e => setCallAddress(e.target.value)}
+              placeholder="Rua, número, bairro, cidade..." className={inputCls} />
           </div>
 
           {error && <p className="text-sm text-red-500">{error}</p>}

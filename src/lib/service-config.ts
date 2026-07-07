@@ -7,7 +7,7 @@ export interface ServiceCategoryConfig {
 
 export const SERVICE_CONFIG: Record<string, ServiceCategoryConfig> = {
   'Desentupimento': {
-    subOptions: ['Ralo', 'Pia', 'Vaso', 'Esgoto', 'Coluna'],
+    subOptions: ['Ralo', 'Pia', 'Vaso', 'Esgoto', 'Coluna', 'Caixa de Gordura'],
     qtyLabel: 'Quantidade de metros',
     priceLabel: 'Valor do metro (R$)',
   },
