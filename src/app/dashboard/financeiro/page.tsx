@@ -368,19 +368,12 @@ export default function FinanceiroPage() {
                 </button>
               </div>
 
-              {/* Extra filters: search + supplier */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--text-tertiary)' }} />
-                  <input type="text" placeholder="Buscar descrição..." value={saidasSearch}
-                    onChange={e => setSaidasSearch(e.target.value)}
-                    className="input-field pl-9 py-2 text-sm w-full" />
-                </div>
-                <select value={saidasSupplierFilter} onChange={e => setSaidasSupplierFilter(e.target.value)}
-                  className="input-field py-2 text-sm">
-                  <option value="todos">Todos os fornecedores</option>
-                  {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
+              {/* Search */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--text-tertiary)' }} />
+                <input type="text" placeholder="Buscar descrição..." value={saidasSearch}
+                  onChange={e => setSaidasSearch(e.target.value)}
+                  className="input-field pl-9 py-2 text-sm w-full" />
               </div>
 
               {showSaidaForm && (
@@ -444,52 +437,26 @@ export default function FinanceiroPage() {
                 </div>
               )}
 
-              {/* Resumo por categoria */}
-              {presentCategories.length > 0 && (
-                <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 no-scrollbar">
-                  {presentCategories.map(([cat, total]) => (
-                    <button key={cat} onClick={() => setSaidasCategoryFilter(saidasCategoryFilter === cat ? 'todos' : cat)}
-                      className="flex-shrink-0 flex flex-col items-start px-3 py-2 rounded-xl text-left transition"
-                      style={saidasCategoryFilter === cat
-                        ? { background: 'var(--primary)', color: '#fff' }
-                        : { background: 'var(--surface-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}>
-                      <span className="text-[10px] font-semibold uppercase tracking-wide opacity-70">
-                        {CATEGORY_LABELS[cat] ?? cat}
-                      </span>
-                      <span className="text-sm font-bold mt-0.5">{fmt(total)}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-
               {/* Filters */}
-              <div className="flex flex-wrap gap-2">
-                {['todos', 'fixo', 'avulso'].map(f => (
-                  <button key={f} onClick={() => setSaidasTypeFilter(f)}
-                    className="px-3 py-1.5 rounded-xl text-xs font-medium transition"
-                    style={saidasTypeFilter === f
-                      ? { background: 'var(--primary)', color: '#fff' }
-                      : { background: 'var(--surface-secondary)', color: 'var(--text-secondary)' }}>
-                    {f === 'todos' ? 'Todos' : f === 'fixo' ? 'Fixo' : 'Avulso'}
-                  </button>
-                ))}
-                <div className="w-px self-stretch" style={{ background: 'var(--border)' }} />
-                {['todos', 'pago', 'pendente'].map(f => (
-                  <button key={f} onClick={() => setSaidasStatusFilter(f)}
-                    className="px-3 py-1.5 rounded-xl text-xs font-medium transition"
-                    style={saidasStatusFilter === f
-                      ? { background: 'var(--primary)', color: '#fff' }
-                      : { background: 'var(--surface-secondary)', color: 'var(--text-secondary)' }}>
-                    {f === 'todos' ? 'Todos' : f === 'pago' ? 'Pago' : 'Pendente'}
-                  </button>
-                ))}
-                {saidasCategoryFilter !== 'todos' && (
-                  <button onClick={() => setSaidasCategoryFilter('todos')}
-                    className="px-3 py-1.5 rounded-xl text-xs font-medium transition"
-                    style={{ background: 'var(--surface-secondary)', color: 'var(--text-secondary)' }}>
-                    × {CATEGORY_LABELS[saidasCategoryFilter] ?? saidasCategoryFilter}
-                  </button>
-                )}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <select value={saidasCategoryFilter} onChange={e => setSaidasCategoryFilter(e.target.value)}
+                  className="input-field py-2 text-sm">
+                  <option value="todos">Todas as categorias</option>
+                  {Object.keys(categoryTotals).sort().map(cat => (
+                    <option key={cat} value={cat}>{CATEGORY_LABELS[cat] ?? cat}</option>
+                  ))}
+                </select>
+                <select value={saidasStatusFilter} onChange={e => setSaidasStatusFilter(e.target.value)}
+                  className="input-field py-2 text-sm">
+                  <option value="todos">Todos os status</option>
+                  <option value="pendente">Pendente</option>
+                  <option value="pago">Pago</option>
+                </select>
+                <select value={saidasSupplierFilter} onChange={e => setSaidasSupplierFilter(e.target.value)}
+                  className="input-field py-2 text-sm">
+                  <option value="todos">Todos os fornecedores</option>
+                  {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
               </div>
 
               {/* List */}
