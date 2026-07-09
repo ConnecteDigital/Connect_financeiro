@@ -379,10 +379,10 @@ export default function FinanceiroPage() {
         if (y > 270) { doc.addPage(); y = 15 }
         doc.setFont('helvetica', 'normal')
         doc.setFontSize(9)
-        doc.text(exp.description.slice(0, 55), 14, y)
-        doc.text(new Date(exp.due_date + 'T12:00:00').toLocaleDateString('pt-BR'), pageW - 50, y)
-        doc.text(exp.status === 'pago' ? 'Pago' : 'Pendente', pageW - 30, y)
-        doc.text(fmt(Number(exp.amount)), pageW - 14, y, { align: 'right' })
+        doc.text(exp.description.slice(0, 45), 14, y)
+        doc.text(new Date(exp.due_date + 'T12:00:00').toLocaleDateString('pt-BR'), 130, y)
+        doc.text(exp.status === 'pago' ? 'Pago' : 'Pendente', 158, y)
+        doc.text(fmt(Number(exp.amount)), pageW - 10, y, { align: 'right' })
         y += 5
       })
     } else {
@@ -399,10 +399,10 @@ export default function FinanceiroPage() {
         if (y > 270) { doc.addPage(); y = 15 }
         doc.setFont('helvetica', 'normal')
         doc.setFontSize(9)
-        doc.text(ce.description.slice(0, 55), 14, y)
-        doc.text(new Date(ce.due_date + 'T12:00:00').toLocaleDateString('pt-BR'), pageW - 50, y)
-        doc.text(ce.status === 'pago' ? 'Recebido' : 'Pendente', pageW - 30, y)
-        doc.text(fmt(Number(ce.amount)), pageW - 14, y, { align: 'right' })
+        doc.text(ce.description.slice(0, 45), 14, y)
+        doc.text(new Date(ce.due_date + 'T12:00:00').toLocaleDateString('pt-BR'), 130, y)
+        doc.text(ce.status === 'pago' ? 'Recebido' : 'Pendente', 158, y)
+        doc.text(fmt(Number(ce.amount)), pageW - 10, y, { align: 'right' })
         y += 5
       })
     }
