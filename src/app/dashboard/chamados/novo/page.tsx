@@ -277,12 +277,12 @@ export default function NovoChamadoPage() {
     setError('')
     try {
       let finalClientId = clientId
-      if (!clientId && contactName.trim() && isApproved) {
+      if (!clientId && contactName.trim()) {
         const created = await createClient_({
           name: contactName.trim(),
           phone: contactPhone || null,
           cpf_cnpj: contactCpf || null,
-          address: newClient.address || null,
+          address: newClient.address || callAddress || null,
           neighborhood: callNeighborhood || null,
           city: callCity || null,
           state: newClient.state || null,
@@ -442,9 +442,18 @@ export default function NovoChamadoPage() {
     if (!contactName.trim()) { setError('Informe o nome do contato.'); return }
     setSaving(true); setError('')
     try {
+      let simplifiedClientId: string | null = null
+      if (contactName.trim()) {
+        const created = await createClient_({
+          name: contactName.trim(),
+          phone: contactPhone || null,
+          address: callAddress || null,
+        })
+        simplifiedClientId = created.id
+      }
       const call = await createCall({
         date: callDate,
-        client_id: null,
+        client_id: simplifiedClientId,
         contact_name: contactName || null,
         contact_phone: contactPhone || null,
         origin,
