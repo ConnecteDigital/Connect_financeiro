@@ -277,17 +277,21 @@ export default function NovoChamadoPage() {
     setError('')
     try {
       let finalClientId = clientId
-      if (!clientId && contactName.trim()) {
-        const created = await createClient_({
-          name: contactName.trim(),
-          phone: contactPhone || null,
-          cpf_cnpj: contactCpf || null,
-          address: newClient.address || callAddress || null,
-          neighborhood: callNeighborhood || null,
-          city: callCity || null,
-          state: newClient.state || null,
-        })
-        finalClientId = created.id
+      if (!clientId && contactName.trim() && callStatus === 'aprovado') {
+        try {
+          const created = await createClient_({
+            name: contactName.trim(),
+            phone: contactPhone || null,
+            cpf_cnpj: contactCpf || null,
+            address: newClient.address || callAddress || null,
+            neighborhood: callNeighborhood || null,
+            city: callCity || null,
+            state: newClient.state || null,
+          })
+          finalClientId = created.id
+        } catch (clientErr) {
+          console.warn('Não foi possível criar cliente automaticamente:', clientErr)
+        }
       }
 
       const call = await createCall({
@@ -443,13 +447,17 @@ export default function NovoChamadoPage() {
     setSaving(true); setError('')
     try {
       let simplifiedClientId: string | null = null
-      if (contactName.trim()) {
-        const created = await createClient_({
-          name: contactName.trim(),
-          phone: contactPhone || null,
-          address: callAddress || null,
-        })
-        simplifiedClientId = created.id
+      if (contactName.trim() && targetStatus === 'aprovado') {
+        try {
+          const created = await createClient_({
+            name: contactName.trim(),
+            phone: contactPhone || null,
+            address: callAddress || null,
+          })
+          simplifiedClientId = created.id
+        } catch (clientErr) {
+          console.warn('Não foi possível criar cliente automaticamente:', clientErr)
+        }
       }
       const call = await createCall({
         date: callDate,
