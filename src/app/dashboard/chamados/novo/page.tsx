@@ -126,7 +126,7 @@ export default function NovoChamadoPage() {
   const [nfNumber, setNfNumber] = useState('')
   const [vehicle, setVehicle] = useState('')
   const [dueDate, setDueDate] = useState('')
-  const [paymentMethod, setPaymentMethod] = useState('')
+  const [paymentMethods, setPaymentMethods] = useState<string[]>([])
   const [amountPaid, setAmountPaid] = useState(0)
   const [remainingAmount, setRemainingAmount] = useState(0)
   const [remainingDueDate, setRemainingDueDate] = useState('')
@@ -355,7 +355,7 @@ export default function NovoChamadoPage() {
           own_fuel_cost: ownFuelCost,
           own_other_cost: ownOtherCost,
           other_service_value: otherServiceValue,
-          payment_method: paymentMethod || null,
+          payment_method: paymentMethods.length > 0 ? paymentMethods.join(', ') : null,
           payment_status: paymentStatus,
           amount_paid: amountPaid,
           remaining_amount: remainingAmount,
@@ -963,12 +963,15 @@ export default function NovoChamadoPage() {
               <label className="block text-sm font-medium text-slate-700 mb-2">Forma de Pagamento</label>
               <div className="flex flex-wrap gap-2">
                 {PAYMENT_METHODS.map(m => (
-                  <button key={m} type="button" onClick={() => setPaymentMethod(paymentMethod === m ? '' : m)}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition ${paymentMethod === m ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                  <button key={m} type="button" onClick={() => setPaymentMethods(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m])}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition ${paymentMethods.includes(m) ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
                     {m}
                   </button>
                 ))}
               </div>
+              {paymentMethods.length > 1 && (
+                <p className="text-xs mt-1.5 text-orange-600 font-medium">{paymentMethods.join(' + ')}</p>
+              )}
             </div>
           </div>
 
