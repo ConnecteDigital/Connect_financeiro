@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useTenant } from '@/lib/tenant-context'
-import { Wallet, TrendingDown, TrendingUp, FileText, BarChart3, Plus, Loader2, Check, AlertCircle, Trash2, Search } from 'lucide-react'
+import { Wallet, TrendingDown, TrendingUp, FileText, BarChart3, Plus, Loader2, Check, AlertCircle, Trash2, Search, Pencil, X, Download } from 'lucide-react'
 import DateRangePicker, { DateRange } from '@/components/DateRangePicker'
 import { format, startOfMonth, endOfMonth } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -20,6 +20,7 @@ interface Expense {
   due_date: string
   paid_date?: string
   created_at: string
+  supplier?: { id: string; name: string } | null
 }
 
 interface CashEntry {
@@ -41,23 +42,6 @@ function fmt(n: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n)
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { label: string; bg: string; color: string }> = {
-    pago: { label: 'Pago', bg: 'rgba(16,185,129,0.12)', color: '#10b981' },
-    pendente: { label: 'Pendente', bg: 'rgba(245,158,11,0.12)', color: '#f59e0b' },
-    cancelado: { label: 'Cancelado', bg: 'rgba(239,68,68,0.1)', color: '#ef4444' },
-  }
-  const s = map[status] ?? map.pendente
-  return (
-    <span className="text-xs font-medium px-2 py-0.5 rounded-full"
-      style={{ background: s.bg, color: s.color }}>{s.label}</span>
-  )
-}
-
-const todayStr = () => {
-  const d = new Date()
-  return format(d, 'yyyy-MM-dd')
-}
 const defaultRange = (): DateRange => {
   const d = new Date()
   return {
@@ -67,6 +51,14 @@ const defaultRange = (): DateRange => {
   }
 }
 
+const CATEGORY_LABELS: Record<string, string> = {
+  combustivel: 'Combustível', material: 'Material', alimentacao: 'Alimentação',
+  salario: 'Salário', aluguel: 'Aluguel', manutencao: 'Manutenção', outros: 'Outros',
+  Pessoal: 'Pessoal', Operacional: 'Operacional',
+}
+
+const STATIC_CATEGORIES = ['combustivel', 'material', 'alimentacao', 'salario', 'aluguel', 'manutencao', 'outros']
+
 export default function FinanceiroPage() {
   const { tenant } = useTenant()
   const [activeTab, setActiveTab] = useState<Tab>('saidas')
@@ -74,12 +66,16 @@ export default function FinanceiroPage() {
   const [cashEntries, setCashEntries] = useState<CashEntry[]>([])
   const [serviceOrdersReceita, setServiceOrdersReceita] = useState(0)
   const [loading, setLoading] = useState(true)
+  const reportRef = useRef<HTMLDivElement>(null)
+
+  // Global categories (independent of date filter)
+  const [allCategories, setAllCategories] = useState<string[]>(STATIC_CATEGORIES)
 
   // Date range (shared)
   const [range, setRange] = useState<DateRange>(defaultRange)
 
   // Saidas filters
-  const [saidasTypeFilter, setSaidasTypeFilter] = useState('todos')
+  const [saidasCategoryFilter, setSaidasCategoryFilter] = useState('todos')
   const [saidasStatusFilter, setSaidasStatusFilter] = useState('todos')
   const [saidasSupplierFilter, setSaidasSupplierFilter] = useState('todos')
   const [saidasSearch, setSaidasSearch] = useState('')
@@ -100,6 +96,25 @@ export default function FinanceiroPage() {
   const [newSaida, setNewSaida] = useState({ description: '', amount: '', category: 'outros', type: 'avulso', due_date: new Date().toISOString().slice(0, 10), status: 'pendente' as string })
   const [newEntrada, setNewEntrada] = useState({ description: '', amount: '', entry_type: 'avulso', due_date: new Date().toISOString().slice(0, 10), status: 'pendente' as string })
   const [newBoleto, setNewBoleto] = useState({ description: '', amount: '', direction: 'saida', boleto_bank: '', boleto_code: '', due_date: new Date().toISOString().slice(0, 10) })
+
+  // Edit modals
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
+  const [editExpenseForm, setEditExpenseForm] = useState({ description: '', amount: '', category: 'outros', type: 'avulso', due_date: '', status: 'pendente' })
+  const [editingCashEntry, setEditingCashEntry] = useState<CashEntry | null>(null)
+  const [editCashEntryForm, setEditCashEntryForm] = useState({ description: '', amount: '', entry_type: 'avulso', due_date: '', status: 'pendente' })
+  const [savingEdit, setSavingEdit] = useState(false)
+
+  // Load all categories globally (no date filter)
+  useEffect(() => {
+    if (!tenant) return
+    const supabase = createClient()
+    supabase.from('expenses').select('category').then(({ data }) => {
+      if (!data) return
+      const cats = new Set<string>(STATIC_CATEGORIES)
+      data.forEach(r => { if (r.category) cats.add(r.category) })
+      setAllCategories(Array.from(cats).sort())
+    })
+  }, [tenant])
 
   const loadData = useCallback(async () => {
     if (!tenant) return
@@ -128,7 +143,6 @@ export default function FinanceiroPage() {
           outsource_fuel_cost: number; outsource_meal_cost: number; outsource_truck_cost: number; outsource_other_cost: number
         }) => {
           const gross = o.payment_status === 'pago' ? (o.total_value || 0) : (o.total_value || 0) - (o.remaining_amount || 0)
-          // Para terceirizado, a empresa só fica com a % definida (ex: 50%)
           const partnerCost = (o.service_type === 'terceirizado_saida')
             ? gross * (1 - (o.outsource_profit_pct ?? 50) / 100)
             : 0
@@ -161,6 +175,11 @@ export default function FinanceiroPage() {
       if (data) {
         setExpenses(prev => [data, ...prev])
         setNewSaida({ description: '', amount: '', category: 'outros', type: 'avulso', due_date: new Date().toISOString().slice(0, 10), status: 'pendente' })
+        setShowSaidaForm(false)
+        // Refresh global categories to include newly added one
+        if (newSaida.category && !allCategories.includes(newSaida.category)) {
+          setAllCategories(prev => [...prev, newSaida.category].sort())
+        }
       }
     } finally {
       setSavingEntry(false)
@@ -184,6 +203,7 @@ export default function FinanceiroPage() {
       if (data) {
         setCashEntries(prev => [data, ...prev])
         setNewEntrada({ description: '', amount: '', entry_type: 'avulso', due_date: new Date().toISOString().slice(0, 10), status: 'pendente' })
+        setShowEntradaForm(false)
       }
     } finally {
       setSavingEntry(false)
@@ -209,6 +229,7 @@ export default function FinanceiroPage() {
       if (data) {
         setCashEntries(prev => [data, ...prev])
         setNewBoleto({ description: '', amount: '', direction: 'saida', boleto_bank: '', boleto_code: '', due_date: new Date().toISOString().slice(0, 10) })
+        setShowBoletoForm(false)
       }
     } finally {
       setSavingEntry(false)
@@ -229,6 +250,40 @@ export default function FinanceiroPage() {
     setExpenses(prev => prev.filter(e => e.id !== id))
   }
 
+  function openEditExpense(exp: Expense) {
+    setEditingExpense(exp)
+    setEditExpenseForm({
+      description: exp.description,
+      amount: String(exp.amount),
+      category: exp.category ?? 'outros',
+      type: exp.type,
+      due_date: exp.due_date,
+      status: exp.status,
+    })
+  }
+
+  async function handleSaveEditExpense() {
+    if (!editingExpense) return
+    setSavingEdit(true)
+    try {
+      const supabase = createClient()
+      const { data } = await supabase.from('expenses').update({
+        description: editExpenseForm.description.trim(),
+        amount: Number(editExpenseForm.amount),
+        category: editExpenseForm.category,
+        type: editExpenseForm.type,
+        due_date: editExpenseForm.due_date,
+        status: editExpenseForm.status,
+      }).eq('id', editingExpense.id).select().single()
+      if (data) {
+        setExpenses(prev => prev.map(e => e.id === editingExpense.id ? { ...e, ...data } : e))
+      }
+      setEditingExpense(null)
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
   async function toggleCashEntryStatus(ce: CashEntry) {
     const nextStatus = ce.status === 'pago' ? 'pendente' : 'pago'
     const supabase = createClient()
@@ -243,32 +298,131 @@ export default function FinanceiroPage() {
     setCashEntries(prev => prev.filter(e => e.id !== id))
   }
 
-  const [saidasCategoryFilter, setSaidasCategoryFilter] = useState('todos')
+  function openEditCashEntry(ce: CashEntry) {
+    setEditingCashEntry(ce)
+    setEditCashEntryForm({
+      description: ce.description,
+      amount: String(ce.amount),
+      entry_type: ce.entry_type,
+      due_date: ce.due_date,
+      status: ce.status,
+    })
+  }
 
-  const CATEGORY_LABELS: Record<string, string> = {
-    combustivel: 'Combustível', material: 'Material', alimentacao: 'Alimentação',
-    salario: 'Salário', aluguel: 'Aluguel', manutencao: 'Manutenção', outros: 'Outros',
+  async function handleSaveEditCashEntry() {
+    if (!editingCashEntry) return
+    setSavingEdit(true)
+    try {
+      const supabase = createClient()
+      const { data } = await supabase.from('cash_entries').update({
+        description: editCashEntryForm.description.trim(),
+        amount: Number(editCashEntryForm.amount),
+        entry_type: editCashEntryForm.entry_type,
+        due_date: editCashEntryForm.due_date,
+        status: editCashEntryForm.status,
+      }).eq('id', editingCashEntry.id).select().single()
+      if (data) {
+        setCashEntries(prev => prev.map(e => e.id === editingCashEntry.id ? { ...e, ...data } : e))
+      }
+      setEditingCashEntry(null)
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
+  async function handleExportPDF(type: 'saidas' | 'entradas') {
+    const { default: jsPDF } = await import('jspdf')
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+    const pageW = doc.internal.pageSize.getWidth()
+    let y = 15
+
+    // Header
+    doc.setFontSize(16)
+    doc.setFont('helvetica', 'bold')
+    doc.text(type === 'saidas' ? 'Relatório de Saídas' : 'Relatório de Entradas', pageW / 2, y, { align: 'center' })
+    y += 7
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'normal')
+    doc.text(`Período: ${range.start.split('-').reverse().join('/')} a ${range.end.split('-').reverse().join('/')}`, pageW / 2, y, { align: 'center' })
+    y += 10
+
+    if (type === 'saidas') {
+      // Category breakdown
+      const catMap: Record<string, number> = {}
+      filteredExpenses.forEach(e => {
+        const cat = e.category ?? 'outros'
+        catMap[cat] = (catMap[cat] || 0) + Number(e.amount)
+      })
+      doc.setFontSize(11)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Resumo por Categoria', 14, y); y += 6
+      Object.entries(catMap).sort((a, b) => b[1] - a[1]).forEach(([cat, val]) => {
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(9)
+        doc.text(`${CATEGORY_LABELS[cat] ?? cat}`, 18, y)
+        doc.text(fmt(val), pageW - 14, y, { align: 'right' })
+        y += 5
+      })
+      y += 3
+
+      // Summary line
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(10)
+      doc.text(`Total: ${fmt(totalExpenses)}   Pago: ${fmt(paidExpenses)}   Pendente: ${fmt(pendingExpenses)}`, 14, y); y += 8
+
+      // List
+      doc.setFontSize(11)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Detalhamento', 14, y); y += 6
+
+      filteredExpenses.forEach(exp => {
+        if (y > 270) { doc.addPage(); y = 15 }
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(9)
+        doc.text(exp.description.slice(0, 55), 14, y)
+        doc.text(new Date(exp.due_date + 'T12:00:00').toLocaleDateString('pt-BR'), pageW - 50, y)
+        doc.text(exp.status === 'pago' ? 'Pago' : 'Pendente', pageW - 30, y)
+        doc.text(fmt(Number(exp.amount)), pageW - 14, y, { align: 'right' })
+        y += 5
+      })
+    } else {
+      // Entradas
+      doc.setFontSize(10)
+      doc.setFont('helvetica', 'bold')
+      doc.text(`Total: ${fmt(totalEntradas)}   Recebido: ${fmt(paidEntradas)}   Pendente: ${fmt(pendingEntradas)}`, 14, y); y += 8
+
+      doc.setFontSize(11)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Detalhamento', 14, y); y += 6
+
+      entradas.forEach(ce => {
+        if (y > 270) { doc.addPage(); y = 15 }
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(9)
+        doc.text(ce.description.slice(0, 55), 14, y)
+        doc.text(new Date(ce.due_date + 'T12:00:00').toLocaleDateString('pt-BR'), pageW - 50, y)
+        doc.text(ce.status === 'pago' ? 'Recebido' : 'Pendente', pageW - 30, y)
+        doc.text(fmt(Number(ce.amount)), pageW - 14, y, { align: 'right' })
+        y += 5
+      })
+    }
+
+    doc.save(`relatorio-${type}-${range.start}-${range.end}.pdf`)
   }
 
   // Computed
   const filteredExpenses = expenses.filter(e => {
-    const typeOk = saidasTypeFilter === 'todos' || e.type === saidasTypeFilter
     const statusOk = saidasStatusFilter === 'todos' || e.status === saidasStatusFilter
     const categoryOk = saidasCategoryFilter === 'todos' || e.category === saidasCategoryFilter
     const searchOk = !saidasSearch || e.description.toLowerCase().includes(saidasSearch.toLowerCase())
-    return typeOk && statusOk && categoryOk && searchOk
+    return statusOk && categoryOk && searchOk
   })
 
-  // Totais por categoria (sobre todas as despesas sem filtro de categoria)
   const categoryTotals = expenses.reduce((acc, e) => {
     const cat = e.category ?? 'outros'
     acc[cat] = (acc[cat] || 0) + Number(e.amount)
     return acc
   }, {} as Record<string, number>)
-
-  const presentCategories = Object.entries(categoryTotals)
-    .filter(([, v]) => v > 0)
-    .sort((a, b) => b[1] - a[1])
 
   const totalExpenses = filteredExpenses.reduce((s, e) => s + Number(e.amount), 0)
   const paidExpenses = filteredExpenses.filter(e => e.status === 'pago').reduce((s, e) => s + Number(e.amount), 0)
@@ -286,7 +440,7 @@ export default function FinanceiroPage() {
   const boletosPagar = cashEntries.filter(e => e.entry_type === 'boleto' && e.direction === 'saida')
   const boletosReceber = cashEntries.filter(e => e.entry_type === 'boleto' && e.direction === 'entrada')
 
-  // Saldo tab - current month
+  // Saldo tab
   const now = new Date()
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10)
@@ -305,6 +459,10 @@ export default function FinanceiroPage() {
     { key: 'boletos', label: 'Boletos', icon: <FileText className="w-4 h-4" /> },
     { key: 'saldo', label: 'Saldo', icon: <BarChart3 className="w-4 h-4" /> },
   ]
+
+  const modalBase = 'fixed inset-0 z-50 flex items-center justify-center p-4'
+  const modalOverlay = 'absolute inset-0 bg-black/40'
+  const modalCard = 'relative w-full max-w-md rounded-2xl p-5 space-y-4 shadow-2xl'
 
   return (
     <div className="space-y-5">
@@ -358,14 +516,22 @@ export default function FinanceiroPage() {
                 ))}
               </div>
 
-              {/* Add button */}
-              <div className="flex items-center justify-between">
+              {/* Add button + PDF */}
+              <div className="flex items-center justify-between gap-2">
                 <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{filteredExpenses.length} saídas</p>
-                <button onClick={() => setShowSaidaForm(v => !v)}
-                  className="btn-primary text-sm px-4 py-2.5 flex items-center gap-2">
-                  <Plus className="w-4 h-4" />
-                  Nova Saída
-                </button>
+                <div className="flex gap-2">
+                  <button onClick={() => handleExportPDF('saidas')}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition"
+                    style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)', background: 'var(--surface)' }}>
+                    <Download className="w-4 h-4" />
+                    <span className="hidden sm:inline">PDF</span>
+                  </button>
+                  <button onClick={() => setShowSaidaForm(v => !v)}
+                    className="btn-primary text-sm px-4 py-2.5 flex items-center gap-2">
+                    <Plus className="w-4 h-4" />
+                    Nova Saída
+                  </button>
+                </div>
               </div>
 
               {/* Search */}
@@ -399,13 +565,9 @@ export default function FinanceiroPage() {
                       <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Categoria</label>
                       <select value={newSaida.category} onChange={e => setNewSaida(p => ({ ...p, category: e.target.value }))}
                         className="input-field py-2.5 text-sm">
-                        <option value="combustivel">Combustível</option>
-                        <option value="material">Material</option>
-                        <option value="alimentacao">Alimentação</option>
-                        <option value="salario">Salário</option>
-                        <option value="aluguel">Aluguel</option>
-                        <option value="manutencao">Manutenção</option>
-                        <option value="outros">Outros</option>
+                        {allCategories.map(cat => (
+                          <option key={cat} value={cat}>{CATEGORY_LABELS[cat] ?? cat}</option>
+                        ))}
                       </select>
                     </div>
                     <div>
@@ -442,7 +604,7 @@ export default function FinanceiroPage() {
                 <select value={saidasCategoryFilter} onChange={e => setSaidasCategoryFilter(e.target.value)}
                   className="input-field py-2 text-sm">
                   <option value="todos">Todas as categorias</option>
-                  {Object.keys(categoryTotals).sort().map(cat => (
+                  {allCategories.map(cat => (
                     <option key={cat} value={cat}>{CATEGORY_LABELS[cat] ?? cat}</option>
                   ))}
                 </select>
@@ -459,6 +621,19 @@ export default function FinanceiroPage() {
                 </select>
               </div>
 
+              {/* Category breakdown */}
+              {Object.keys(categoryTotals).length > 0 && (
+                <div className="rounded-2xl p-4 space-y-2" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                  <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>Por categoria (período)</p>
+                  {Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]).map(([cat, val]) => (
+                    <div key={cat} className="flex items-center justify-between">
+                      <span className="text-sm" style={{ color: 'var(--text-primary)' }}>{CATEGORY_LABELS[cat] ?? cat}</span>
+                      <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{fmt(val)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* List */}
               <div className="space-y-2">
                 {filteredExpenses.length === 0 && (
@@ -472,11 +647,16 @@ export default function FinanceiroPage() {
                         <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{exp.description}</p>
                         <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
                           Venc: {new Date(exp.due_date + 'T12:00:00').toLocaleDateString('pt-BR')}
-                          {exp.type && <span className="ml-2 capitalize opacity-70">{exp.type}</span>}
+                          {exp.category && <span className="ml-2 opacity-70">{CATEGORY_LABELS[exp.category] ?? exp.category}</span>}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{fmt(Number(exp.amount))}</p>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <p className="text-sm font-bold mr-1" style={{ color: 'var(--text-primary)' }}>{fmt(Number(exp.amount))}</p>
+                        <button onClick={() => openEditExpense(exp)}
+                          className="w-8 h-8 rounded-xl flex items-center justify-center transition hover:bg-blue-50"
+                          title="Editar">
+                          <Pencil className="w-4 h-4 text-blue-400" />
+                        </button>
                         <button onClick={() => deleteExpense(exp.id)}
                           className="w-8 h-8 rounded-xl flex items-center justify-center transition hover:bg-red-50"
                           title="Excluir">
@@ -504,13 +684,21 @@ export default function FinanceiroPage() {
           {/* ENTRADAS TAB */}
           {activeTab === 'entradas' && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{entradas.length} entradas</p>
-                <button onClick={() => setShowEntradaForm(v => !v)}
-                  className="btn-primary text-sm px-4 py-2.5 flex items-center gap-2">
-                  <Plus className="w-4 h-4" />
-                  Entrada avulsa
-                </button>
+                <div className="flex gap-2">
+                  <button onClick={() => handleExportPDF('entradas')}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition"
+                    style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)', background: 'var(--surface)' }}>
+                    <Download className="w-4 h-4" />
+                    <span className="hidden sm:inline">PDF</span>
+                  </button>
+                  <button onClick={() => setShowEntradaForm(v => !v)}
+                    className="btn-primary text-sm px-4 py-2.5 flex items-center gap-2">
+                    <Plus className="w-4 h-4" />
+                    Entrada avulsa
+                  </button>
+                </div>
               </div>
 
               {/* Extra filters: search + status */}
@@ -612,8 +800,13 @@ export default function FinanceiroPage() {
                           {new Date(ce.due_date + 'T12:00:00').toLocaleDateString('pt-BR')} · {ce.entry_type}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <p className="text-sm font-bold text-emerald-600">{fmt(Number(ce.amount))}</p>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <p className="text-sm font-bold text-emerald-600 mr-1">{fmt(Number(ce.amount))}</p>
+                        <button onClick={() => openEditCashEntry(ce)}
+                          className="w-8 h-8 rounded-xl flex items-center justify-center transition hover:bg-blue-50"
+                          title="Editar">
+                          <Pencil className="w-4 h-4 text-blue-400" />
+                        </button>
                         <button onClick={() => deleteCashEntry(ce.id)}
                           className="w-8 h-8 rounded-xl flex items-center justify-center transition hover:bg-red-50"
                           title="Excluir">
@@ -840,6 +1033,131 @@ export default function FinanceiroPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* Edit Expense Modal */}
+      {editingExpense && (
+        <div className={modalBase}>
+          <div className={modalOverlay} onClick={() => setEditingExpense(null)} />
+          <div className={modalCard} style={{ background: 'var(--surface)', zIndex: 1 }}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Editar Saída</h3>
+              <button onClick={() => setEditingExpense(null)} className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-gray-100">
+                <X className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Descrição*</label>
+                <input type="text" value={editExpenseForm.description} onChange={e => setEditExpenseForm(p => ({ ...p, description: e.target.value }))}
+                  className="input-field py-2.5 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Valor*</label>
+                <input type="number" step="0.01" value={editExpenseForm.amount} onChange={e => setEditExpenseForm(p => ({ ...p, amount: e.target.value }))}
+                  className="input-field py-2.5 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Vencimento</label>
+                <input type="date" value={editExpenseForm.due_date} onChange={e => setEditExpenseForm(p => ({ ...p, due_date: e.target.value }))}
+                  className="input-field py-2.5 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Categoria</label>
+                <select value={editExpenseForm.category} onChange={e => setEditExpenseForm(p => ({ ...p, category: e.target.value }))}
+                  className="input-field py-2.5 text-sm">
+                  {allCategories.map(cat => (
+                    <option key={cat} value={cat}>{CATEGORY_LABELS[cat] ?? cat}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Tipo</label>
+                <select value={editExpenseForm.type} onChange={e => setEditExpenseForm(p => ({ ...p, type: e.target.value }))}
+                  className="input-field py-2.5 text-sm">
+                  <option value="avulso">Avulso</option>
+                  <option value="fixo">Fixo</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Status</label>
+                <select value={editExpenseForm.status} onChange={e => setEditExpenseForm(p => ({ ...p, status: e.target.value }))}
+                  className="input-field py-2.5 text-sm">
+                  <option value="pendente">Pendente</option>
+                  <option value="pago">Pago</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end pt-1">
+              <button onClick={() => setEditingExpense(null)} className="px-4 py-2.5 rounded-xl text-sm font-medium"
+                style={{ background: 'var(--surface-secondary)', color: 'var(--text-secondary)' }}>Cancelar</button>
+              <button onClick={handleSaveEditExpense} disabled={savingEdit || !editExpenseForm.description.trim() || !editExpenseForm.amount}
+                className="btn-primary text-sm px-5 py-2.5 flex items-center gap-2">
+                {savingEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                Salvar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Cash Entry Modal */}
+      {editingCashEntry && (
+        <div className={modalBase}>
+          <div className={modalOverlay} onClick={() => setEditingCashEntry(null)} />
+          <div className={modalCard} style={{ background: 'var(--surface)', zIndex: 1 }}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Editar Entrada</h3>
+              <button onClick={() => setEditingCashEntry(null)} className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-gray-100">
+                <X className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Descrição*</label>
+                <input type="text" value={editCashEntryForm.description} onChange={e => setEditCashEntryForm(p => ({ ...p, description: e.target.value }))}
+                  className="input-field py-2.5 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Valor*</label>
+                <input type="number" step="0.01" value={editCashEntryForm.amount} onChange={e => setEditCashEntryForm(p => ({ ...p, amount: e.target.value }))}
+                  className="input-field py-2.5 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Data</label>
+                <input type="date" value={editCashEntryForm.due_date} onChange={e => setEditCashEntryForm(p => ({ ...p, due_date: e.target.value }))}
+                  className="input-field py-2.5 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Tipo</label>
+                <select value={editCashEntryForm.entry_type} onChange={e => setEditCashEntryForm(p => ({ ...p, entry_type: e.target.value }))}
+                  className="input-field py-2.5 text-sm">
+                  <option value="avulso">Avulso</option>
+                  <option value="venda">Venda</option>
+                  <option value="servico">Serviço</option>
+                  <option value="outros">Outros</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Status</label>
+                <select value={editCashEntryForm.status} onChange={e => setEditCashEntryForm(p => ({ ...p, status: e.target.value }))}
+                  className="input-field py-2.5 text-sm">
+                  <option value="pendente">Pendente</option>
+                  <option value="pago">Pago</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end pt-1">
+              <button onClick={() => setEditingCashEntry(null)} className="px-4 py-2.5 rounded-xl text-sm font-medium"
+                style={{ background: 'var(--surface-secondary)', color: 'var(--text-secondary)' }}>Cancelar</button>
+              <button onClick={handleSaveEditCashEntry} disabled={savingEdit || !editCashEntryForm.description.trim() || !editCashEntryForm.amount}
+                className="btn-primary text-sm px-5 py-2.5 flex items-center gap-2">
+                {savingEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                Salvar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
