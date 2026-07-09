@@ -1,9 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useTenant } from '@/lib/tenant-context'
-import { Wallet, TrendingDown, TrendingUp, FileText, BarChart3, Plus, Loader2, Check, AlertCircle, Trash2 } from 'lucide-react'
+import { Wallet, TrendingDown, TrendingUp, FileText, BarChart3, Plus, Loader2, Check, AlertCircle, Trash2, Search } from 'lucide-react'
+import DateRangePicker, { DateRange } from '@/components/DateRangePicker'
+import { format, startOfMonth, endOfMonth } from 'date-fns'
+import { ptBR } from 'date-fns/locale'
 
 type Tab = 'saidas' | 'entradas' | 'boletos' | 'saldo'
 
@@ -51,6 +54,19 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
+const todayStr = () => {
+  const d = new Date()
+  return format(d, 'yyyy-MM-dd')
+}
+const defaultRange = (): DateRange => {
+  const d = new Date()
+  return {
+    start: format(startOfMonth(d), 'yyyy-MM-dd'),
+    end: format(endOfMonth(d), 'yyyy-MM-dd'),
+    label: format(d, "MMMM 'de' yyyy", { locale: ptBR }),
+  }
+}
+
 export default function FinanceiroPage() {
   const { tenant } = useTenant()
   const [activeTab, setActiveTab] = useState<Tab>('saidas')
@@ -59,9 +75,21 @@ export default function FinanceiroPage() {
   const [serviceOrdersReceita, setServiceOrdersReceita] = useState(0)
   const [loading, setLoading] = useState(true)
 
+  // Date range (shared)
+  const [range, setRange] = useState<DateRange>(defaultRange)
+
   // Saidas filters
   const [saidasTypeFilter, setSaidasTypeFilter] = useState('todos')
   const [saidasStatusFilter, setSaidasStatusFilter] = useState('todos')
+  const [saidasSupplierFilter, setSaidasSupplierFilter] = useState('todos')
+  const [saidasSearch, setSaidasSearch] = useState('')
+
+  // Entradas filters
+  const [entradasStatusFilter, setEntradasStatusFilter] = useState('todos')
+  const [entradasSearch, setEntradasSearch] = useState('')
+
+  // Suppliers list for filter
+  const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([])
 
   // New entry form state
   const [showSaidaForm, setShowSaidaForm] = useState(false)
@@ -73,27 +101,26 @@ export default function FinanceiroPage() {
   const [newEntrada, setNewEntrada] = useState({ description: '', amount: '', entry_type: 'avulso', due_date: new Date().toISOString().slice(0, 10), status: 'pendente' as string })
   const [newBoleto, setNewBoleto] = useState({ description: '', amount: '', direction: 'saida', boleto_bank: '', boleto_code: '', due_date: new Date().toISOString().slice(0, 10) })
 
-  useEffect(() => {
+  const loadData = useCallback(async () => {
     if (!tenant) return
-    loadData()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tenant])
-
-  async function loadData() {
     setLoading(true)
     try {
       const supabase = createClient()
-      const now = new Date()
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
-      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10)
-      const [expRes, ceRes, soRes] = await Promise.all([
-        supabase.from('expenses').select('*').order('created_at', { ascending: false }),
-        supabase.from('cash_entries').select('*').order('created_at', { ascending: false }),
-        // Receita de chamados aprovados (OS pagas/parciais no mês)
+      const monthStart = range.start
+      const monthEnd = range.end
+
+      let expQuery = supabase.from('expenses').select('*, supplier:suppliers(id,name)').gte('due_date', monthStart).lte('due_date', monthEnd).order('due_date', { ascending: false })
+      if (saidasSupplierFilter !== 'todos') expQuery = expQuery.eq('supplier_id', saidasSupplierFilter)
+
+      const [expRes, ceRes, soRes, suppRes] = await Promise.all([
+        expQuery,
+        supabase.from('cash_entries').select('*').gte('due_date', monthStart).lte('due_date', monthEnd).order('due_date', { ascending: false }),
         supabase.from('service_orders').select('total_value, remaining_amount, payment_status, service_type, outsource_profit_pct, outsource_fuel_cost, outsource_meal_cost, outsource_truck_cost, outsource_other_cost').gte('date', monthStart).lte('date', monthEnd),
+        supabase.from('suppliers').select('id,name').order('name'),
       ])
       if (expRes.data) setExpenses(expRes.data)
       if (ceRes.data) setCashEntries(ceRes.data)
+      if (suppRes.data) setSuppliers(suppRes.data)
       if (soRes.data) {
         const receita = soRes.data.reduce((s: number, o: {
           total_value: number; remaining_amount: number; payment_status: string
@@ -113,7 +140,9 @@ export default function FinanceiroPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [tenant, range, saidasSupplierFilter])
+
+  useEffect(() => { loadData() }, [loadData])
 
   async function handleAddSaida() {
     if (!tenant || !newSaida.description.trim() || !newSaida.amount) return
@@ -226,7 +255,8 @@ export default function FinanceiroPage() {
     const typeOk = saidasTypeFilter === 'todos' || e.type === saidasTypeFilter
     const statusOk = saidasStatusFilter === 'todos' || e.status === saidasStatusFilter
     const categoryOk = saidasCategoryFilter === 'todos' || e.category === saidasCategoryFilter
-    return typeOk && statusOk && categoryOk
+    const searchOk = !saidasSearch || e.description.toLowerCase().includes(saidasSearch.toLowerCase())
+    return typeOk && statusOk && categoryOk && searchOk
   })
 
   // Totais por categoria (sobre todas as despesas sem filtro de categoria)
@@ -244,7 +274,15 @@ export default function FinanceiroPage() {
   const paidExpenses = filteredExpenses.filter(e => e.status === 'pago').reduce((s, e) => s + Number(e.amount), 0)
   const pendingExpenses = filteredExpenses.filter(e => e.status === 'pendente').reduce((s, e) => s + Number(e.amount), 0)
 
-  const entradas = cashEntries.filter(e => e.direction === 'entrada' && e.entry_type !== 'boleto')
+  const entradas = cashEntries.filter(e => {
+    if (e.direction !== 'entrada' || e.entry_type === 'boleto') return false
+    const statusOk = entradasStatusFilter === 'todos' || e.status === entradasStatusFilter
+    const searchOk = !entradasSearch || e.description.toLowerCase().includes(entradasSearch.toLowerCase())
+    return statusOk && searchOk
+  })
+  const totalEntradas = entradas.reduce((s, e) => s + Number(e.amount), 0)
+  const paidEntradas = entradas.filter(e => e.status === 'pago').reduce((s, e) => s + Number(e.amount), 0)
+  const pendingEntradas = entradas.filter(e => e.status !== 'pago').reduce((s, e) => s + Number(e.amount), 0)
   const boletosPagar = cashEntries.filter(e => e.entry_type === 'boleto' && e.direction === 'saida')
   const boletosReceber = cashEntries.filter(e => e.entry_type === 'boleto' && e.direction === 'entrada')
 
@@ -270,14 +308,17 @@ export default function FinanceiroPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(var(--primary-rgb),0.1)' }}>
-          <Wallet className="w-5 h-5" style={{ color: 'var(--primary)' }} />
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(var(--primary-rgb),0.1)' }}>
+            <Wallet className="w-5 h-5" style={{ color: 'var(--primary)' }} />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Financeiro</h1>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Gerencie saídas, entradas, boletos e saldo</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Financeiro</h1>
-          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Gerencie saídas, entradas, boletos e saldo</p>
-        </div>
+        <DateRangePicker value={range} onChange={setRange} variant="card" />
       </div>
 
       {/* Tabs */}
@@ -325,6 +366,21 @@ export default function FinanceiroPage() {
                   <Plus className="w-4 h-4" />
                   Nova Saída
                 </button>
+              </div>
+
+              {/* Extra filters: search + supplier */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--text-tertiary)' }} />
+                  <input type="text" placeholder="Buscar descrição..." value={saidasSearch}
+                    onChange={e => setSaidasSearch(e.target.value)}
+                    className="input-field pl-9 py-2 text-sm w-full" />
+                </div>
+                <select value={saidasSupplierFilter} onChange={e => setSaidasSupplierFilter(e.target.value)}
+                  className="input-field py-2 text-sm">
+                  <option value="todos">Todos os fornecedores</option>
+                  {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
               </div>
 
               {showSaidaForm && (
@@ -488,6 +544,41 @@ export default function FinanceiroPage() {
                   <Plus className="w-4 h-4" />
                   Entrada avulsa
                 </button>
+              </div>
+
+              {/* Extra filters: search + status */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--text-tertiary)' }} />
+                  <input type="text" placeholder="Buscar descrição..." value={entradasSearch}
+                    onChange={e => setEntradasSearch(e.target.value)}
+                    className="input-field pl-9 py-2 text-sm w-full" />
+                </div>
+                <div className="flex gap-1.5">
+                  {(['todos', 'pendente', 'pago'] as const).map(f => (
+                    <button key={f} onClick={() => setEntradasStatusFilter(f)}
+                      className="flex-1 px-3 py-2 rounded-xl text-xs font-medium transition"
+                      style={entradasStatusFilter === f
+                        ? { background: 'var(--primary)', color: '#fff' }
+                        : { background: 'var(--surface-secondary)', color: 'var(--text-secondary)' }}>
+                      {f === 'todos' ? 'Todos' : f === 'pago' ? 'Recebido' : 'Pendente'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Summary cards */}
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { label: 'Total', value: totalEntradas, color: 'var(--text-primary)' },
+                  { label: 'Recebido', value: paidEntradas, color: '#10b981' },
+                  { label: 'Pendente', value: pendingEntradas, color: '#f59e0b' },
+                ].map(card => (
+                  <div key={card.label} className="rounded-2xl p-3" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                    <p className="text-xs font-medium truncate" style={{ color: 'var(--text-secondary)' }}>{card.label}</p>
+                    <p className="text-sm font-bold mt-1 leading-tight break-all" style={{ color: card.color }}>{fmt(card.value)}</p>
+                  </div>
+                ))}
               </div>
 
               {showEntradaForm && (
