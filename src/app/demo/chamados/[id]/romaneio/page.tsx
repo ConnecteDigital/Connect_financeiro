@@ -3,7 +3,7 @@
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Share2, MapPin, Phone, User, Wrench, FileText, CalendarDays } from 'lucide-react'
-import { MOCK_CALLS, COMPANY } from '../../../../data'
+import { MOCK_CALLS, COMPANY } from '../../../data'
 
 const ORIGIN_LABELS: Record<string, string> = {
   whatsapp: 'WhatsApp', telefone: 'Telefone', indicacao: 'Indicação',
