@@ -162,3 +162,29 @@ export const MOCK_CLIENTS = [
   { id: 'cl3', name: 'Roberto Mendes',       phone: '(11) 97777-3333', city: 'São Paulo', neighborhood: 'Consolação',      calls: 3 },
   { id: 'cl4', name: 'Patricia Alves',       phone: '(11) 94444-0000', city: 'São Paulo', neighborhood: 'Higienópolis',    calls: 1 },
 ]
+
+export const MOCK_QUOTES = [
+  { id: 'q1', quote_number: 'ORC-001', client_name: 'Ricardo Oliveira',  total: 3500,  status: 'aprovado', created_at: '2026-07-05', valid_until: '2026-07-20' },
+  { id: 'q2', quote_number: 'ORC-002', client_name: 'Luciana Ferreira',  total: 1800,  status: 'pendente', created_at: '2026-07-08', valid_until: '2026-07-23' },
+  { id: 'q3', quote_number: 'ORC-003', client_name: 'Daniel Rodrigues',  total: 5200,  status: 'pendente', created_at: '2026-07-11', valid_until: '2026-07-26' },
+  { id: 'q4', quote_number: 'ORC-004', client_name: 'Ana Paula Castro',  total: 920,   status: 'recusado', created_at: '2026-07-03', valid_until: null },
+  { id: 'q5', quote_number: 'ORC-005', client_name: 'Guilherme Santos',  total: 2750,  status: 'aprovado', created_at: '2026-07-01', valid_until: '2026-07-16' },
+]
+
+export const MOCK_SUPPLIERS = [
+  { id: 's1', name: 'Hidráulica Total',      category: 'Materiais',    phone: '(11) 3333-1111', email: 'contato@hidraulicatotal.com.br' },
+  { id: 's2', name: 'Eletro Peças SP',       category: 'Elétrica',     phone: '(11) 4444-2222', email: 'vendas@eletropecas.com.br' },
+  { id: 's3', name: 'Ar & Clima Atacado',    category: 'Climatização', phone: '(11) 5555-3333', email: null },
+  { id: 's4', name: 'Ferramentas Master',    category: 'Ferramentas',  phone: '(11) 6666-4444', email: 'master@ferramentasmaster.com' },
+]
+
+export const MOCK_AUXILIARIES = [
+  {
+    id: 'ax1', name: 'João Técnico',    type: 'tecnico',   percentage: 35,
+    total_earned: 1750, paid_earned: 1400, unpaid_earned: 350, call_count: 5,
+  },
+  {
+    id: 'ax2', name: 'Pedro Auxiliar',  type: 'auxiliar',  percentage: 15,
+    total_earned: 750,  paid_earned: 600, unpaid_earned: 150, call_count: 5,
+  },
+]

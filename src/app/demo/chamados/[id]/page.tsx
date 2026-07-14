@@ -103,12 +103,20 @@ export default function DemoChamadoDetail() {
         <div className="rounded-2xl p-4 space-y-3" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>Ordem de Serviço — {call.os_number}</p>
-            <Link href={`/demo/chamados/${call.id}/imprimir`}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition"
-              style={{ background: 'var(--surface-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
-              <Printer className="w-3.5 h-3.5" />
-              Imprimir / Romaneio
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link href={`/demo/chamados/${call.id}/romaneio`}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition"
+                style={{ background: 'var(--surface-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
+                <FileText className="w-3.5 h-3.5" />
+                Romaneio
+              </Link>
+              <Link href={`/demo/chamados/${call.id}/imprimir`}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition"
+                style={{ background: 'var(--surface-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
+                <Printer className="w-3.5 h-3.5" />
+                Imprimir OS
+              </Link>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
