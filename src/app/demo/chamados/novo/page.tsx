@@ -25,7 +25,7 @@ export default function DemoNovoChamado() {
   const isScheduled = status === 'agendado'
 
   return (
-    <div className="space-y-4 max-w-2xl mx-auto lg:mx-0">
+    <div className="space-y-4 max-w-2xl">
       {/* Header */}
       <div className="flex items-center gap-3">
         <Link href="/demo/chamados"

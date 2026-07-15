@@ -19,7 +19,7 @@ export default function DemoConfiguracoes() {
   const [commActive] = useState(true)
 
   return (
-    <div className="space-y-5 max-w-2xl mx-auto lg:mx-0">
+    <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Configurações</h1>
         <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Gerencie equipes, tipos de serviço, auxiliares e preferências do sistema</p>
