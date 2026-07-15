@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { FileText } from 'lucide-react'
+import { FileText, Plus } from 'lucide-react'
 import { MOCK_QUOTES } from '../data'
 
 function fmt(n: number) {
@@ -21,14 +21,16 @@ export default function DemoOrcamentos() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(37,99,235,0.1)' }}>
-          <FileText className="w-5 h-5" style={{ color: '#2563eb' }} />
-        </div>
+      <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Orçamentos</h1>
           <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Gerencie propostas e orçamentos para clientes</p>
         </div>
+        <button disabled className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white opacity-40 cursor-not-allowed"
+          style={{ background: '#2563eb' }}>
+          <Plus className="w-4 h-4" />
+          Novo Orçamento
+        </button>
       </div>
 
       <div className="flex flex-wrap gap-2">

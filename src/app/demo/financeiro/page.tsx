@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Wallet, TrendingDown, TrendingUp, BarChart3, Search, Download, FileText } from 'lucide-react'
+import { Wallet, TrendingDown, TrendingUp, BarChart3, Search, Download, FileText, Plus } from 'lucide-react'
 import { MOCK_EXPENSES, MOCK_ENTRADAS } from '../data'
 
 type Tab = 'saidas' | 'entradas' | 'boletos' | 'saldo'
@@ -65,18 +65,25 @@ export default function DemoFinanceiro() {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(37,99,235,0.1)' }}>
-            <Wallet className="w-5 h-5" style={{ color: 'var(--primary)' }} />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Financeiro</h1>
-            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Gerencie saídas, entradas, boletos e saldo</p>
-          </div>
+        <div>
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Financeiro</h1>
+          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Gerencie saídas, entradas, boletos e saldo</p>
         </div>
-        <div className="px-3 py-1.5 rounded-xl text-xs font-semibold flex-shrink-0"
-          style={{ background: 'var(--surface-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
-          📅 julho de 2026
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button disabled className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium text-white opacity-40 cursor-not-allowed"
+            style={{ background: '#2563eb' }}>
+            <Plus className="w-3.5 h-3.5" />
+            Nova Saída
+          </button>
+          <button disabled className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium text-white opacity-40 cursor-not-allowed"
+            style={{ background: '#10b981' }}>
+            <Plus className="w-3.5 h-3.5" />
+            Nova Entrada
+          </button>
+          <div className="px-3 py-2 rounded-xl text-xs font-semibold"
+            style={{ background: 'var(--surface-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
+            📅 jul/2026
+          </div>
         </div>
       </div>
 

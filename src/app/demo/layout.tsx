@@ -203,14 +203,14 @@ export default function DemoLayout({ children }: { children: React.ReactNode }) 
                 )
               })}
 
-              {/* Center FAB (disabled in demo) */}
-              <div className="flex flex-col items-center gap-0.5 px-2 py-1 -mt-5">
-                <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-white opacity-40 cursor-not-allowed"
-                  style={{ background: PRIMARY }}>
+              {/* Center FAB */}
+              <Link href="/demo/chamados/novo" className="flex flex-col items-center gap-0.5 px-2 py-1 -mt-5">
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg"
+                  style={{ background: PRIMARY, boxShadow: `0 4px 16px rgba(37,99,235,0.4)` }}>
                   <Plus className="w-7 h-7" strokeWidth={2.5} />
                 </div>
                 <span className="text-[10px] font-medium mt-0.5" style={{ color: PRIMARY }}>Novo</span>
-              </div>
+              </Link>
 
               {/* Financeiro */}
               {mainNav.slice(2).map(({ href, label, icon: Icon }) => {

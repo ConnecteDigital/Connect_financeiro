@@ -12,7 +12,7 @@ export default function DemoFornecedores() {
   )
 
   return (
-    <div className="space-y-4 max-w-4xl">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Fornecedores</h1>

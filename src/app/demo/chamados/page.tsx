@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import { Search, CheckCircle, XCircle, Clock, ChevronRight } from 'lucide-react'
+import { Search, CheckCircle, XCircle, Clock, ChevronRight, Plus } from 'lucide-react'
 import { MOCK_CALLS } from '../data'
 
 const statusConfig: Record<string, { label: string; color: string; border: string; bg: string; icon: React.ElementType }> = {
@@ -59,6 +59,12 @@ export default function DemoChamados() {
           <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Chamados</h1>
           <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Gerencie chamados e ordens de serviço</p>
         </div>
+        <Link href="/demo/chamados/novo"
+          className="hidden lg:flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white"
+          style={{ background: '#2563eb' }}>
+          <Plus className="w-4 h-4" />
+          Novo Chamado
+        </Link>
       </div>
 
       {/* Search */}
