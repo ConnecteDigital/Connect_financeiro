@@ -1,0 +1,27 @@
+{
+  "name": "Connect Financeiro — Demo",
+  "short_name": "CF Demo",
+  "description": "Sistema de gestão financeira e administrativa — Demonstração",
+  "start_url": "/demo",
+  "scope": "/demo",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f5f5f7",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "/logo-connect.jpeg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo-connect.jpeg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["business", "finance"],
+  "lang": "pt-BR"
+}

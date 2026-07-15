@@ -56,6 +56,22 @@ export default function DemoLayout({ children }: { children: React.ReactNode }) 
     document.documentElement.style.setProperty('--shadow-primary', '0 4px 20px rgba(37,99,235,0.35)')
   }, [theme])
 
+  // Inject demo PWA manifest so "Add to Home Screen" opens /demo
+  useEffect(() => {
+    const existing = document.querySelector('link[rel="manifest"]')
+    if (existing) existing.setAttribute('href', '/demo-manifest.json')
+    else {
+      const link = document.createElement('link')
+      link.rel = 'manifest'
+      link.href = '/demo-manifest.json'
+      document.head.appendChild(link)
+    }
+    return () => {
+      const l = document.querySelector('link[rel="manifest"]')
+      if (l) l.setAttribute('href', '/manifest.json')
+    }
+  }, [])
+
   // Hide-on-scroll
   useEffect(() => {
     const el = mainRef.current
@@ -172,7 +188,7 @@ export default function DemoLayout({ children }: { children: React.ReactNode }) 
 
         <main
           ref={mainRef}
-          className="flex-1 overflow-y-auto pt-[calc(64px_+_env(safe-area-inset-top,0px))] lg:pt-0"
+          className="flex-1 overflow-y-auto pt-[calc(80px_+_env(safe-area-inset-top,0px))] lg:pt-0"
           style={{ paddingBottom: 'calc(var(--bottom-nav-height, 90px) + 16px)' }}>
           <div className="p-4 lg:p-6 max-w-7xl mx-auto lg:pb-6">
             {children}
