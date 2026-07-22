@@ -41,6 +41,7 @@ interface Quote {
   status: string
   origin: string | null
   notes: string | null
+  show_total: boolean
   created_at: string
   updated_at: string
 }
@@ -278,7 +279,14 @@ export default function OrcamentoDetailPage() {
 
         {/* Items */}
         <div className="rounded-2xl p-5 space-y-3" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Itens do Orçamento</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Itens do Orçamento</h2>
+            {!quote.show_total && (
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: 'rgba(245,158,11,0.1)', color: '#d97706' }}>
+                Sem valor total
+              </span>
+            )}
+          </div>
           <div className="space-y-2">
             {(quote.items ?? []).map((item, idx) => (
               <div key={idx} className="flex items-center justify-between py-2 border-b last:border-0" style={{ borderColor: 'var(--border)' }}>
@@ -286,32 +294,36 @@ export default function OrcamentoDetailPage() {
                   <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{item.description}</p>
                   <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>{item.quantity}x {fmt(item.unit_price)}</p>
                 </div>
-                <p className="text-sm font-semibold flex-shrink-0" style={{ color: 'var(--text-primary)' }}>{fmt(item.quantity * item.unit_price)}</p>
+                {quote.show_total !== false && (
+                  <p className="text-sm font-semibold flex-shrink-0" style={{ color: 'var(--text-primary)' }}>{fmt(item.quantity * item.unit_price)}</p>
+                )}
               </div>
             ))}
           </div>
-          <div className="pt-2 space-y-1.5 text-sm">
-            <div className="flex justify-between">
-              <span style={{ color: 'var(--text-secondary)' }}>Subtotal</span>
-              <span style={{ color: 'var(--text-primary)' }}>{fmt(Number(quote.subtotal))}</span>
-            </div>
-            {Number(quote.discount) > 0 && (
+          {quote.show_total !== false && (
+            <div className="pt-2 space-y-1.5 text-sm">
               <div className="flex justify-between">
-                <span style={{ color: 'var(--text-secondary)' }}>Desconto</span>
-                <span className="text-red-500">- {fmt(Number(quote.discount))}</span>
+                <span style={{ color: 'var(--text-secondary)' }}>Subtotal</span>
+                <span style={{ color: 'var(--text-primary)' }}>{fmt(Number(quote.subtotal))}</span>
               </div>
-            )}
-            {Number(quote.taxes) > 0 && (
-              <div className="flex justify-between">
-                <span style={{ color: 'var(--text-secondary)' }}>Impostos</span>
-                <span style={{ color: 'var(--text-primary)' }}>+ {fmt(Number(quote.taxes))}</span>
+              {Number(quote.discount) > 0 && (
+                <div className="flex justify-between">
+                  <span style={{ color: 'var(--text-secondary)' }}>Desconto</span>
+                  <span className="text-red-500">- {fmt(Number(quote.discount))}</span>
+                </div>
+              )}
+              {Number(quote.taxes) > 0 && (
+                <div className="flex justify-between">
+                  <span style={{ color: 'var(--text-secondary)' }}>Impostos</span>
+                  <span style={{ color: 'var(--text-primary)' }}>+ {fmt(Number(quote.taxes))}</span>
+                </div>
+              )}
+              <div className="flex justify-between pt-2 border-t text-base font-bold" style={{ borderColor: 'var(--border)' }}>
+                <span style={{ color: 'var(--text-primary)' }}>Total</span>
+                <span style={{ color: 'var(--primary)' }}>{fmt(Number(quote.total))}</span>
               </div>
-            )}
-            <div className="flex justify-between pt-2 border-t text-base font-bold" style={{ borderColor: 'var(--border)' }}>
-              <span style={{ color: 'var(--text-primary)' }}>Total</span>
-              <span style={{ color: 'var(--primary)' }}>{fmt(Number(quote.total))}</span>
             </div>
-          </div>
+          )}
         </div>
 
         {quote.notes && (
@@ -409,7 +421,9 @@ export default function OrcamentoDetailPage() {
           <div style={{ display: 'flex', background: brandColor, borderRadius: '10px 10px 0 0', padding: '8px 12px' }}>
             <span style={{ flex: 1, color: '#fff', fontSize: 11, fontWeight: 700 }}>Descrição</span>
             <span style={{ width: 50, textAlign: 'center', color: '#fff', fontSize: 11, fontWeight: 700 }}>Qtd</span>
-            <span style={{ width: 90, textAlign: 'right', color: '#fff', fontSize: 11, fontWeight: 700 }}>Total</span>
+            <span style={{ width: 90, textAlign: 'right', color: '#fff', fontSize: 11, fontWeight: 700 }}>
+              {quote.show_total !== false ? 'Total' : 'Val. Unit.'}
+            </span>
           </div>
           {(quote.items ?? []).map((item, idx) => (
             <div key={idx} style={{
@@ -419,22 +433,29 @@ export default function OrcamentoDetailPage() {
             }}>
               <span style={{ flex: 1, fontSize: 12, color: '#1e293b' }}>{item.description}</span>
               <span style={{ width: 50, textAlign: 'center', fontSize: 12, color: '#64748b' }}>{item.quantity}</span>
-              <span style={{ width: 90, textAlign: 'right', fontSize: 12, fontWeight: 600, color: '#1e293b' }}>{fmt(item.quantity * item.unit_price)}</span>
+              <span style={{ width: 90, textAlign: 'right', fontSize: 12, fontWeight: 600, color: '#1e293b' }}>
+                {quote.show_total !== false ? fmt(item.quantity * item.unit_price) : fmt(item.unit_price)}
+              </span>
             </div>
           ))}
         </div>
 
-        {/* Total */}
-        <div style={{ margin: '0 20px 20px', padding: '12px 14px', background: `rgba(${rgb}, 0.07)`, borderRadius: '0 0 12px 12px' }}>
-          {Number(quote.discount) > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#64748b', marginBottom: 4 }}>
-              <span>Desconto</span><span style={{ color: '#ef4444' }}>- {fmt(Number(quote.discount))}</span>
+        {/* Total (hidden when show_total is false) */}
+        {quote.show_total !== false && (
+          <div style={{ margin: '0 20px 20px', padding: '12px 14px', background: `rgba(${rgb}, 0.07)`, borderRadius: '0 0 12px 12px' }}>
+            {Number(quote.discount) > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#64748b', marginBottom: 4 }}>
+                <span>Desconto</span><span style={{ color: '#ef4444' }}>- {fmt(Number(quote.discount))}</span>
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 900, color: brandColor }}>
+              <span>TOTAL</span><span>{fmt(Number(quote.total))}</span>
             </div>
-          )}
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 900, color: brandColor }}>
-            <span>TOTAL</span><span>{fmt(Number(quote.total))}</span>
           </div>
-        </div>
+        )}
+        {quote.show_total === false && (
+          <div style={{ margin: '0 20px 20px', height: 8 }} />
+        )}
 
         {/* Footer */}
         <div style={{ margin: '0 20px 20px', background: `rgba(${rgb}, 0.06)`, borderRadius: 12, padding: '10px 14px', textAlign: 'center' }}>
@@ -480,7 +501,9 @@ export default function OrcamentoDetailPage() {
               <th style={{ padding: '10px 12px', textAlign: 'left', color: '#fff', fontSize: '12px', fontWeight: '600' }}>Descrição</th>
               <th style={{ padding: '10px 12px', textAlign: 'center', color: '#fff', fontSize: '12px', fontWeight: '600', width: '60px' }}>Qtd</th>
               <th style={{ padding: '10px 12px', textAlign: 'right', color: '#fff', fontSize: '12px', fontWeight: '600', width: '100px' }}>Val. Unit.</th>
-              <th style={{ padding: '10px 12px', textAlign: 'right', color: '#fff', fontSize: '12px', fontWeight: '600', width: '100px' }}>Total</th>
+              {quote.show_total !== false && (
+                <th style={{ padding: '10px 12px', textAlign: 'right', color: '#fff', fontSize: '12px', fontWeight: '600', width: '100px' }}>Total</th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -489,31 +512,35 @@ export default function OrcamentoDetailPage() {
                 <td style={{ padding: '10px 12px', fontSize: '13px' }}>{item.description}</td>
                 <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: '13px' }}>{item.quantity}</td>
                 <td style={{ padding: '10px 12px', textAlign: 'right', fontSize: '13px' }}>{fmt(item.unit_price)}</td>
-                <td style={{ padding: '10px 12px', textAlign: 'right', fontSize: '13px', fontWeight: '600' }}>{fmt(item.quantity * item.unit_price)}</td>
+                {quote.show_total !== false && (
+                  <td style={{ padding: '10px 12px', textAlign: 'right', fontSize: '13px', fontWeight: '600' }}>{fmt(item.quantity * item.unit_price)}</td>
+                )}
               </tr>
             ))}
           </tbody>
         </table>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '24px' }}>
-          <div style={{ width: '240px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '13px', borderBottom: '1px solid #eee' }}>
-              <span>Subtotal</span><span>{fmt(Number(quote.subtotal))}</span>
-            </div>
-            {Number(quote.discount) > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '13px', borderBottom: '1px solid #eee', color: '#ef4444' }}>
-                <span>Desconto</span><span>- {fmt(Number(quote.discount))}</span>
-              </div>
-            )}
-            {Number(quote.taxes) > 0 && (
+        {quote.show_total !== false && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '24px' }}>
+            <div style={{ width: '240px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '13px', borderBottom: '1px solid #eee' }}>
-                <span>Impostos</span><span>+ {fmt(Number(quote.taxes))}</span>
+                <span>Subtotal</span><span>{fmt(Number(quote.subtotal))}</span>
               </div>
-            )}
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', fontSize: '16px', fontWeight: 'bold', color: brandColor, borderTop: `2px solid ${brandColor}`, marginTop: '4px' }}>
-              <span>TOTAL</span><span>{fmt(Number(quote.total))}</span>
+              {Number(quote.discount) > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '13px', borderBottom: '1px solid #eee', color: '#ef4444' }}>
+                  <span>Desconto</span><span>- {fmt(Number(quote.discount))}</span>
+                </div>
+              )}
+              {Number(quote.taxes) > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '13px', borderBottom: '1px solid #eee' }}>
+                  <span>Impostos</span><span>+ {fmt(Number(quote.taxes))}</span>
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', fontSize: '16px', fontWeight: 'bold', color: brandColor, borderTop: `2px solid ${brandColor}`, marginTop: '4px' }}>
+                <span>TOTAL</span><span>{fmt(Number(quote.total))}</span>
+              </div>
             </div>
           </div>
-        </div>
+        )}
         {quote.notes && (
           <div style={{ marginBottom: '24px', padding: '14px', border: '1px solid #ddd', borderRadius: '6px' }}>
             <h3 style={{ fontSize: '12px', fontWeight: 'bold', color: '#888', textTransform: 'uppercase', marginBottom: '6px' }}>Observações</h3>

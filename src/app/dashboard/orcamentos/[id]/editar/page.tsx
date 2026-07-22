@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useTenant } from '@/lib/tenant-context'
-import { Plus, Trash2, Loader2, ArrowLeft } from 'lucide-react'
+import { Plus, Trash2, Loader2, ArrowLeft, Eye, EyeOff } from 'lucide-react'
 import Link from 'next/link'
 
 interface Item {
@@ -39,6 +39,7 @@ export default function EditarOrcamentoPage() {
   const [discount, setDiscount] = useState('')
   const [taxes, setTaxes] = useState('')
   const [notes, setNotes] = useState('')
+  const [showTotal, setShowTotal] = useState(true)
 
   const subtotal = items.reduce((s, it) => s + it.quantity * it.unit_price, 0)
   const total = subtotal - Number(discount || 0) + Number(taxes || 0)
@@ -60,6 +61,7 @@ export default function EditarOrcamentoPage() {
         setDiscount(data.discount != null ? String(data.discount) : '')
         setTaxes(data.taxes != null ? String(data.taxes) : '')
         setNotes(data.notes ?? '')
+        setShowTotal(data.show_total !== false)
       }
       setLoading(false)
     }
@@ -97,6 +99,7 @@ export default function EditarOrcamentoPage() {
         taxes: Number(taxes || 0),
         total,
         notes: notes.trim() || null,
+        show_total: showTotal,
         updated_at: new Date().toISOString(),
       }).eq('id', id)
 
@@ -255,6 +258,33 @@ export default function EditarOrcamentoPage() {
           <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
             className="input-field py-2.5 text-sm resize-none" placeholder="Condições, prazo de execução, garantias..." />
         </div>
+      </div>
+
+      {/* Show total option */}
+      <div className="rounded-2xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Mostrar valor total no orçamento</p>
+            <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
+              Quando desativado, o orçamento compartilhado mostra apenas a quantidade e o valor unitário de cada item — sem o total geral.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowTotal(v => !v)}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold flex-shrink-0 transition"
+            style={showTotal
+              ? { background: 'rgba(var(--primary-rgb),0.1)', color: 'var(--primary)', border: '1px solid rgba(var(--primary-rgb),0.2)' }
+              : { background: 'var(--surface-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }
+            }>
+            {showTotal ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+            {showTotal ? 'Sim' : 'Não'}
+          </button>
+        </div>
+        {!showTotal && (
+          <div className="mt-3 rounded-xl px-3 py-2.5 text-xs" style={{ background: 'rgba(245,158,11,0.08)', color: '#d97706', border: '1px solid rgba(245,158,11,0.2)' }}>
+            O orçamento será compartilhado mostrando apenas: descrição, quantidade e valor unitário por item.
+          </div>
+        )}
       </div>
 
       <div className="flex gap-3 justify-end pb-6">

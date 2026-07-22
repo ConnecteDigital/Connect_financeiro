@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { ArrowLeft, Phone, CheckCircle, XCircle, Clock, Edit, DollarSign, User, FileText, Wrench, Paperclip, Upload, Trash2, Download, Printer } from 'lucide-react'
+import { ArrowLeft, Phone, CheckCircle, XCircle, Clock, Edit, DollarSign, User, FileText, Wrench, Paperclip, Upload, Trash2, Download, Printer, ClipboardList } from 'lucide-react'
 import Link from 'next/link'
 import { use } from 'react'
 import { useRouter } from 'next/navigation'
@@ -185,6 +185,13 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
               className="flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg transition">
               <Printer className="w-3.5 h-3.5" />
               Compartilhar OS
+            </Link>
+          )}
+          {(call.status === 'agendado' || call.status === 'aprovado') && (
+            <Link href={`/dashboard/orcamentos/novo?from_call=${id}`}
+              className="flex items-center gap-1.5 bg-violet-600 hover:bg-violet-700 text-white text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg transition">
+              <ClipboardList className="w-3.5 h-3.5" />
+              Gerar Orçamento
             </Link>
           )}
           <Link href={`/dashboard/chamados/${id}/editar`}
