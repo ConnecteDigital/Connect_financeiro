@@ -248,47 +248,26 @@ function ImprimirContent({ id }: { id: string }) {
   if (!so) return <div className="flex items-center justify-center h-screen text-slate-500">Este chamado não possui ordem de serviço.</div>
 
   const companyName = tenant?.name ?? 'Empresa'
-  const cnpj = tenant?.cnpj ?? ''
-  const tenantPhone = tenant?.phone ?? ''
-  const ORIGIN_LABELS: Record<string, string> = {
-    site_lider: 'Site Líder', site_poa: 'Site POA', site_millenium: 'Site Millenium',
-    site_praja: 'Site Pra Já', indicacao: 'Indicação', terceirizado: 'Terceirizado',
-  }
+  const tenantTagline = 'Atendimento 24h · Domingos e Feriados'
   const origin = call.origin as string | null
   const originBranding = origin ? (tenant?.origin_branding?.[origin] ?? null) : null
-  const siteName = origin ? (ORIGIN_LABELS[origin] ?? origin) : null
   const logoUrl = originBranding?.logo_url ?? tenant?.logo_url
-  const brandColor = originBranding?.color ?? null
+  const brandColor = originBranding?.color ?? tenant?.primary_color ?? '#555555'
 
   const client = call.client
   const clientName = client?.name ?? call.contact_name ?? '—'
   const items: any[] = so.items ?? []
-  const TOTAL_ROWS = 8
+  const TOTAL_ROWS = 6
   const emptyRows = Math.max(0, TOTAL_ROWS - items.length)
-
-  const totalServicos = items.reduce((acc: number, it: any) => acc + Number(it.total ?? it.quantity * it.unit_price), 0)
-  const locacao = Number(so.equipment_rental_value ?? 0)
-  const desconto = Number(so.discount ?? 0)
-  const impostos = Number(so.taxes ?? 0)
   const valorTotal = Number(so.total_value ?? 0)
-
   const osDate = so.date ? new Date(so.date + 'T12:00:00').toLocaleDateString('pt-BR') : '—'
 
-  const levChecks = [
-    { label: 'Com planta baixa', on: !!so.has_floor_plan },
-    { label: 'Sem planta baixa', on: !!so.has_no_floor_plan },
-    { label: 'Com planta hidráulica', on: !!so.has_hydraulic_plan },
-    { label: 'Sem planta hidráulica', on: !!so.has_no_hydraulic_plan },
-    { label: 'Sem conhecimento', on: !!so.has_no_knowledge },
-    { label: 'Sem garantia', on: !!so.has_no_guarantee },
-    { label: 'Com garantia 30 dias', on: !!so.has_guarantee },
-  ]
-
-  const cobrancaItems = ['Metro Linear', 'Metro Cúbico', 'Litros', 'Carga', 'Valor Fechado', 'Metro Quadrado']
+  const labelSt: React.CSSProperties = { fontSize: 8, fontWeight: 700, textTransform: 'uppercase', color: '#555', display: 'block', marginBottom: 2 }
+  const valueSt: React.CSSProperties = { fontSize: 12, fontWeight: 700, minHeight: 16 }
+  const cellSt: React.CSSProperties = { padding: '5px 8px', verticalAlign: 'top' }
 
   return (
     <>
-      {/* Voltar */}
       <div className="print:hidden flex items-center max-w-3xl mx-auto pt-3 pb-2 px-3">
         <Link href={`/dashboard/chamados/${id}`}
           className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition">
@@ -300,190 +279,177 @@ function ImprimirContent({ id }: { id: string }) {
       <div
         ref={sheetRef}
         className="os-sheet bg-white mx-auto"
-        style={{ maxWidth: 760, fontFamily: 'Arial, sans-serif', fontSize: 11, color: '#000', padding: 12 }}
+        style={{ maxWidth: 720, fontFamily: 'Arial, sans-serif', fontSize: 11, color: '#000', padding: 16 }}
       >
         {/* ── Header ── */}
-        <div style={{ display: 'flex', border: B }}>
-          {/* Logo */}
-          <div style={{ width: 120, borderRight: B, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 8, flexShrink: 0, background: brandColor ? `${brandColor}18` : undefined }}>
+        <div style={{ display: 'flex', border: B, marginBottom: 0 }}>
+          {/* Logo / Company */}
+          <div style={{ flex: 1, padding: '14px 18px', borderRight: B }}>
             {logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={logoUrl} alt={siteName ?? companyName} loading="eager"
-                style={{ maxWidth: 100, maxHeight: 64, objectFit: 'contain' }} />
+              <img src={logoUrl} alt={companyName} loading="eager"
+                style={{ maxHeight: 56, maxWidth: 200, objectFit: 'contain', display: 'block', marginBottom: 4 }} />
             ) : (
-              <p style={{ fontWeight: 900, fontSize: 16, textAlign: 'center', color: brandColor ?? '#000' }}>{siteName ?? companyName}</p>
+              <p style={{ fontWeight: 900, fontSize: 20, color: brandColor, letterSpacing: '-0.02em', lineHeight: 1.1 }}>{companyName.toUpperCase()}</p>
             )}
+            <p style={{ fontSize: 10, color: '#777', marginTop: 4 }}>{tenantTagline}</p>
           </div>
-          {/* Company info */}
-          <div style={{ flex: 1, padding: '8px 12px', textAlign: 'center', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-            <p style={{ fontWeight: 700, fontSize: 13, color: brandColor ?? '#000' }}>{siteName ?? companyName}</p>
-            {siteName && <p style={{ fontSize: 11, color: '#666' }}>{companyName}</p>}
-            {cnpj && <p style={{ fontSize: 11 }}>CNPJ: {cnpj}</p>}
-            {tenantPhone && <p style={{ fontSize: 11 }}>Fone: {tenantPhone}</p>}
-            {!cnpj && !tenantPhone && <p style={{ fontSize: 11 }}>Atendimento 24h · Domingos e Feriados</p>}
-          </div>
-          {/* OS number */}
-          <div style={{ width: 130, borderLeft: B, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 8, flexShrink: 0 }}>
-            <p style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Ordem de Serviço</p>
-            <p style={{ fontSize: 28, fontWeight: 900, lineHeight: 1.1, color: brandColor ?? '#000' }}>{so.os_number}</p>
-            <p style={{ fontSize: 10 }}>{osDate}</p>
+          {/* OS Number */}
+          <div style={{ width: 160, padding: '14px 16px', textAlign: 'right', flexShrink: 0 }}>
+            <p style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#777' }}>Ordem de Serviço</p>
+            <p style={{ fontSize: 42, fontWeight: 900, lineHeight: 1, color: '#000', marginTop: 4 }}>{so.os_number}</p>
           </div>
         </div>
 
-        {/* ── Client data grid ── */}
-        <table style={{ width: '100%', borderCollapse: 'collapse', borderTop: 'none' }}>
-          <tbody>
-            <tr>
-              <OSCell label="Código do Cliente" value="" style={{ width: 110 }} />
-              <OSCell label="OS" value={String(so.os_number)} style={{ width: 70 }} />
-              <OSCell label="Bairro" value={call.call_neighborhood || client?.neighborhood || ''} />
-              <OSCell label="ESTADO" value={client?.state || ''} style={{ width: 56 }} />
-            </tr>
-            <tr>
-              <OSCell label="Nome" value={clientName} colSpan={2} />
-              <OSCell label="CEP" value={client?.cep || ''} />
-              <OSCell label="Inscrição Est." value="" style={{ width: 56 }} />
-            </tr>
-            <tr>
-              <OSCell label="Endereço" value={call.call_address || client?.address || ''} colSpan={2} />
-              <OSCell label="Cidade" value={call.call_city || client?.city || ''} />
-              <OSCell label="Veículo" value="" />
-            </tr>
-            <tr>
-              <OSCell label="Data do Vcto" value={osDate} style={{ width: 110 }} />
-              <OSCell label="CPF/CNPJ" value={client?.cpf_cnpj || ''} />
-              <OSCell label="Motorista" value={so.driver || ''} />
-              <OSCell label="NF" value={so.nf_number || ''} style={{ width: 56 }} />
-            </tr>
-            <tr>
-              <OSCell label="Fone" value={call.contact_phone || client?.phone || ''} />
-              <OSCell label="Forma de Pagto" value={so.payment_method || ''} colSpan={3} />
-            </tr>
-          </tbody>
-        </table>
+        {/* ── DADOS DO CLIENTE ── */}
+        <div style={{ border: B, borderTop: 'none', background: '#f5f5f5', padding: '3px 8px', textAlign: 'center', fontWeight: 700, fontSize: 11, letterSpacing: '0.04em' }}>
+          DADOS DO CLIENTE
+        </div>
 
-        {/* ── Service items ── */}
+        {/* Nome | CNPJ/CPF */}
+        <div style={{ display: 'flex', border: B, borderTop: 'none' }}>
+          <div style={{ flex: 1, ...cellSt, borderRight: B }}>
+            <span style={labelSt}>Nome</span>
+            <span style={valueSt}>{clientName}</span>
+          </div>
+          <div style={{ width: 200, ...cellSt }}>
+            <span style={labelSt}>CNPJ / CPF</span>
+            <span style={valueSt}>{client?.cpf_cnpj || call.contact_cpf || ''}</span>
+          </div>
+        </div>
+
+        {/* Endereço | Bairro | CEP */}
+        <div style={{ display: 'flex', border: B, borderTop: 'none' }}>
+          <div style={{ flex: 2, ...cellSt, borderRight: B }}>
+            <span style={labelSt}>Endereço</span>
+            <span style={valueSt}>{client?.address || call.call_address || ''}</span>
+          </div>
+          <div style={{ flex: 1, ...cellSt, borderRight: B }}>
+            <span style={labelSt}>Bairro</span>
+            <span style={valueSt}>{client?.neighborhood || call.call_neighborhood || ''}</span>
+          </div>
+          <div style={{ width: 90, ...cellSt }}>
+            <span style={labelSt}>CEP</span>
+            <span style={valueSt}>{client?.cep || ''}</span>
+          </div>
+        </div>
+
+        {/* Município | Telefone | UF */}
+        <div style={{ display: 'flex', border: B, borderTop: 'none' }}>
+          <div style={{ flex: 1, ...cellSt, borderRight: B }}>
+            <span style={labelSt}>Município</span>
+            <span style={valueSt}>{call.call_city || client?.city || ''}</span>
+          </div>
+          <div style={{ flex: 1, ...cellSt, borderRight: B }}>
+            <span style={labelSt}>Telefone</span>
+            <span style={valueSt}>{call.contact_phone || client?.phone || ''}</span>
+          </div>
+          <div style={{ width: 60, ...cellSt }}>
+            <span style={labelSt}>UF</span>
+            <span style={valueSt}>{client?.state || ''}</span>
+          </div>
+        </div>
+
+        {/* ── DADOS DO SERVIÇO ── */}
+        <div style={{ border: B, borderTop: 'none', background: '#f5f5f5', padding: '3px 8px', textAlign: 'center', fontWeight: 700, fontSize: 11, letterSpacing: '0.04em' }}>
+          DADOS DO SERVIÇO
+        </div>
+
+        {/* Categoria | Data */}
+        <div style={{ display: 'flex', border: B, borderTop: 'none' }}>
+          <div style={{ flex: 1, ...cellSt, borderRight: B }}>
+            <span style={labelSt}>Categoria</span>
+            <span style={valueSt}>{call.service_category || '—'}</span>
+          </div>
+          <div style={{ width: 150, ...cellSt }}>
+            <span style={labelSt}>Data</span>
+            <span style={valueSt}>{osDate}</span>
+          </div>
+        </div>
+
+        {/* Endereço do Serviço */}
+        <div style={{ border: B, borderTop: 'none', ...cellSt }}>
+          <span style={labelSt}>Endereço do Serviço</span>
+          <span style={valueSt}>{call.call_address ? `${call.call_address}${call.call_city ? ` - ${call.call_city}` : ''}` : (client?.address || '')}</span>
+        </div>
+
+        {/* ── SERVIÇOS / PEÇAS ── */}
+        <div style={{ border: B, borderTop: 'none', background: '#f5f5f5', padding: '3px 8px', textAlign: 'center', fontWeight: 700, fontSize: 11, letterSpacing: '0.04em' }}>
+          SERVIÇOS / PEÇAS
+        </div>
+
         <table style={{ width: '100%', borderCollapse: 'collapse', borderTop: 'none' }}>
           <thead>
-            <tr style={{ background: brandColor ? `${brandColor}22` : '#f3f4f6' }}>
-              <th style={{ border: B, padding: '3px 5px', textAlign: 'left', width: 50 }}>Quant.</th>
-              <th style={{ border: B, padding: '3px 5px', textAlign: 'left' }}>Descrição</th>
-              <th style={{ border: B, padding: '3px 5px', textAlign: 'right', width: 90 }}>R$ Unit.</th>
-              <th style={{ border: B, padding: '3px 5px', textAlign: 'right', width: 90 }}>Total</th>
+            <tr>
+              <th style={{ border: B, borderTop: 'none', padding: '4px 8px', textAlign: 'left', width: 55, fontWeight: 700 }}>Qtd</th>
+              <th style={{ border: B, borderTop: 'none', padding: '4px 8px', textAlign: 'left', fontWeight: 700 }}>Descrição</th>
+              <th style={{ border: B, borderTop: 'none', padding: '4px 8px', textAlign: 'right', width: 100, fontWeight: 700 }}>Vlr Unit.</th>
+              <th style={{ border: B, borderTop: 'none', padding: '4px 8px', textAlign: 'right', width: 110, fontWeight: 700 }}>Vlr Total</th>
             </tr>
           </thead>
           <tbody>
-            {items.map((it: any) => (
-              <tr key={it.id}>
-                <td style={{ border: B, padding: '3px 5px', textAlign: 'center' }}>{it.quantity}</td>
-                <td style={{ border: B, padding: '3px 5px' }}>
+            {items.map((it: any, idx: number) => (
+              <tr key={it.id ?? idx}>
+                <td style={{ border: B, padding: '5px 8px', textAlign: 'left', verticalAlign: 'top' }}>{it.quantity}</td>
+                <td style={{ border: B, padding: '5px 8px', verticalAlign: 'top' }}>
                   {it.description}
-                  {it.notes && (
-                    <span style={{ display: 'block', fontSize: 10, color: '#374151' }}>{it.notes}</span>
-                  )}
+                  {it.notes && <span style={{ display: 'block', fontSize: 9, color: '#555', marginTop: 2 }}>{it.notes}</span>}
                 </td>
-                <td style={{ border: B, padding: '3px 5px', textAlign: 'right' }}>{BRL(it.unit_price)}</td>
-                <td style={{ border: B, padding: '3px 5px', textAlign: 'right' }}>{BRL(it.total ?? it.quantity * it.unit_price)}</td>
+                <td style={{ border: B, padding: '5px 8px', textAlign: 'right', verticalAlign: 'top' }}>{BRL(it.unit_price)}</td>
+                <td style={{ border: B, padding: '5px 8px', textAlign: 'right', verticalAlign: 'top' }}>{BRL(it.total ?? it.quantity * it.unit_price)}</td>
               </tr>
             ))}
             {Array.from({ length: emptyRows }).map((_, i) => (
               <tr key={`e${i}`}>
-                <td style={{ border: B, padding: '3px 5px', height: 20 }}>&nbsp;</td>
-                <td style={{ border: B, padding: '3px 5px' }}>&nbsp;</td>
-                <td style={{ border: B, padding: '3px 5px' }}>&nbsp;</td>
-                <td style={{ border: B, padding: '3px 5px' }}>&nbsp;</td>
+                <td style={{ border: B, padding: '5px 8px', height: 24 }}>&nbsp;</td>
+                <td style={{ border: B, padding: '5px 8px' }}>&nbsp;</td>
+                <td style={{ border: B, padding: '5px 8px' }}>&nbsp;</td>
+                <td style={{ border: B, padding: '5px 8px' }}>&nbsp;</td>
               </tr>
             ))}
           </tbody>
         </table>
 
-        {/* ── Locação row ── */}
-        <table style={{ width: '100%', borderCollapse: 'collapse', borderTop: 'none' }}>
-          <tbody>
-            <tr>
-              <td style={{ border: B, padding: '3px 5px', fontWeight: 700, fontSize: 10 }}>
-                Locação de Equipamentos e Mão de Obra
-              </td>
-              <td style={{ border: B, padding: '3px 5px', textAlign: 'right', width: 90 }}>
-                {locacao > 0 ? BRL(locacao) : ''}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-
-        {/* ── Sistema de Cobrança + Levantamento + Totals ── */}
-        <div style={{ display: 'flex', border: B, borderTop: 'none' }}>
-          {/* Left: checkboxes */}
-          <div style={{ flex: 1, padding: '6px 8px', borderRight: B }}>
-            <p style={{ fontWeight: 700, fontSize: 10, textTransform: 'uppercase', marginBottom: 4 }}>Sistema de Cobrança</p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 8px' }}>
-              {cobrancaItems.map(c => (
-                <div key={c} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10 }}>
-                  <span style={{ display: 'inline-block', width: 11, height: 11, border: B, flexShrink: 0 }} />
-                  {c}
-                </div>
-              ))}
-            </div>
-            <p style={{ fontWeight: 700, fontSize: 10, textTransform: 'uppercase', marginTop: 8, marginBottom: 4 }}>Levantamento</p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 8px' }}>
-              {levChecks.map(c => (
-                <div key={c.label} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10 }}>
-                  <span style={{
-                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                    width: 11, height: 11, border: B, flexShrink: 0,
-                    background: c.on ? '#000' : 'transparent', color: '#fff', fontSize: 8, fontWeight: 900
-                  }}>{c.on ? '✓' : ''}</span>
-                  {c.label}
-                </div>
-              ))}
-            </div>
-          </div>
-          {/* Right: totals */}
-          <div style={{ width: 160, flexShrink: 0 }}>
-            <TotalRow label="Total dos Serviços" value={BRL(totalServicos)} />
-            <TotalRow label="Descontos" value={desconto > 0 ? `- ${BRL(desconto)}` : ''} />
-            <TotalRow label="Impostos" value={impostos > 0 ? BRL(impostos) : ''} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 8px', background: brandColor ?? '#111', color: '#fff', fontWeight: 900, fontSize: 12 }}>
-              <span>VALOR TOTAL</span>
-              <span>{BRL(valorTotal)}</span>
-            </div>
+        {/* ── TOTAL row ── */}
+        <div style={{ border: B, borderTop: 'none', display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 48, padding: '6px 12px' }}>
+            <span style={{ fontWeight: 900, fontSize: 13, letterSpacing: '0.04em' }}>TOTAL</span>
+            <span style={{ fontWeight: 900, fontSize: 14 }}>{BRL(valorTotal)}</span>
           </div>
         </div>
 
-        {/* ── Condições + Observações ── */}
-        <div style={{ display: 'flex', border: B, borderTop: 'none' }}>
-          <div style={{ flex: 1, padding: '5px 8px', borderRight: B }}>
-            <p style={{ fontWeight: 700, fontSize: 9, textTransform: 'uppercase', marginBottom: 3 }}>Condições de Pagamento</p>
-            <p style={{ fontSize: 11, minHeight: 28 }}>{so.conditions || ''}</p>
-          </div>
-          <div style={{ flex: 1, padding: '5px 8px' }}>
-            <p style={{ fontWeight: 700, fontSize: 9, textTransform: 'uppercase', marginBottom: 3 }}>Observações</p>
-            <p style={{ fontSize: 11, minHeight: 28 }}>{so.observations || call.notes || ''}</p>
-          </div>
-        </div>
-
-        {/* ── Signature text ── */}
-        <div style={{ border: B, borderTop: 'none', padding: '5px 8px', textAlign: 'center' }}>
-          <p style={{ fontSize: 11, fontWeight: 600 }}>
-            PAGAREI(emos) PELO(s) SERVIÇO(s) PRESTADO(s) O VALOR TOTAL DE R$__________
-          </p>
-          <p style={{ fontSize: 10, color: '#444', marginTop: 2 }}>
-            Declaro que os serviços acima descritos foram prestados a contento.
-          </p>
+        {/* ── Forma de Pagamento ── */}
+        <div style={{ border: B, borderTop: 'none', ...cellSt }}>
+          <span style={labelSt}>Forma de Pagamento</span>
+          <span style={valueSt}>{so.payment_method || ''}</span>
         </div>
 
         {/* ── Signature row ── */}
         <div style={{ display: 'flex', border: B, borderTop: 'none' }}>
-          <SigCell label="Data" bottom={osDate} flex={1} />
-          <SigCell label="Assinatura" bottom="" flex={2} />
-          <SigCell label="Carro" bottom="" flex={1} />
-          <div style={{ flex: 1, borderLeft: B, padding: '5px 8px' }}>
-            <p style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase' }}>Prof. 1</p>
-            <div style={{ borderBottom: B, marginTop: 18, marginBottom: 6 }} />
-            <p style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase' }}>Prof. 2</p>
-            <div style={{ borderBottom: B, marginTop: 18 }} />
+          {/* Data */}
+          <div style={{ flex: 1, padding: '8px 12px', borderRight: B }}>
+            <span style={labelSt}>Data</span>
+            <div style={{ borderBottom: B, marginTop: 28, marginBottom: 4 }} />
+            <span style={{ fontSize: 10, color: '#555' }}>{osDate}</span>
+          </div>
+          {/* Técnico */}
+          <div style={{ flex: 1, padding: '8px 12px', borderRight: B }}>
+            <span style={labelSt}>Técnico Responsável</span>
+            <div style={{ borderBottom: B, marginTop: 28, marginBottom: 4 }} />
+            <span style={{ fontSize: 10, color: '#555' }}>{so.driver || ''}</span>
+          </div>
+          {/* Assinatura cliente */}
+          <div style={{ flex: 1, padding: '8px 12px' }}>
+            <span style={labelSt}>Assinatura do Cliente</span>
+            <div style={{ borderBottom: B, marginTop: 28, marginBottom: 4 }} />
+            <span style={{ fontSize: 10, color: '#555' }}>{clientName}</span>
           </div>
         </div>
+
+        {/* ── Footer ── */}
+        <p style={{ textAlign: 'center', fontSize: 10, color: '#777', marginTop: 10 }}>
+          {companyName.toUpperCase()} · {tenantTagline}
+        </p>
       </div>
 
       {/* Espaço para o botão fixo não cobrir o fim da folha */}
