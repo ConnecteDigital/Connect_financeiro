@@ -52,7 +52,8 @@ export async function getReportData(
     s + Number(o.outsource_fuel_cost || 0) + Number(o.outsource_meal_cost || 0) +
     Number(o.outsource_truck_cost || 0) + Number(o.outsource_other_cost || 0), 0)
   const totalExpenses = expenses.reduce((s, e) => s + Number(e.amount || 0), 0)
-  const netRevenue = grossRevenue - outsourceCosts - totalExpenses
+  const paidExpenses = expenses.filter(e => e.status === 'pago').reduce((s, e) => s + Number(e.amount || 0), 0)
+  const netRevenue = grossRevenue - outsourceCosts - paidExpenses
   const paidRevenue = orders.filter(o => o.payment_status === 'pago').reduce((s, o) => s + Number(o.total_value || 0), 0)
   const pendingRevenue = orders.filter(o => o.payment_status !== 'pago').reduce((s, o) => s + Number(o.total_value || 0), 0)
 

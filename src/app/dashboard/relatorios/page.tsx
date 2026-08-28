@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { BarChart3, Download, TrendingUp, MapPin, Globe, Tag, Loader2, CheckCircle, XCircle, Clock, TrendingDown, ArrowUpCircle, ArrowDownCircle } from 'lucide-react'
+import { BarChart3, TrendingUp, MapPin, Globe, Tag, Loader2, CheckCircle, XCircle, Clock, TrendingDown, ArrowUpCircle, ArrowDownCircle } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { getReportData, getExpensesReport, getCashEntriesReport } from '@/lib/db/reports'
 import { getClients } from '@/lib/db/clients'

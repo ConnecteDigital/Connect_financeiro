@@ -130,21 +130,23 @@ export default function ChamadosPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900">Chamados</h1>
-          <p className="text-zinc-500 text-sm mt-0.5 hidden sm:block">Gerencie chamados e ordens de servico</p>
+          <p className="text-zinc-500 text-sm mt-0.5 hidden sm:block">Gerencie chamados e ordens de serviço</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex bg-white border border-zinc-200 rounded-xl shadow-sm overflow-hidden">
             <button onClick={() => setView('lista')} title="Lista"
-              className={`p-2.5 transition ${view === 'lista' ? 'bg-orange-500 text-white' : 'text-zinc-500 hover:bg-zinc-50'}`}>
+              className={`p-2.5 transition ${view === 'lista' ? 'text-white' : 'text-zinc-500 hover:bg-zinc-50'}`}
+              style={view === 'lista' ? { background: 'var(--primary)' } : {}}>
               <List className="w-4 h-4" />
             </button>
             <button onClick={() => setView('calendario')} title="Calendário"
-              className={`p-2.5 transition ${view === 'calendario' ? 'bg-orange-500 text-white' : 'text-zinc-500 hover:bg-zinc-50'}`}>
+              className={`p-2.5 transition ${view === 'calendario' ? 'text-white' : 'text-zinc-500 hover:bg-zinc-50'}`}
+              style={view === 'calendario' ? { background: 'var(--primary)' } : {}}>
               <CalendarDays className="w-4 h-4" />
             </button>
           </div>
           <Link href="/dashboard/chamados/novo"
-            className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition shadow-sm">
+            className="flex items-center gap-2 btn-primary text-sm px-4 py-2.5 rounded-xl">
             <Plus className="w-4 h-4" />
             <span className="hidden sm:inline">Novo Chamado</span>
             <span className="sm:hidden">Novo</span>
@@ -157,7 +159,7 @@ export default function ChamadosPage() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
         <input type="text" placeholder="Buscar cliente, contato ou código OS..."
           value={search} onChange={e => handleSearchChange(e.target.value)}
-          className="w-full pl-9 pr-4 py-2.5 bg-white border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 shadow-sm" />
+          className="w-full pl-9 pr-4 py-2.5 bg-white border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] shadow-sm" />
       </div>
 
       {/* Status filters */}
@@ -166,9 +168,10 @@ export default function ChamadosPage() {
           <button key={f.value} onClick={() => setStatusFilter(f.value)}
             className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-semibold border transition ${
               statusFilter === f.value
-                ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
-                : 'bg-white text-zinc-600 border-zinc-200 hover:border-orange-300'
-            }`}>
+                ? 'text-white border-transparent shadow-sm'
+                : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400'
+            }`}
+            style={statusFilter === f.value ? { background: 'var(--primary)' } : {}}>
             {f.label}
           </button>
         ))}
@@ -245,14 +248,13 @@ export default function ChamadosPage() {
                   const isSelected = key === selectedDay
                   return (
                     <button key={key} onClick={() => setSelectedDay(isSelected ? null : key)}
-                      className={`min-h-[52px] sm:min-h-[64px] rounded-lg border p-1 text-left transition flex flex-col ${
-                        isSelected ? 'border-orange-500 bg-orange-50' :
-                        isToday ? 'border-orange-300 bg-orange-50/40' :
-                        'border-zinc-100 hover:border-orange-200'
-                      }`}>
-                      <span className={`text-xs font-semibold ${isToday ? 'text-orange-600' : 'text-zinc-600'}`}>{day}</span>
+                      className="min-h-[52px] sm:min-h-[64px] rounded-lg border p-1 text-left transition flex flex-col"
+                      style={isSelected ? { borderColor: 'var(--primary)', background: 'rgba(var(--primary-rgb),0.06)' } :
+                             isToday ? { borderColor: 'var(--primary)', background: 'rgba(var(--primary-rgb),0.03)' } :
+                             {}}>
+                      <span className="text-xs font-semibold" style={isToday ? { color: 'var(--primary)' } : { color: '#52525b' }}>{day}</span>
                       {dayCalls.length > 0 && (
-                        <span className="mt-auto self-center bg-orange-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 leading-none">
+                        <span className="mt-auto self-center text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 leading-none" style={{ background: 'var(--primary)' }}>
                           {dayCalls.length}
                         </span>
                       )}
@@ -280,10 +282,10 @@ export default function ChamadosPage() {
                         className="flex items-center justify-between px-4 py-3 hover:bg-zinc-50 transition">
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-zinc-800 truncate">
-                            {c.client?.name ?? c.contact_name ?? 'Sem identificacao'}
+                            {c.client?.name ?? c.contact_name ?? 'Sem identificação'}
                           </p>
                           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                            {c.scheduled_time && <span className="text-xs text-orange-600 font-semibold">🕐 {String(c.scheduled_time).slice(0, 5)}</span>}
+                            {c.scheduled_time && <span className="text-xs font-semibold" style={{ color: 'var(--primary)' }}>🕐 {String(c.scheduled_time).slice(0, 5)}</span>}
                             {c.service_category && <span className="text-xs text-zinc-500 truncate">{c.service_category}</span>}
                           </div>
                         </div>
@@ -323,7 +325,7 @@ export default function ChamadosPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
                       <p className="font-semibold text-zinc-900 text-sm truncate">
-                        {c.client?.name ?? c.contact_name ?? 'Sem identificacao'}
+                        {c.client?.name ?? c.contact_name ?? 'Sem identificação'}
                       </p>
                       <ChevronRight className="w-4 h-4 text-zinc-300 flex-shrink-0" />
                     </div>

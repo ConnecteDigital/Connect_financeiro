@@ -440,13 +440,11 @@ export default function FinanceiroPage() {
   const boletosPagar = cashEntries.filter(e => e.entry_type === 'boleto' && e.direction === 'saida')
   const boletosReceber = cashEntries.filter(e => e.entry_type === 'boleto' && e.direction === 'entrada')
 
-  // Saldo tab
+  // Saldo tab — usa o mesmo período selecionado no DateRangePicker
   const now = new Date()
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
-  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10)
-  const entradasAvulsasMes = cashEntries.filter(e => e.direction === 'entrada' && e.due_date >= monthStart && e.due_date <= monthEnd && e.status === 'pago').reduce((s, e) => s + Number(e.amount), 0)
+  const entradasAvulsasMes = cashEntries.filter(e => e.direction === 'entrada' && e.due_date >= range.start && e.due_date <= range.end && e.status === 'pago').reduce((s, e) => s + Number(e.amount), 0)
   const entradasMes = serviceOrdersReceita + entradasAvulsasMes
-  const saidasMes = expenses.filter(e => e.due_date >= monthStart && e.due_date <= monthEnd && e.status === 'pago').reduce((s, e) => s + Number(e.amount), 0)
+  const saidasMes = expenses.filter(e => e.due_date >= range.start && e.due_date <= range.end && e.status === 'pago').reduce((s, e) => s + Number(e.amount), 0)
   const saldoLiquido = entradasMes - saidasMes
   const in7days = new Date()
   in7days.setDate(in7days.getDate() + 7)

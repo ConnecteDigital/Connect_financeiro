@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { FileText, Plus, Loader2 } from 'lucide-react'
+import { useTenant } from '@/lib/tenant-context'
 
 interface Quote {
   id: string
@@ -33,19 +34,22 @@ function fmt(n: number) {
 }
 
 export default function OrcamentosPage() {
+  const { tenant } = useTenant()
   const [quotes, setQuotes] = useState<Quote[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('todos')
 
   useEffect(() => {
+    if (!tenant?.id) return
     const supabase = createClient()
     supabase.from('quotes').select('id, quote_number, client_name, total, status, created_at, valid_until')
+      .eq('tenant_id', tenant.id)
       .order('created_at', { ascending: false })
       .then(({ data }) => {
         if (data) setQuotes(data)
         setLoading(false)
       })
-  }, [])
+  }, [tenant?.id])
 
   const filtered = quotes.filter(q => filter === 'todos' || q.status === filter)
 
@@ -104,7 +108,7 @@ export default function OrcamentosPage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs font-mono font-semibold" style={{ color: 'var(--primary)' }}>
-                      {q.quote_number ?? 'ORC-?'}
+                      {q.quote_number ?? 'Rascunho'}
                     </span>
                     <StatusBadge status={q.status} />
                   </div>

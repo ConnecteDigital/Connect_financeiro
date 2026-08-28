@@ -42,6 +42,7 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
   const [deleting, setDeleting] = useState(false)
   const [attachments, setAttachments] = useState<any[]>([])
   const [uploading, setUploading] = useState(false)
+  const [attachError, setAttachError] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -72,7 +73,7 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
       if (error) throw error
       await loadAttachments()
     } catch (err: any) {
-      alert('Erro ao fazer upload: ' + (err.message ?? 'Tente novamente'))
+      setAttachError('Erro ao fazer upload: ' + (err.message ?? 'Tente novamente'))
     } finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -86,7 +87,7 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
       await supabase.storage.from('chamados-anexos').remove([`${id}/${name}`])
       await loadAttachments()
     } catch (err: any) {
-      alert('Erro ao remover arquivo')
+      setAttachError('Erro ao remover arquivo. Tente novamente.')
     }
   }
 
@@ -104,7 +105,7 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
       router.push('/dashboard/chamados')
     } catch (err) {
       console.error(err)
-      alert('Erro ao excluir o chamado. Tente novamente.')
+      console.error('Erro ao excluir o chamado.')
       setDeleting(false)
     }
   }
@@ -491,13 +492,15 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
-            className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white text-xs font-semibold px-3 py-2 rounded-lg transition">
+            className="flex items-center gap-2 btn-primary disabled:opacity-50 text-xs font-semibold px-3 py-2 rounded-lg transition">
             <Upload className="w-3.5 h-3.5" />
             {uploading ? 'Enviando...' : 'Anexar arquivo'}
           </button>
           <input ref={fileInputRef} type="file" className="hidden" onChange={handleUpload}
             accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" />
         </div>
+
+        {attachError && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-2.5">{attachError}</div>}
 
         {attachments.length === 0 ? (
           <div className="border-2 border-dashed border-slate-200 rounded-lg p-8 text-center">

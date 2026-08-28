@@ -53,13 +53,13 @@ export default function EditarFornecedorPage({ params }: { params: Promise<{ id:
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1.5">Nome / Razão Social *</label>
           <input required value={form.name} onChange={e => set('name', e.target.value)}
-            className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+            className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" />
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Categoria</label>
             <select value={form.category} onChange={e => set('category', e.target.value)}
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]">
               <option value="">Selecione...</option>
               {categories.map(c => <option key={c}>{c}</option>)}
             </select>
@@ -67,31 +67,31 @@ export default function EditarFornecedorPage({ params }: { params: Promise<{ id:
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Contato / Responsável</label>
             <input value={form.contact} onChange={e => set('contact', e.target.value)}
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Telefone</label>
             <input value={form.phone} onChange={e => set('phone', e.target.value)}
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" />
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Email</label>
             <input type="email" value={form.email} onChange={e => set('email', e.target.value)}
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" />
           </div>
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1.5">Observações</label>
           <textarea rows={2} value={form.notes} onChange={e => set('notes', e.target.value)}
-            className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none" />
+            className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] resize-none" />
         </div>
         {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-2.5">{error}</div>}
         <div className="flex gap-3 justify-end pt-2">
           <Link href="/dashboard/fornecedores" className="px-6 py-2.5 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition">Cancelar</Link>
           <button type="submit" disabled={saving}
-            className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white text-sm font-semibold px-6 py-2.5 rounded-lg transition">
+            className="flex items-center gap-2 btn-primary text-sm px-6 py-2.5">
             <Save className="w-4 h-4" />
             {saving ? 'Salvando...' : 'Salvar Alterações'}
           </button>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Plus, Search, Building2, Phone, Mail, Trash2, Edit } from 'lucide-react'
 import Link from 'next/link'
 import { getSuppliers, deleteSupplier } from '@/lib/db/suppliers'
@@ -9,22 +9,28 @@ export default function FornecedoresPage() {
   const [search, setSearch] = useState('')
   const [suppliers, setSuppliers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const load = useCallback(async () => {
+  function load(s?: string) {
     setLoading(true)
-    try {
-      const data = await getSuppliers(search || undefined)
-      setSuppliers(data)
-    } catch (e) { console.error(e) }
-    finally { setLoading(false) }
-  }, [search])
+    getSuppliers(s || undefined)
+      .then(data => setSuppliers(data))
+      .catch(console.error)
+      .finally(() => setLoading(false))
+  }
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load() }, [])
+
+  function handleSearch(v: string) {
+    setSearch(v)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => load(v), 350)
+  }
 
   async function handleDelete(id: string, name: string) {
     if (!confirm(`Remover o fornecedor "${name}"?`)) return
     await deleteSupplier(id)
-    load()
+    load(search || undefined)
   }
 
   return (
@@ -35,7 +41,7 @@ export default function FornecedoresPage() {
           <p className="text-slate-500 text-sm mt-0.5">Empresas e parceiros cadastrados</p>
         </div>
         <Link href="/dashboard/fornecedores/novo"
-          className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition">
+          className="flex items-center gap-2 btn-primary text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition">
           <Plus className="w-4 h-4" />
           Novo Fornecedor
         </Link>
@@ -44,8 +50,8 @@ export default function FornecedoresPage() {
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
         <input type="text" placeholder="Buscar fornecedor..." value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
+          onChange={e => handleSearch(e.target.value)}
+          className="w-full pl-9 pr-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] bg-white" />
       </div>
 
       {loading ? (
@@ -56,7 +62,7 @@ export default function FornecedoresPage() {
         <div className="bg-white rounded-xl border border-dashed border-slate-200 p-12 text-center">
           <Building2 className="w-8 h-8 text-slate-300 mx-auto mb-2" />
           <p className="text-slate-400 text-sm">Nenhum fornecedor cadastrado</p>
-          <Link href="/dashboard/fornecedores/novo" className="text-orange-500 text-sm font-medium mt-2 inline-block">
+          <Link href="/dashboard/fornecedores/novo" className="text-[color:var(--primary)] text-sm font-medium mt-2 inline-block">
             Cadastrar primeiro fornecedor
           </Link>
         </div>
@@ -66,7 +72,7 @@ export default function FornecedoresPage() {
             <div key={s.id} className="flex items-center justify-between p-4 hover:bg-slate-50 transition">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center flex-shrink-0">
-                  <Building2 className="w-5 h-5 text-orange-500" />
+                  <Building2 className="w-5 h-5 text-[color:var(--primary)]" />
                 </div>
                 <div>
                   <p className="font-semibold text-slate-800 text-sm">{s.name}</p>

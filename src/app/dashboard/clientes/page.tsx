@@ -1,7 +1,7 @@
 ﻿'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { Plus, Search, Eye, MapPin, Phone, FileText } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Plus, Search, Eye, MapPin, Phone } from 'lucide-react'
 import Link from 'next/link'
 import { getClients } from '@/lib/db/clients'
 
@@ -9,20 +9,23 @@ export default function ClientesPage() {
   const [search, setSearch] = useState('')
   const [clients, setClients] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    try {
-      const data = await getClients(search || undefined)
-      setClients(data)
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setLoading(false)
-    }
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(async () => {
+      setLoading(true)
+      try {
+        const data = await getClients(search || undefined)
+        setClients(data)
+      } catch (e) {
+        console.error(e)
+      } finally {
+        setLoading(false)
+      }
+    }, 350)
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
   }, [search])
-
-  useEffect(() => { load() }, [load])
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -32,7 +35,7 @@ export default function ClientesPage() {
           <p className="text-slate-500 text-sm mt-0.5">Banco de dados de clientes e histórico de serviços</p>
         </div>
         <Link href="/dashboard/clientes/novo"
-          className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition">
+          className="flex items-center gap-2 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition btn-primary">
           <Plus className="w-4 h-4" />
           Novo Cliente
         </Link>
@@ -43,7 +46,7 @@ export default function ClientesPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input type="text" placeholder="Buscar por nome ou cidade..." value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+            className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" />
         </div>
       </div>
 
@@ -59,8 +62,8 @@ export default function ClientesPage() {
       ) : clients.length === 0 ? (
         <div className="text-center py-16 text-slate-400">
           <p className="text-sm">Nenhum cliente cadastrado ainda.</p>
-          <Link href="/dashboard/clientes/novo" className="text-orange-500 text-sm font-medium mt-2 inline-block hover:underline">
-            Cadastrar primeiro cliente â†'
+          <Link href="/dashboard/clientes/novo" className="text-[color:var(--primary)] text-sm font-medium mt-2 inline-block hover:underline">
+            Cadastrar primeiro cliente →
           </Link>
         </div>
       ) : (
@@ -73,7 +76,7 @@ export default function ClientesPage() {
                   <h3 className="font-semibold text-slate-800 mt-0.5">{c.name}</h3>
                 </div>
                 <Link href={`/dashboard/clientes/${c.id}`}
-                  className="flex items-center gap-1 text-xs text-orange-500 hover:text-orange-600 font-medium">
+                  className="flex items-center gap-1 text-xs text-[color:var(--primary)] hover:text-[color:var(--primary)] font-medium">
                   <Eye className="w-3.5 h-3.5" />
                   Ver
                 </Link>
