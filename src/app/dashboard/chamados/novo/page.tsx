@@ -72,6 +72,7 @@ export default function NovoChamadoPage() {
 
   // Chamado básico
   const [callDate, setCallDate] = useState(localToday)
+  const [callTime, setCallTime] = useState('')
   const [origin, setOrigin] = useState('')
   const [callStatus, setCallStatus] = useState('agendado')
   const [callNotes, setCallNotes] = useState('')
@@ -231,8 +232,15 @@ export default function NovoChamadoPage() {
     return subs.length ? `${cat} (${subs.join(', ')})` : cat
   }).join(', ')
 
-  const clientSuggestions = isApproved && !clientId && contactName.trim().length >= 2
-    ? clients.filter(c => c.name.toLowerCase().includes(contactName.trim().toLowerCase())).slice(0, 5)
+  const [clientSearch, setClientSearch] = useState('')
+  const clientSuggestions = !clientId && clientSearch.trim().length >= 2
+    ? clients.filter(c => {
+        const q = clientSearch.trim().toLowerCase()
+        const phoneQ = q.replace(/\D/g, '')
+        return c.name.toLowerCase().includes(q)
+          || (c.phone && c.phone.replace(/\D/g, '').includes(phoneQ) && phoneQ.length >= 3)
+          || (c.address && c.address.toLowerCase().includes(q))
+      }).slice(0, 6)
     : []
   const linkedClient = clients.find(c => c.id === clientId)
 
@@ -277,7 +285,7 @@ export default function NovoChamadoPage() {
     setError('')
     try {
       let finalClientId = clientId
-      if (!clientId && contactName.trim() && callStatus === 'aprovado') {
+      if (!clientId && contactName.trim() && (callStatus === 'aprovado' || callStatus === 'agendado')) {
         try {
           const created = await createClient_({
             name: contactName.trim(),
@@ -296,6 +304,7 @@ export default function NovoChamadoPage() {
 
       const call = await createCall({
         date: callDate,
+        call_time: callTime || null,
         client_id: finalClientId || null,
         contact_name: contactName || null,
         contact_phone: contactPhone || null,
@@ -439,7 +448,7 @@ export default function NovoChamadoPage() {
     }
   }
 
-  const inputCls = 'w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400'
+  const inputCls = 'w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]'
 
   async function handleSimplifiedSubmit(targetStatus: 'agendado' | 'aprovado') {
     if (!origin) { setError('Selecione a origem do chamado.'); return }
@@ -447,7 +456,7 @@ export default function NovoChamadoPage() {
     setSaving(true); setError('')
     try {
       let simplifiedClientId: string | null = null
-      if (contactName.trim() && targetStatus === 'aprovado') {
+      if (contactName.trim()) {
         try {
           const created = await createClient_({
             name: contactName.trim(),
@@ -461,6 +470,7 @@ export default function NovoChamadoPage() {
       }
       const call = await createCall({
         date: callDate,
+        call_time: callTime || null,
         client_id: simplifiedClientId,
         contact_name: contactName || null,
         contact_phone: contactPhone || null,
@@ -637,41 +647,69 @@ export default function NovoChamadoPage() {
           </div>
         </div>
 
-        {/* Data do chamado */}
-        <div className="sm:max-w-xs">
-          <label className="block text-sm font-medium text-slate-700 mb-1.5">Data do Chamado *</label>
-          <input type="date" required value={callDate} onChange={e => setCallDate(e.target.value)} className={inputCls} />
+        {/* Data + horário do chamado */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="col-span-2 sm:col-span-2">
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Data do Chamado *</label>
+            <input type="date" required value={callDate} onChange={e => setCallDate(e.target.value)} className={inputCls} />
+          </div>
+          <div className="col-span-2 sm:col-span-2">
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Horário do Chamado</label>
+            <input type="time" value={callTime} onChange={e => setCallTime(e.target.value)} className={inputCls} />
+          </div>
+        </div>
+
+        {/* Buscar cliente existente */}
+        <div className="relative">
+          <label className="block text-sm font-medium text-slate-700 mb-1.5">
+            Buscar Cliente Existente
+            <span className="text-slate-400 font-normal ml-1">(por nome, telefone ou endereço)</span>
+          </label>
+          <input type="text" value={clientSearch}
+            onChange={e => setClientSearch(e.target.value)}
+            placeholder="Digite nome, telefone ou endereço..."
+            className={inputCls} />
+          {clientSuggestions.length > 0 && (
+            <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden">
+              {clientSuggestions.map(c => (
+                <button key={c.id} type="button"
+                  onClick={() => {
+                    setClientId(c.id)
+                    setContactName(c.name)
+                    if (c.phone) setContactPhone(c.phone)
+                    if (c.cpf_cnpj) setContactCpf(c.cpf_cnpj)
+                    if (c.city) setCallCity(c.city)
+                    if (c.neighborhood) setCallNeighborhood(c.neighborhood)
+                    if (c.address) setCallAddress(c.address)
+                    setClientSearch('')
+                  }}
+                  className="w-full text-left px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 border-b border-slate-50 last:border-0 transition">
+                  <p className="font-medium">{c.name}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">{[c.phone, c.city, c.address].filter(Boolean).join(' · ')}</p>
+                </button>
+              ))}
+            </div>
+          )}
+          {clientId && (
+            <div className="mt-2 flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+              <p className="text-sm text-emerald-700">✓ Vinculado: <span className="font-semibold">{linkedClient?.name}</span></p>
+              <button type="button" onClick={() => { setClientId(''); setClientSearch('') }}
+                className="text-xs text-emerald-600 hover:text-emerald-800 font-medium underline">Desvincular</button>
+            </div>
+          )}
         </div>
 
         {/* Contato + telefone + CPF + solicitante */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="relative sm:col-span-2">
             <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              {isApproved ? 'Nome do Cliente *' : 'Nome do Contato *'}
-              <span className="text-slate-400 font-normal ml-1">{isApproved ? '(busca nos cadastrados)' : '(quem vai ser atendido)'}</span>
+              Nome do Contato *
+              <span className="text-slate-400 font-normal ml-1">(quem vai ser atendido)</span>
             </label>
             <input type="text" value={contactName}
               onChange={e => { setContactName(e.target.value); if (clientId) setClientId('') }}
               placeholder="Ex: João Silva"
               className={inputCls} />
-            {clientSuggestions.length > 0 && (
-              <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden">
-                <p className="px-3 py-1.5 text-xs text-slate-400 bg-slate-50 border-b border-slate-100">Cliente já cadastrado? Clique para vincular:</p>
-                {clientSuggestions.map(c => (
-                  <button key={c.id} type="button"
-                    onClick={() => {
-                      setClientId(c.id)
-                      setContactName(c.name)
-                      if (!contactPhone && c.phone) setContactPhone(c.phone)
-                      if (!contactCpf && c.cpf_cnpj) setContactCpf(c.cpf_cnpj)
-                    }}
-                    className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-orange-50 transition">
-                    {c.name}
-                    {(c.city || c.phone) && <span className="text-xs text-slate-400 ml-2">{[c.city, c.phone].filter(Boolean).join(' · ')}</span>}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Telefone</label>
@@ -695,19 +733,7 @@ export default function NovoChamadoPage() {
           </div>
         </div>
 
-        {isApproved && linkedClient && (
-          <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-2.5">
-            <p className="text-sm text-emerald-700">
-              ✓ Vinculado ao cliente cadastrado <span className="font-semibold">{linkedClient.name}</span>
-              {linkedClient.code && <span className="text-emerald-500 ml-1">({linkedClient.code})</span>}
-            </p>
-            <button type="button" onClick={() => setClientId('')}
-              className="text-xs text-emerald-600 hover:text-emerald-800 font-medium underline">
-              Desvincular
-            </button>
-          </div>
-        )}
-        {isApproved && !clientId && contactName.trim().length >= 2 && clientSuggestions.length === 0 && (
+        {!clientId && contactName.trim().length >= 2 && clientSuggestions.length === 0 && (
           <div className="border border-orange-100 bg-orange-50/50 rounded-lg p-4 space-y-3">
             <p className="text-xs font-semibold text-orange-600">Cliente novo — será cadastrado automaticamente:</p>
             <div className="grid grid-cols-2 gap-3">
