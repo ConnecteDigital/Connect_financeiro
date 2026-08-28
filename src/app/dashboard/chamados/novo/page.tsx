@@ -661,6 +661,8 @@ export default function NovoChamadoPage() {
             {[
               { value: 'whatsapp', label: '💬 WhatsApp' },
               { value: 'ligacao', label: '📞 Ligação' },
+              { value: 'cliente', label: '🏠 Cliente' },
+              { value: 'indicacao', label: '🤝 Indicação' },
             ].map(ch => (
               <button key={ch.value} type="button" onClick={() => setCallChannel(prev => prev === ch.value ? '' : ch.value)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition ${callChannel === ch.value ? 'text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
