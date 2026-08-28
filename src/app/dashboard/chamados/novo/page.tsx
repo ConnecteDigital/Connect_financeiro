@@ -73,6 +73,7 @@ export default function NovoChamadoPage() {
   // Chamado básico
   const [callDate, setCallDate] = useState(localToday)
   const [callTime, setCallTime] = useState('')
+  const [callChannel, setCallChannel] = useState('')
   const [origin, setOrigin] = useState('')
   const [callStatus, setCallStatus] = useState('agendado')
   const [callNotes, setCallNotes] = useState('')
@@ -305,6 +306,7 @@ export default function NovoChamadoPage() {
       const call = await createCall({
         date: callDate,
         call_time: callTime || null,
+        call_channel: callChannel || null,
         client_id: finalClientId || null,
         contact_name: contactName || null,
         contact_phone: contactPhone || null,
@@ -471,6 +473,7 @@ export default function NovoChamadoPage() {
       const call = await createCall({
         date: callDate,
         call_time: callTime || null,
+        call_channel: callChannel || null,
         client_id: simplifiedClientId,
         contact_name: contactName || null,
         contact_phone: contactPhone || null,
@@ -522,6 +525,23 @@ export default function NovoChamadoPage() {
                 <button key={o.value} type="button" onClick={() => setOrigin(o.value)}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition ${origin === o.value ? 'bg-orange-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
                   {o.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Canal */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Canal</label>
+            <div className="flex gap-2">
+              {[
+                { value: 'whatsapp', label: '💬 WhatsApp' },
+                { value: 'ligacao', label: '📞 Ligação' },
+              ].map(ch => (
+                <button key={ch.value} type="button" onClick={() => setCallChannel(prev => prev === ch.value ? '' : ch.value)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition ${callChannel === ch.value ? 'text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                  style={callChannel === ch.value ? { background: 'var(--primary)' } : {}}>
+                  {ch.label}
                 </button>
               ))}
             </div>
@@ -629,6 +649,23 @@ export default function NovoChamadoPage() {
               <button key={o.value} type="button" onClick={() => setOrigin(o.value)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition ${origin === o.value ? 'bg-orange-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
                 {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Canal */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">Canal</label>
+          <div className="flex gap-2">
+            {[
+              { value: 'whatsapp', label: '💬 WhatsApp' },
+              { value: 'ligacao', label: '📞 Ligação' },
+            ].map(ch => (
+              <button key={ch.value} type="button" onClick={() => setCallChannel(prev => prev === ch.value ? '' : ch.value)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${callChannel === ch.value ? 'text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                style={callChannel === ch.value ? { background: 'var(--primary)' } : {}}>
+                {ch.label}
               </button>
             ))}
           </div>
