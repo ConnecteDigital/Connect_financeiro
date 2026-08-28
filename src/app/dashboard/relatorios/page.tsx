@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { BarChart3, TrendingUp, MapPin, Globe, Tag, Loader2, CheckCircle, XCircle, Clock, TrendingDown, ArrowUpCircle, ArrowDownCircle } from 'lucide-react'
+import { BarChart3, TrendingUp, MapPin, Globe, Tag, Loader2, CheckCircle, XCircle, Clock, TrendingDown, ArrowUpCircle, ArrowDownCircle, FileDown } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { getReportData, getExpensesReport, getCashEntriesReport } from '@/lib/db/reports'
 import { getClients } from '@/lib/db/clients'
@@ -52,6 +52,12 @@ export default function RelatoriosPage() {
 
   const { origins: tenantOrigins } = useCallOrigins()
   const { tenant } = useTenant()
+
+  function handleDownloadPDF() {
+    const payload = { tab: mainTab, range, tenantName: tenant?.name, tenantCnpj: tenant?.cnpj, data, expData, ceData }
+    sessionStorage.setItem('relatorio_print', JSON.stringify(payload))
+    window.open('/dashboard/relatorios/imprimir', '_blank')
+  }
 
   // Load suppliers, clients, and expense categories once
   useEffect(() => {
@@ -106,7 +112,14 @@ export default function RelatoriosPage() {
           <h1 className="text-2xl font-bold text-slate-800">Relatórios</h1>
           <p className="text-slate-500 text-sm mt-0.5">Análise completa do desempenho financeiro e operacional</p>
         </div>
-        <DateRangePicker value={range} onChange={setRange} variant="card" />
+        <div className="flex items-center gap-2">
+          <DateRangePicker value={range} onChange={setRange} variant="card" />
+          <button onClick={handleDownloadPDF}
+            className="flex items-center gap-2 btn-primary text-sm px-4 py-2.5 no-print">
+            <FileDown className="w-4 h-4" />
+            <span className="hidden sm:inline">Baixar PDF</span>
+          </button>
+        </div>
       </div>
 
       {/* Main tabs */}
@@ -134,7 +147,8 @@ export default function RelatoriosPage() {
               <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
                 {[{ v: 'todos', l: 'Todos' }, ...tenantOrigins.map(o => ({ v: o.value, l: o.label }))].map(o => (
                   <button key={o.v} onClick={() => setOriginFilter(o.v)}
-                    className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border transition ${originFilter === o.v ? 'bg-orange-500 text-white border-orange-500' : 'text-slate-500 border-slate-200 hover:border-orange-300'}`}>
+                    className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border transition ${originFilter === o.v ? 'text-white border-transparent' : 'text-slate-500 border-slate-200 hover:border-slate-400'}`}
+                    style={originFilter === o.v ? { background: 'var(--primary)' } : {}}>
                     {o.l}
                   </button>
                 ))}
@@ -145,7 +159,8 @@ export default function RelatoriosPage() {
               <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
                 {['todos', ...SERVICE_CATEGORIES].map(c => (
                   <button key={c} onClick={() => setCategoryFilter(c)}
-                    className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border transition ${categoryFilter === c ? 'bg-orange-500 text-white border-orange-500' : 'text-slate-500 border-slate-200 hover:border-orange-300'}`}>
+                    className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border transition ${categoryFilter === c ? 'text-white border-transparent' : 'text-slate-500 border-slate-200 hover:border-slate-400'}`}
+                    style={categoryFilter === c ? { background: 'var(--primary)' } : {}}>
                     {c === 'todos' ? 'Todos' : c.length > 20 ? c.slice(0, 18) + '...' : c}
                   </button>
                 ))}
@@ -307,7 +322,7 @@ export default function RelatoriosPage() {
               <div>
                 <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide block mb-1.5">Categoria</label>
                 <select value={saidaCategory} onChange={e => setSaidaCategory(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]">
                   <option value="todos">Todas as categorias</option>
                   {expenseCategories.map(c => (
                     <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
@@ -317,7 +332,7 @@ export default function RelatoriosPage() {
               <div>
                 <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide block mb-1.5">Fornecedor</label>
                 <select value={saidaSupplier} onChange={e => setSaidaSupplier(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]">
                   <option value="todos">Todos os fornecedores</option>
                   {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
@@ -325,7 +340,7 @@ export default function RelatoriosPage() {
               <div>
                 <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide block mb-1.5">Status</label>
                 <select value={saidaStatus} onChange={e => setSaidaStatus(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]">
                   <option value="todos">Todos</option>
                   <option value="pendente">Pendente</option>
                   <option value="pago">Pago</option>
@@ -439,7 +454,7 @@ export default function RelatoriosPage() {
               <div>
                 <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide block mb-1.5">Cliente</label>
                 <select value={entradaClient} onChange={e => setEntradaClient(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]">
                   <option value="todos">Todos os clientes</option>
                   {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
@@ -447,7 +462,7 @@ export default function RelatoriosPage() {
               <div>
                 <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide block mb-1.5">Status</label>
                 <select value={entradaStatus} onChange={e => setEntradaStatus(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]">
                   <option value="todos">Todos</option>
                   <option value="pendente">Pendente</option>
                   <option value="pago">Pago</option>

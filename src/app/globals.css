@@ -269,3 +269,17 @@ button:active, a:active { transform: scale(0.97); }
 .btn-primary:hover { filter: brightness(1.06); }
 .btn-primary:active { transform: scale(0.97); box-shadow: none; }
 .btn-primary:disabled { opacity: 0.5; pointer-events: none; }
+
+/* ── Print / PDF ─────────────────────────────────────────────── */
+@media print {
+  aside,
+  nav,
+  header,
+  .no-print,
+  [class*="BottomNav"],
+  [class*="MobileHeader"] {
+    display: none !important;
+  }
+  body, html { background: white !important; }
+  .page-enter { animation: none !important; }
+}

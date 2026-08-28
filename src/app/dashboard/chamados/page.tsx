@@ -301,7 +301,7 @@ export default function ChamadosPage() {
       ) : filteredCalls.length === 0 ? (
         <div className="bg-white rounded-2xl border border-zinc-100 p-12 text-center">
           <p className="text-zinc-400 text-sm">Nenhum chamado encontrado</p>
-          <Link href="/dashboard/chamados/novo" className="text-orange-500 text-sm font-medium mt-2 inline-block">
+          <Link href="/dashboard/chamados/novo" className="text-sm font-medium mt-2 inline-block" style={{ color: 'var(--primary)' }}>
             Registrar novo chamado
           </Link>
         </div>
@@ -316,7 +316,7 @@ export default function ChamadosPage() {
             const iconColor = c.status === 'aprovado' ? 'text-emerald-500' : c.status === 'agendado' ? 'text-blue-500' : c.status === 'cancelado' ? 'text-red-500' : 'text-zinc-400'
 
             return (
-              <div key={c.id} className="bg-white rounded-2xl border border-zinc-100 hover:border-orange-200 hover:shadow-sm transition">
+              <div key={c.id} className="bg-white rounded-2xl border border-zinc-100 hover:shadow-sm transition" style={{ ['--tw-border-opacity' as any]: 1 }} onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(var(--primary-rgb),0.35)')} onMouseLeave={e => (e.currentTarget.style.borderColor = '')}>
                 <Link href={`/dashboard/chamados/${c.id}`}
                   className="flex items-start gap-3 p-4 active:scale-[0.99] transition">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${iconBg}`}>
