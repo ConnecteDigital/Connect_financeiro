@@ -150,7 +150,7 @@ export default function ChamadosPage() {
               const today = new Date()
               const d = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
               sessionStorage.setItem('resumo_dia_date', d)
-              window.open('/dashboard/chamados/resumo-dia', '_blank')
+              window.open('/resumo-dia', '_blank')
             }}
             className="flex items-center gap-2 text-sm px-4 py-2.5 rounded-xl border font-semibold transition"
             style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)', background: 'var(--surface)' }}>
