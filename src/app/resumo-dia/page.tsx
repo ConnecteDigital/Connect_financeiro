@@ -79,39 +79,177 @@ export default function ResumoDiaPage() {
   }, [])
 
   async function handleShare() {
-    if (!contentRef.current) return
     setSharing(true)
     try {
-      const html2canvas = (await import('html2canvas')).default
-      const canvas = await html2canvas(contentRef.current, {
-        backgroundColor: '#ffffff',
-        scale: 2,
-        useCORS: true,
-        logging: false,
-      })
-      canvas.toBlob(async (blob) => {
-        if (!blob) { setSharing(false); return }
-        const file = new File([blob], 'resumo-dia.png', { type: 'image/png' })
-        if (navigator.share && navigator.canShare({ files: [file] })) {
-          await navigator.share({
-            title: `Resumo do Dia — ${tenantName}`,
-            files: [file],
-          })
-        } else {
-          // Fallback: download image
-          const url = URL.createObjectURL(blob)
-          const a = document.createElement('a')
-          a.href = url
-          a.download = `resumo-${date}.png`
-          a.click()
-          URL.revokeObjectURL(url)
-        }
-        setSharing(false)
-      }, 'image/png')
+      const blob = await gerarImagemCanvas()
+      if (!blob) { setSharing(false); return }
+      const file = new File([blob], `resumo-${date}.png`, { type: 'image/png' })
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ title: `Resumo do Dia — ${tenantName}`, files: [file] })
+      } else {
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `resumo-${date}.png`
+        a.click()
+        URL.revokeObjectURL(url)
+      }
     } catch (e) {
-      console.error(e)
+      console.error('Erro ao gerar imagem:', e)
+      alert('Não foi possível gerar a imagem. Tente usar o botão PDF.')
+    } finally {
       setSharing(false)
     }
+  }
+
+  function gerarImagemCanvas(): Promise<Blob | null> {
+    return new Promise((resolve) => {
+      const W = 900
+      const ROW_H = 36
+      const HEADER_H = 90
+      const SUMMARY_H = 70
+      const TABLE_HEADER_H = 30
+      const FOOTER_H = 36
+      const PADDING = 20
+      const totalRows = calls.length + 1 // +1 total row
+      const H = PADDING + HEADER_H + SUMMARY_H + TABLE_HEADER_H + totalRows * ROW_H + FOOTER_H + PADDING
+
+      const canvas = document.createElement('canvas')
+      canvas.width = W * 2
+      canvas.height = H * 2
+      const ctx = canvas.getContext('2d')!
+      ctx.scale(2, 2)
+
+      // Background
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, W, H)
+
+      let y = PADDING
+
+      // Header
+      ctx.fillStyle = '#1a1a1a'
+      ctx.font = 'bold 18px Arial'
+      ctx.fillText(`${tenantName} — Resumo do Dia`, PADDING, y + 22)
+      ctx.fillStyle = '#555555'
+      ctx.font = '11px Arial'
+      ctx.fillText(`Data: ${date ? fmt(date) : '—'}   ·   Gerado em: ${new Date().toLocaleString('pt-BR')}`, PADDING, y + 42)
+      y += HEADER_H - 20
+
+      // Summary cards
+      const cards = [
+        { label: 'TOTAL DE CHAMADOS', value: String(calls.length), color: '#15803d', bg: '#f0faf0', border: '#bbf7d0' },
+        { label: 'FEITOS (OS)', value: String(totalFeitos), color: '#15803d', bg: '#f0faf0', border: '#bbf7d0' },
+        { label: 'FATURAMENTO DO DIA', value: `R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, color: '#b45309', bg: '#fffbeb', border: '#fbbf24' },
+      ]
+      cards.forEach((card, i) => {
+        const cx = PADDING + i * 290
+        ctx.fillStyle = card.bg
+        roundRect(ctx, cx, y, 270, 52, 8)
+        ctx.strokeStyle = card.border
+        ctx.lineWidth = 1
+        roundRect(ctx, cx, y, 270, 52, 8, true)
+        ctx.fillStyle = '#555'
+        ctx.font = 'bold 9px Arial'
+        ctx.fillText(card.label, cx + 12, y + 18)
+        ctx.fillStyle = card.color
+        ctx.font = 'bold 18px Arial'
+        ctx.fillText(card.value, cx + 12, y + 42)
+      })
+      y += SUMMARY_H
+
+      // Table columns
+      const cols = [
+        { label: 'DATA', w: 90 },
+        { label: 'HORA', w: 55 },
+        { label: 'CLIENTE', w: 130 },
+        { label: 'BAIRRO / CIDADE', w: 150 },
+        { label: 'TELEFONE', w: 110 },
+        { label: 'SOLICITAÇÃO', w: 130 },
+        { label: 'STATUS', w: 75 },
+        { label: 'VALOR', w: 80 },
+      ]
+
+      // Table header
+      ctx.fillStyle = '#1e4d2b'
+      ctx.fillRect(PADDING, y, W - PADDING * 2, TABLE_HEADER_H)
+      ctx.fillStyle = '#ffffff'
+      ctx.font = 'bold 9px Arial'
+      let cx = PADDING + 8
+      cols.forEach(col => {
+        ctx.fillText(col.label, cx, y + 20)
+        cx += col.w
+      })
+      y += TABLE_HEADER_H
+
+      // Table rows
+      calls.forEach((c, i) => {
+        const os = c.service_orders?.[0]
+        const value = os?.total_value != null ? `R$ ${Number(os.total_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'
+        const hora = c.call_time ? c.call_time.slice(0, 5) : '—'
+        const local = [c.call_neighborhood, c.call_city].filter(Boolean).join(' / ') || '—'
+        const statusLabel = STATUS_LABEL[c.status] ?? c.status
+
+        ctx.fillStyle = i % 2 === 0 ? '#ffffff' : '#f5f9f5'
+        ctx.fillRect(PADDING, y, W - PADDING * 2, ROW_H)
+        ctx.strokeStyle = '#e5e5e5'
+        ctx.lineWidth = 0.5
+        ctx.beginPath(); ctx.moveTo(PADDING, y + ROW_H); ctx.lineTo(W - PADDING, y + ROW_H); ctx.stroke()
+
+        const vals = [fmt(c.date), hora, c.contact_name || '—', local, c.contact_phone || '—', c.service_category || '—', statusLabel, value]
+        let vx = PADDING + 8
+        vals.forEach((val, vi) => {
+          ctx.fillStyle = vi === 2 ? '#111' : '#333'
+          ctx.font = vi === 2 ? 'bold 10px Arial' : '10px Arial'
+          if (vi === 6) {
+            ctx.fillStyle = c.status === 'aprovado' ? '#15803d' : '#b91c1c'
+            ctx.font = 'bold 10px Arial'
+          }
+          // Truncate text
+          const maxW = cols[vi].w - 8
+          let text = val
+          while (ctx.measureText(text).width > maxW && text.length > 1) text = text.slice(0, -1)
+          if (text !== val) text = text.slice(0, -1) + '…'
+          ctx.fillText(text, vx, y + 23)
+          vx += cols[vi].w
+        })
+        y += ROW_H
+      })
+
+      // Total row
+      ctx.fillStyle = '#b91c1c'
+      ctx.fillRect(PADDING, y, W - PADDING * 2, ROW_H)
+      ctx.fillStyle = '#ffffff'
+      ctx.font = 'bold 11px Arial'
+      ctx.fillText(`TOTAL DO DIA — ${calls.length} chamado${calls.length !== 1 ? 's' : ''} (${totalFeitos} feito${totalFeitos !== 1 ? 's' : ''})`, PADDING + 8, y + 23)
+      ctx.textAlign = 'right'
+      ctx.fillText(`R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, W - PADDING - 8, y + 23)
+      ctx.textAlign = 'left'
+      y += ROW_H + 16
+
+      // Footer
+      ctx.fillStyle = '#999'
+      ctx.font = '9px Arial'
+      ctx.textAlign = 'center'
+      ctx.fillText(`${tenantName}  ·  Connect Financeiro  ·  Impresso em ${new Date().toLocaleString('pt-BR')}`, W / 2, y + 12)
+      ctx.textAlign = 'left'
+
+      canvas.toBlob(resolve, 'image/png')
+    })
+  }
+
+  function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number, stroke = false) {
+    ctx.beginPath()
+    ctx.moveTo(x + r, y)
+    ctx.lineTo(x + w - r, y)
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r)
+    ctx.lineTo(x + w, y + h - r)
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h)
+    ctx.lineTo(x + r, y + h)
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r)
+    ctx.lineTo(x, y + r)
+    ctx.quadraticCurveTo(x, y, x + r, y)
+    ctx.closePath()
+    if (stroke) ctx.stroke(); else ctx.fill()
   }
 
   const totalValue = calls.reduce((sum, c) => {
