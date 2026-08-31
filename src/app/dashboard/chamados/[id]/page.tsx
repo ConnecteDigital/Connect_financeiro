@@ -68,7 +68,8 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
     setUploading(true)
     try {
       const supabase = createClient()
-      const path = `${id}/${Date.now()}_${file.name}`
+      const safeName = file.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9._-]/g, '_')
+      const path = `${id}/${Date.now()}_${safeName}`
       const { error } = await supabase.storage.from('chamados-anexos').upload(path, file)
       if (error) throw error
       await loadAttachments()

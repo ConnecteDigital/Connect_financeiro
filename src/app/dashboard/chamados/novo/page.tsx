@@ -267,7 +267,8 @@ export default function NovoChamadoPage() {
     if (pendingFiles.length === 0) return
     const supabase = createClient()
     await Promise.all(pendingFiles.map(({ file }) => {
-      const path = `${callId}/${Date.now()}_${file.name}`
+      const safeName = file.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9._-]/g, '_')
+      const path = `${callId}/${Date.now()}_${safeName}`
       return supabase.storage.from('chamados-anexos').upload(path, file)
     }))
   }
