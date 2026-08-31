@@ -76,11 +76,23 @@ export default function ResumoDiaPage() {
     load()
   }, [])
 
-  useEffect(() => {
-    if (!loading && calls !== null) {
-      setTimeout(() => window.print(), 600)
+  function handleShare() {
+    const text = `*${tenantName} — Resumo do Dia ${date ? date.split('-').reverse().join('/') : ''}*\n\n` +
+      `📋 ${calls.length} chamado${calls.length !== 1 ? 's' : ''} | ✅ ${totalFeitos} feito${totalFeitos !== 1 ? 's' : ''} | 💰 R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n\n` +
+      calls.map(c => {
+        const os = c.service_orders?.[0]
+        const value = os?.total_value != null ? `R$ ${Number(os.total_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'
+        const hora = c.call_time ? c.call_time.slice(0, 5) : '—'
+        const status = STATUS_LABEL[c.status] ?? c.status
+        return `• ${hora} | *${c.contact_name || '—'}* | ${c.service_category || '—'} | ${status} | ${value}`
+      }).join('\n')
+
+    if (navigator.share) {
+      navigator.share({ title: `Resumo do Dia — ${tenantName}`, text })
+    } else {
+      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank')
     }
-  }, [loading, calls])
+  }
 
   const totalValue = calls.reduce((sum, c) => {
     const os = c.service_orders?.[0]
@@ -226,9 +238,16 @@ export default function ResumoDiaPage() {
         </div>
       </div>
 
-      <button className="print-btn no-print" onClick={() => window.print()}>
-        🖨️ Imprimir / Salvar PDF
-      </button>
+      <div className="no-print" style={{ position: 'fixed', bottom: 24, right: 24, display: 'flex', gap: 10 }}>
+        <button onClick={() => window.print()}
+          style={{ background: '#374151', color: 'white', border: 'none', padding: '12px 18px', borderRadius: 10, fontSize: 14, fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 14px rgba(0,0,0,0.2)' }}>
+          🖨️ PDF
+        </button>
+        <button onClick={handleShare}
+          style={{ background: '#25D366', color: 'white', border: 'none', padding: '12px 20px', borderRadius: 10, fontSize: 14, fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 14px rgba(0,0,0,0.2)' }}>
+          📤 Compartilhar no WhatsApp
+        </button>
+      </div>
     </>
   )
 }
