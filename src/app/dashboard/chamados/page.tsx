@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { Plus, Search, CheckCircle, XCircle, Clock, ChevronRight, ChevronLeft, List, CalendarDays } from 'lucide-react'
+import { Plus, Search, CheckCircle, XCircle, Clock, ChevronRight, ChevronLeft, List, CalendarDays, FileText } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { getCalls, updateCall } from '@/lib/db/calls'
@@ -145,6 +145,18 @@ export default function ChamadosPage() {
               <CalendarDays className="w-4 h-4" />
             </button>
           </div>
+          <button
+            onClick={() => {
+              const today = new Date()
+              const d = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
+              sessionStorage.setItem('resumo_dia_date', d)
+              window.open('/dashboard/chamados/resumo-dia', '_blank')
+            }}
+            className="flex items-center gap-2 text-sm px-4 py-2.5 rounded-xl border font-semibold transition"
+            style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)', background: 'var(--surface)' }}>
+            <FileText className="w-4 h-4" />
+            <span className="hidden sm:inline">Resumo do Dia</span>
+          </button>
           <Link href="/dashboard/chamados/novo"
             className="flex items-center gap-2 btn-primary text-sm px-4 py-2.5 rounded-xl">
             <Plus className="w-4 h-4" />
