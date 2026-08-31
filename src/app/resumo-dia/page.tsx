@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 interface CallRow {
@@ -41,6 +41,8 @@ export default function ResumoDiaPage() {
   const [date, setDate] = useState('')
   const [tenantName, setTenantName] = useState('')
   const [loading, setLoading] = useState(true)
+  const [sharing, setSharing] = useState(false)
+  const contentRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const storedDate = sessionStorage.getItem('resumo_dia_date') || new Date().toISOString().slice(0, 10)
@@ -76,21 +78,39 @@ export default function ResumoDiaPage() {
     load()
   }, [])
 
-  function handleShare() {
-    const text = `*${tenantName} — Resumo do Dia ${date ? date.split('-').reverse().join('/') : ''}*\n\n` +
-      `📋 ${calls.length} chamado${calls.length !== 1 ? 's' : ''} | ✅ ${totalFeitos} feito${totalFeitos !== 1 ? 's' : ''} | 💰 R$ ${totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n\n` +
-      calls.map(c => {
-        const os = c.service_orders?.[0]
-        const value = os?.total_value != null ? `R$ ${Number(os.total_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'
-        const hora = c.call_time ? c.call_time.slice(0, 5) : '—'
-        const status = STATUS_LABEL[c.status] ?? c.status
-        return `• ${hora} | *${c.contact_name || '—'}* | ${c.service_category || '—'} | ${status} | ${value}`
-      }).join('\n')
-
-    if (navigator.share) {
-      navigator.share({ title: `Resumo do Dia — ${tenantName}`, text })
-    } else {
-      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank')
+  async function handleShare() {
+    if (!contentRef.current) return
+    setSharing(true)
+    try {
+      const html2canvas = (await import('html2canvas')).default
+      const canvas = await html2canvas(contentRef.current, {
+        backgroundColor: '#ffffff',
+        scale: 2,
+        useCORS: true,
+        logging: false,
+      })
+      canvas.toBlob(async (blob) => {
+        if (!blob) { setSharing(false); return }
+        const file = new File([blob], 'resumo-dia.png', { type: 'image/png' })
+        if (navigator.share && navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            title: `Resumo do Dia — ${tenantName}`,
+            files: [file],
+          })
+        } else {
+          // Fallback: download image
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = `resumo-${date}.png`
+          a.click()
+          URL.revokeObjectURL(url)
+        }
+        setSharing(false)
+      }, 'image/png')
+    } catch (e) {
+      console.error(e)
+      setSharing(false)
     }
   }
 
@@ -144,7 +164,7 @@ export default function ResumoDiaPage() {
         .date-bar button { background: #1e4d2b; color: white; border: none; padding: 5px 12px; border-radius: 6px; font-size: 11px; cursor: pointer; }
       `}</style>
 
-      <div className="page">
+      <div className="page" ref={contentRef}>
         {/* Date picker (only on screen) */}
         <div className="date-bar no-print">
           <label style={{ fontWeight: 600 }}>Data:</label>
@@ -243,9 +263,9 @@ export default function ResumoDiaPage() {
           style={{ background: '#374151', color: 'white', border: 'none', padding: '12px 18px', borderRadius: 10, fontSize: 14, fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 14px rgba(0,0,0,0.2)' }}>
           🖨️ PDF
         </button>
-        <button onClick={handleShare}
-          style={{ background: '#25D366', color: 'white', border: 'none', padding: '12px 20px', borderRadius: 10, fontSize: 14, fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 14px rgba(0,0,0,0.2)' }}>
-          📤 Compartilhar no WhatsApp
+        <button onClick={handleShare} disabled={sharing}
+          style={{ background: '#25D366', color: 'white', border: 'none', padding: '12px 20px', borderRadius: 10, fontSize: 14, fontWeight: 'bold', cursor: sharing ? 'wait' : 'pointer', boxShadow: '0 4px 14px rgba(0,0,0,0.2)', opacity: sharing ? 0.7 : 1 }}>
+          {sharing ? '⏳ Gerando...' : '📸 Compartilhar como Foto'}
         </button>
       </div>
     </>
