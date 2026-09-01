@@ -36,18 +36,24 @@ export async function getDashboardStatsRange(startDate: string, endDate: string)
   const not_approved_calls = calls.filter(c => c.status === 'nao_aprovou').length
   const gross_revenue = orders.reduce((s, o) => s + (o.total_value || 0), 0)
 
+  function liquidoOS(o: any): number {
+    const bruto = Number(o.total_value || 0)
+    if (o.service_type === 'terceirizado_saida' || o.service_type === 'terceirizado_entrada') {
+      const pct = Number(o.outsource_profit_pct ?? 50)
+      return bruto * pct / 100
+    }
+    return bruto
+  }
+
   const total_costs = orders.reduce((s, o) => {
     const operational = (o.outsource_fuel_cost || 0) + (o.outsource_meal_cost || 0) +
       (o.outsource_truck_cost || 0) + (o.outsource_other_cost || 0)
-    // Para serviços terceirizados, o custo do parceiro é a parte que fica com o terceiro
-    const partnerCost = (o.service_type === 'terceirizado_saida')
-      ? (o.total_value || 0) * (1 - (o.outsource_profit_pct ?? 50) / 100)
-      : 0
-    return s + operational + partnerCost
+    return s + operational
   }, 0)
 
+  const liquid_revenue = orders.reduce((s, o) => s + liquidoOS(o), 0)
   const total_expenses = expenses.reduce((s, e) => s + (e.amount || 0), 0)
-  const net_revenue = gross_revenue - total_costs - total_expenses
+  const net_revenue = liquid_revenue - total_costs - total_expenses
 
   const pending_receivables = orders
     .filter(o => o.payment_status === 'pendente' || o.payment_status === 'pago_parcial')
