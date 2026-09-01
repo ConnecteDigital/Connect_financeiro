@@ -3,6 +3,7 @@ export interface ServiceCategoryConfig {
   subOptions?: string[]
   qtyLabel: string
   priceLabel: string
+  allowFlatPrice?: boolean  // permite modo "valor fechado" sem quantidade
 }
 
 export const SERVICE_CONFIG: Record<string, ServiceCategoryConfig> = {
@@ -19,11 +20,13 @@ export const SERVICE_CONFIG: Record<string, ServiceCategoryConfig> = {
     subOptions: ['Caixa de Gordura', 'Fossa'],
     qtyLabel: 'Quantidade',
     priceLabel: 'Valor unitário (R$)',
+    allowFlatPrice: true,
   },
   'Sucção': {
     subOptions: ['Fossa'],
     qtyLabel: 'Quantidade de litros',
     priceLabel: 'Valor do litro (R$)',
+    allowFlatPrice: true,
   },
   'Aplicação de CO2': {
     qtyLabel: 'Quantidade',

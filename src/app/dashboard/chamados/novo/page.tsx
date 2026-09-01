@@ -24,6 +24,8 @@ interface ServiceLine {
   quantity: number
   unitPrice: number
   notes: string
+  flatPrice?: boolean   // true = valor fechado (sem quantidade/litros)
+  flatValue?: number    // valor total quando flatPrice = true
 }
 
 interface SelectedAuxiliary {
@@ -162,7 +164,7 @@ export default function NovoChamadoPage() {
   }, [commissionsEnabled])
 
   // ── Value calculations ──
-  const lineTotal = (l: ServiceLine) => l.quantity * l.unitPrice
+  const lineTotal = (l: ServiceLine) => l.flatPrice ? (l.flatValue ?? 0) : l.quantity * l.unitPrice
   const subtotal = serviceLines.reduce((sum, l) => sum + lineTotal(l), 0)
   const bruto = subtotal + equipmentRentalValue - discount + taxes
   const isOutsourced = serviceType !== 'proprio'
@@ -376,9 +378,9 @@ export default function NovoChamadoPage() {
           observations: observations || null,
         }
         const validItems = serviceLines.map(l => ({
-          quantity: l.quantity || 1,
-          description: l.category + (l.sub ? ` — ${l.sub}` : ''),
-          unit_price: l.unitPrice,
+          quantity: l.flatPrice ? 1 : (l.quantity || 1),
+          description: l.category + (l.sub ? ` — ${l.sub}` : '') + (l.flatPrice ? ' (valor fechado)' : ''),
+          unit_price: l.flatPrice ? (l.flatValue ?? 0) : l.unitPrice,
           category: l.category,
           sub_options: l.sub,
           notes: l.notes || null,
@@ -887,23 +889,57 @@ export default function NovoChamadoPage() {
                 {isApproved && catLines.map(l => (
                   <div key={l.sub ?? cat} className="bg-white border border-orange-100 rounded-xl p-3 space-y-3">
                     {l.sub && <p className="text-xs font-bold text-orange-500 uppercase tracking-wide">{l.sub}</p>}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-medium text-slate-600 mb-1">{cfg?.qtyLabel ?? 'Quantidade'}</label>
-                        <input type="number" min="0" step="0.01" value={l.quantity || ''}
-                          onChange={e => updateLine(l.category, l.sub, { quantity: Number(e.target.value) })}
-                          className={inputCls} />
+
+                    {/* Toggle valor fechado / por quantidade */}
+                    {cfg?.allowFlatPrice && (
+                      <div className="flex gap-2">
+                        <button type="button"
+                          onClick={() => updateLine(l.category, l.sub, { flatPrice: false })}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${!l.flatPrice ? 'text-white border-transparent' : 'bg-white text-slate-500 border-slate-200'}`}
+                          style={!l.flatPrice ? { background: 'var(--primary)' } : {}}>
+                          Por {cfg.qtyLabel.toLowerCase().includes('litro') ? 'litro' : 'quantidade'}
+                        </button>
+                        <button type="button"
+                          onClick={() => updateLine(l.category, l.sub, { flatPrice: true })}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${l.flatPrice ? 'text-white border-transparent' : 'bg-white text-slate-500 border-slate-200'}`}
+                          style={l.flatPrice ? { background: 'var(--primary)' } : {}}>
+                          Valor fechado
+                        </button>
                       </div>
-                      <div>
-                        <label className="block text-xs font-medium text-slate-600 mb-1">{cfg?.priceLabel ?? 'Valor (R$)'}</label>
-                        <input type="number" min="0" step="0.01" value={l.unitPrice || ''}
-                          onChange={e => updateLine(l.category, l.sub, { unitPrice: Number(e.target.value) })}
-                          className={inputCls} />
-                      </div>
-                    </div>
-                    {l.quantity > 0 && l.unitPrice > 0 && (
-                      <p className="text-sm font-bold text-orange-600">Total: R$ {lineTotal(l).toFixed(2)}</p>
                     )}
+
+                    {l.flatPrice ? (
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">Valor Total do Serviço (R$)</label>
+                        <input type="number" min="0" step="0.01" value={l.flatValue || ''}
+                          onChange={e => updateLine(l.category, l.sub, { flatValue: Number(e.target.value) })}
+                          className={inputCls} />
+                        {(l.flatValue ?? 0) > 0 && (
+                          <p className="text-sm font-bold mt-1" style={{ color: 'var(--primary)' }}>Total: R$ {(l.flatValue ?? 0).toFixed(2)}</p>
+                        )}
+                      </div>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 mb-1">{cfg?.qtyLabel ?? 'Quantidade'}</label>
+                            <input type="number" min="0" step="0.01" value={l.quantity || ''}
+                              onChange={e => updateLine(l.category, l.sub, { quantity: Number(e.target.value) })}
+                              className={inputCls} />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-600 mb-1">{cfg?.priceLabel ?? 'Valor (R$)'}</label>
+                            <input type="number" min="0" step="0.01" value={l.unitPrice || ''}
+                              onChange={e => updateLine(l.category, l.sub, { unitPrice: Number(e.target.value) })}
+                              className={inputCls} />
+                          </div>
+                        </div>
+                        {l.quantity > 0 && l.unitPrice > 0 && (
+                          <p className="text-sm font-bold" style={{ color: 'var(--primary)' }}>Total: R$ {lineTotal(l).toFixed(2)}</p>
+                        )}
+                      </>
+                    )}
+
                     <input type="text" value={l.notes}
                       onChange={e => updateLine(l.category, l.sub, { notes: e.target.value })}
                       placeholder="Descrição do serviço..."
