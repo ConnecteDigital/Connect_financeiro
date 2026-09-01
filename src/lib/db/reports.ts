@@ -19,7 +19,7 @@ export async function getReportData(
   let ordersQuery = supabase
     .from('service_orders')
     .select(`
-      id, total_value, service_type, payment_status, date,
+      id, total_value, service_type, outsource_profit_pct, payment_status, date,
       outsource_fuel_cost, outsource_meal_cost, outsource_truck_cost, outsource_other_cost,
       client:clients(name, city),
       items:service_order_items(description, quantity, unit_price, total),
@@ -46,16 +46,27 @@ export async function getReportData(
   const noVisitCalls = calls.filter(c => c.status === 'nao_quis_visita').length
   const notApprovedCalls = calls.filter(c => c.status === 'nao_aprovou').length
 
+  // Valor líquido por OS: terceirizado_saida retém só outsource_profit_pct% do bruto
+  function liquidoOS(o: any): number {
+    const bruto = Number(o.total_value || 0)
+    if (o.service_type === 'terceirizado_saida') {
+      const pct = Number(o.outsource_profit_pct ?? 50)
+      return bruto * pct / 100
+    }
+    return bruto
+  }
+
   // Financeiro
   const grossRevenue = orders.reduce((s, o) => s + Number(o.total_value || 0), 0)
+  const liquidRevenue = orders.reduce((s, o) => s + liquidoOS(o), 0)
   const outsourceCosts = orders.reduce((s, o) =>
     s + Number(o.outsource_fuel_cost || 0) + Number(o.outsource_meal_cost || 0) +
     Number(o.outsource_truck_cost || 0) + Number(o.outsource_other_cost || 0), 0)
   const totalExpenses = expenses.reduce((s, e) => s + Number(e.amount || 0), 0)
   const paidExpenses = expenses.filter(e => e.status === 'pago').reduce((s, e) => s + Number(e.amount || 0), 0)
-  const netRevenue = grossRevenue - outsourceCosts - paidExpenses
-  const paidRevenue = orders.filter(o => o.payment_status === 'pago').reduce((s, o) => s + Number(o.total_value || 0), 0)
-  const pendingRevenue = orders.filter(o => o.payment_status !== 'pago').reduce((s, o) => s + Number(o.total_value || 0), 0)
+  const netRevenue = liquidRevenue - outsourceCosts - paidExpenses
+  const paidRevenue = orders.filter(o => o.payment_status === 'pago').reduce((s, o) => s + liquidoOS(o), 0)
+  const pendingRevenue = orders.filter(o => o.payment_status !== 'pago').reduce((s, o) => s + liquidoOS(o), 0)
 
   // Por origem
   const originCount: Record<string, { calls: number; revenue: number }> = {}
@@ -65,7 +76,7 @@ export async function getReportData(
   })
   orders.forEach(o => {
     const origin = (o.call as any)?.origin
-    if (origin && originCount[origin]) originCount[origin].revenue += Number(o.total_value || 0)
+    if (origin && originCount[origin]) originCount[origin].revenue += liquidoOS(o)
   })
   const ORIGIN_LABELS: Record<string, string> = { site_lider: 'Site Líder', site_poa: 'Site POA', site_millenium: 'Site Millenium', site_praja: 'Site Pra Já', indicacao: 'Indicação', terceirizado: 'Terceirizado' }
   const colors = ['#2563eb', '#7c3aed', '#059669', '#d97706']
@@ -83,7 +94,7 @@ export async function getReportData(
   orders.forEach(o => {
     const cat = (o.call as any)?.service_category || 'Não informado'
     if (!catMap[cat]) catMap[cat] = { calls: 0, revenue: 0 }
-    catMap[cat].revenue += Number(o.total_value || 0)
+    catMap[cat].revenue += liquidoOS(o)
   })
   const byCategory = Object.entries(catMap).map(([cat, data]) => ({ category: cat, ...data })).sort((a, b) => b.revenue - a.revenue)
 
@@ -93,7 +104,7 @@ export async function getReportData(
     const city = (o.client as any)?.city || 'Não informado'
     if (!cityMap[city]) cityMap[city] = { calls: 0, revenue: 0 }
     cityMap[city].calls++
-    cityMap[city].revenue += Number(o.total_value || 0)
+    cityMap[city].revenue += liquidoOS(o)
   })
   const byCity = Object.entries(cityMap).map(([city, data]) => ({ city, ...data })).sort((a, b) => b.revenue - a.revenue).slice(0, 10)
 
@@ -105,12 +116,12 @@ export async function getReportData(
     if (!weekMap[week]) weekMap[week] = { bruto: 0, liquido: 0 }
     const cost = Number(o.outsource_fuel_cost || 0) + Number(o.outsource_meal_cost || 0) + Number(o.outsource_truck_cost || 0) + Number(o.outsource_other_cost || 0)
     weekMap[week].bruto += Number(o.total_value || 0)
-    weekMap[week].liquido += Number(o.total_value || 0) - cost
+    weekMap[week].liquido += liquidoOS(o) - cost
   })
   const revenueByWeek = Object.entries(weekMap).sort(([a], [b]) => a.localeCompare(b)).map(([name, data]) => ({ name, ...data }))
 
   return {
-    summary: { totalCalls, approvedCalls, scheduledCalls, cancelledCalls, noVisitCalls, notApprovedCalls, grossRevenue, netRevenue, paidRevenue, pendingRevenue, totalExpenses, outsourceCosts },
+    summary: { totalCalls, approvedCalls, scheduledCalls, cancelledCalls, noVisitCalls, notApprovedCalls, grossRevenue, liquidRevenue, netRevenue, paidRevenue, pendingRevenue, totalExpenses, outsourceCosts },
     byOrigin,
     byCategory,
     byCity,

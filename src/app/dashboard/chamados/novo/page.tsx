@@ -74,7 +74,7 @@ export default function NovoChamadoPage() {
   const [callDate, setCallDate] = useState(localToday)
   const [callTime, setCallTime] = useState('')
   const [callChannel, setCallChannel] = useState('')
-  const [origin, setOrigin] = useState('')
+  const [origins, setOrigins] = useState<string[]>([])
   const [callStatus, setCallStatus] = useState('agendado')
   const [callNotes, setCallNotes] = useState('')
   const [clientId, setClientId] = useState('')
@@ -279,7 +279,7 @@ export default function NovoChamadoPage() {
       setError('Informe o nome do contato ou selecione um cliente cadastrado.')
       return
     }
-    if (!origin) {
+    if (origins.length === 0) {
       setError('Selecione a origem do chamado.')
       return
     }
@@ -311,7 +311,7 @@ export default function NovoChamadoPage() {
         client_id: finalClientId || null,
         contact_name: contactName || null,
         contact_phone: contactPhone || null,
-        origin,
+        origin: origins.join(', '),
         status: callStatus,
         notes: callNotes || null,
         service_category: serviceCategoryText || null,
@@ -454,7 +454,7 @@ export default function NovoChamadoPage() {
   const inputCls = 'w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]'
 
   async function handleSimplifiedSubmit(targetStatus: 'agendado' | 'aprovado') {
-    if (!origin) { setError('Selecione a origem do chamado.'); return }
+    if (origins.length === 0) { setError('Selecione a origem do chamado.'); return }
     if (!contactName.trim()) { setError('Informe o nome do contato.'); return }
     setSaving(true); setError('')
     try {
@@ -478,7 +478,7 @@ export default function NovoChamadoPage() {
         client_id: simplifiedClientId,
         contact_name: contactName || null,
         contact_phone: contactPhone || null,
-        origin,
+        origin: origins.join(', '),
         status: targetStatus,
         notes: null,
         service_category: serviceCategory || null,
@@ -523,8 +523,10 @@ export default function NovoChamadoPage() {
             <label className="block text-sm font-medium text-slate-700 mb-2">Origem *</label>
             <div className="flex flex-wrap gap-2">
               {callOrigins.map(o => (
-                <button key={o.value} type="button" onClick={() => setOrigin(o.value)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition ${origin === o.value ? 'bg-orange-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                <button key={o.value} type="button"
+                  onClick={() => setOrigins(prev => prev.includes(o.value) ? prev.filter(x => x !== o.value) : [...prev, o.value])}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition ${origins.includes(o.value) ? 'text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                  style={origins.includes(o.value) ? { background: 'var(--primary)' } : {}}>
                   {o.label}
                 </button>
               ))}
@@ -647,11 +649,18 @@ export default function NovoChamadoPage() {
           <label className="block text-sm font-medium text-slate-700 mb-2">Origem *</label>
           <div className="flex flex-wrap gap-2">
             {callOrigins.map(o => (
-              <button key={o.value} type="button" onClick={() => setOrigin(o.value)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${origin === o.value ? 'bg-orange-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+              <button key={o.value} type="button"
+                onClick={() => setOrigins(prev => prev.includes(o.value) ? prev.filter(x => x !== o.value) : [...prev, o.value])}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${origins.includes(o.value) ? 'text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                style={origins.includes(o.value) ? { background: 'var(--primary)' } : {}}>
                 {o.label}
               </button>
             ))}
+            {origins.length > 1 && (
+              <span className="text-xs self-center px-2 py-1 rounded-full font-medium" style={{ background: 'rgba(var(--primary-rgb),0.12)', color: 'var(--primary)' }}>
+                {origins.length} selecionadas
+              </span>
+            )}
           </div>
         </div>
 
