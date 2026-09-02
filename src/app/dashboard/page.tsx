@@ -14,7 +14,7 @@ interface Stats {
   total_calls: number; approved_calls: number; scheduled_calls: number
   cancelled_calls: number; no_visit_calls: number; not_approved_calls: number
   gross_revenue: number; net_revenue: number; pending_receivables: number
-  total_expenses: number; outsource_costs: number; paid_revenue: number
+  total_expenses: number; outsource_costs: number; partner_costs: number; paid_revenue: number
 }
 
 const today = new Date()
@@ -207,7 +207,7 @@ export default function DashboardPage() {
         <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
           {[
             { label: 'Receita bruta', value: stats?.gross_revenue ?? 0, color: 'var(--text-primary)' },
-            { label: 'Custos terceirizados', value: -(stats?.outsource_costs ?? 0), color: '#ef4444' },
+            { label: 'Custos terceirizados', value: -(stats?.partner_costs ?? 0), color: '#ef4444' },
             { label: 'Despesas do período', value: -(stats?.total_expenses ?? 0), color: '#ef4444' },
             { label: 'Receita líquida', value: stats?.net_revenue ?? 0, color: '#16a34a', bold: true },
             { label: 'Recebido', value: stats?.paid_revenue ?? 0, color: '#16a34a' },
@@ -337,7 +337,7 @@ export default function DashboardPage() {
             <div className="px-5 pb-6 space-y-1">
               {[
                 { label: 'Receita bruta', value: stats?.gross_revenue ?? 0, color: 'var(--text-primary)' },
-                { label: 'Custos terceirizados', value: -(stats?.outsource_costs ?? 0), color: '#ef4444' },
+                { label: 'Custos terceirizados', value: -(stats?.partner_costs ?? 0), color: '#ef4444' },
                 { label: 'Despesas do período', value: -(stats?.total_expenses ?? 0), color: '#ef4444' },
               ].map(r => (
                 <div key={r.label} className="flex items-center justify-between py-2.5 border-b border-slate-100">

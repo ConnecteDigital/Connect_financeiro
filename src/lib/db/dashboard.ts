@@ -45,15 +45,24 @@ export async function getDashboardStatsRange(startDate: string, endDate: string)
     return bruto
   }
 
-  const total_costs = orders.reduce((s, o) => {
-    const operational = (o.outsource_fuel_cost || 0) + (o.outsource_meal_cost || 0) +
+  const operational_costs = orders.reduce((s, o) => {
+    return s + (o.outsource_fuel_cost || 0) + (o.outsource_meal_cost || 0) +
       (o.outsource_truck_cost || 0) + (o.outsource_other_cost || 0)
-    return s + operational
   }, 0)
 
+  const partner_costs = orders.reduce((s, o) => {
+    const bruto = Number(o.total_value || 0)
+    if (o.service_type === 'terceirizado_saida' || o.service_type === 'terceirizado_entrada') {
+      const pct = Number(o.outsource_profit_pct ?? 50)
+      return s + bruto * (1 - pct / 100)
+    }
+    return s
+  }, 0)
+
+  const total_costs = operational_costs + partner_costs
   const liquid_revenue = orders.reduce((s, o) => s + liquidoOS(o), 0)
   const total_expenses = expenses.reduce((s, e) => s + (e.amount || 0), 0)
-  const net_revenue = liquid_revenue - total_costs - total_expenses
+  const net_revenue = liquid_revenue - operational_costs - total_expenses
 
   const pending_receivables = orders
     .filter(o => o.payment_status === 'pendente' || o.payment_status === 'pago_parcial')
@@ -72,7 +81,8 @@ export async function getDashboardStatsRange(startDate: string, endDate: string)
     net_revenue,
     pending_receivables,
     total_expenses,
-    outsource_costs: total_costs,
+    outsource_costs: operational_costs,
+    partner_costs,
     paid_revenue,
   }
 }
