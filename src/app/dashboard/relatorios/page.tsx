@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { BarChart3, TrendingUp, MapPin, Globe, Tag, Loader2, CheckCircle, XCircle, Clock, TrendingDown, ArrowUpCircle, ArrowDownCircle, FileDown, Share2, ImageIcon } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { getReportData, getExpensesReport, getCashEntriesReport } from '@/lib/db/reports'
@@ -28,9 +28,7 @@ type MainTab = 'chamados' | 'saidas' | 'entradas'
 export default function RelatoriosPage() {
   const [mainTab, setMainTab] = useState<MainTab>('chamados')
   const [range, setRange] = useState<DateRange>(defaultRange)
-  const [sharing, setSharing] = useState(false)
   const [showShareMenu, setShowShareMenu] = useState(false)
-  const contentRef = useRef<HTMLDivElement>(null)
 
   // Chamados filters
   const [originFilter, setOriginFilter] = useState('todos')
@@ -56,49 +54,11 @@ export default function RelatoriosPage() {
   const { origins: tenantOrigins } = useCallOrigins()
   const { tenant } = useTenant()
 
-  function handleDownloadPDF() {
+  function openImprimirPage(mode: 'pdf' | 'image') {
     const payload = { tab: mainTab, range, tenantName: tenant?.name, tenantCnpj: tenant?.cnpj, data, expData, ceData }
     sessionStorage.setItem('relatorio_print', JSON.stringify(payload))
-    window.open('/dashboard/relatorios/imprimir', '_blank')
+    window.open(`/dashboard/relatorios/imprimir?mode=${mode}`, '_blank')
     setShowShareMenu(false)
-  }
-
-  async function handleShareImage() {
-    if (!contentRef.current || sharing) return
-    setSharing(true)
-    setShowShareMenu(false)
-    try {
-      const html2canvas = (await import('html2canvas')).default
-      const canvas = await html2canvas(contentRef.current, {
-        scale: 2,
-        backgroundColor: '#f8fafc',
-        useCORS: true,
-        allowTaint: false,
-        logging: false,
-        ignoreElements: (el) => el.classList.contains('no-print'),
-      })
-      const blob: Blob | null = await new Promise(res => canvas.toBlob(res, 'image/png'))
-      if (!blob) throw new Error('Falha ao gerar imagem')
-      const label = range.label ?? range.start
-      const file = new File([blob], `relatorio-${label}.png`, { type: 'image/png' })
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], title: `Relatório ${label}` })
-      } else {
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `relatorio-${label}.png`
-        a.click()
-        URL.revokeObjectURL(url)
-      }
-    } catch (e: unknown) {
-      if ((e as { name?: string })?.name !== 'AbortError') {
-        console.error('Erro ao compartilhar relatório:', e)
-        alert('Não foi possível compartilhar. Tente novamente.')
-      }
-    } finally {
-      setSharing(false)
-    }
   }
 
   // Load suppliers, clients, and expense categories once
@@ -147,7 +107,7 @@ export default function RelatoriosPage() {
   const s = data?.summary
 
   return (
-    <div ref={contentRef} className="space-y-6 max-w-7xl mx-auto" onClick={(e) => {
+    <div className="space-y-6 max-w-7xl mx-auto" onClick={(e) => {
       if (showShareMenu && !(e.target as HTMLElement).closest('.relative')) setShowShareMenu(false)
     }}>
       {/* Header */}
@@ -161,20 +121,19 @@ export default function RelatoriosPage() {
           <div className="relative no-print">
             <button
               onClick={() => setShowShareMenu(v => !v)}
-              disabled={sharing}
               className="flex items-center gap-2 btn-primary text-sm px-4 py-2.5"
             >
-              {sharing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />}
-              <span className="hidden sm:inline">{sharing ? 'Gerando...' : 'Compartilhar'}</span>
+              <Share2 className="w-4 h-4" />
+              <span className="hidden sm:inline">Compartilhar</span>
             </button>
             {showShareMenu && (
               <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-xl shadow-lg min-w-[180px] overflow-hidden">
-                <button onClick={handleDownloadPDF}
+                <button onClick={() => openImprimirPage('pdf')}
                   className="flex items-center gap-2 w-full px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition">
                   <FileDown className="w-4 h-4 text-slate-500" />
                   Baixar PDF
                 </button>
-                <button onClick={handleShareImage}
+                <button onClick={() => openImprimirPage('image')}
                   className="flex items-center gap-2 w-full px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition border-t border-slate-100">
                   <ImageIcon className="w-4 h-4 text-slate-500" />
                   Compartilhar Imagem
