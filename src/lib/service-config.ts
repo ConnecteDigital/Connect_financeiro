@@ -11,6 +11,7 @@ export const SERVICE_CONFIG: Record<string, ServiceCategoryConfig> = {
     subOptions: ['Ralo', 'Pia', 'Vaso', 'Esgoto', 'Coluna', 'Caixa de Gordura'],
     qtyLabel: 'Quantidade de metros',
     priceLabel: 'Valor do metro (R$)',
+    allowFlatPrice: true,
   },
   'Hidrojateamento': {
     qtyLabel: 'Metragem (m)',
