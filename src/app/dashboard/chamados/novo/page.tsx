@@ -805,14 +805,22 @@ export default function NovoChamadoPage() {
         )}
 
         {!isScheduled && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Cidade</label>
-              <input type="text" value={callCity} onChange={e => setCallCity(e.target.value)} placeholder="Ex: Porto Alegre" className={inputCls} />
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Cidade</label>
+                <input type="text" value={callCity} onChange={e => setCallCity(e.target.value)} placeholder="Ex: Porto Alegre" className={inputCls} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Bairro</label>
+                <input type="text" value={callNeighborhood} onChange={e => setCallNeighborhood(e.target.value)} placeholder="Ex: Centro" className={inputCls} />
+              </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Bairro</label>
-              <input type="text" value={callNeighborhood} onChange={e => setCallNeighborhood(e.target.value)} placeholder="Ex: Centro" className={inputCls} />
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Endereço do Serviço</label>
+              <input type="text" value={callAddress} onChange={e => setCallAddress(e.target.value)}
+                placeholder="Rua, número, bairro, cidade"
+                className={inputCls} />
             </div>
           </div>
         )}
@@ -886,7 +894,7 @@ export default function NovoChamadoPage() {
                     })}
                   </div>
                 )}
-                {isApproved && catLines.map(l => (
+                {(isApproved || isScheduled) && catLines.map(l => (
                   <div key={l.sub ?? cat} className="bg-white border border-orange-100 rounded-xl p-3 space-y-3">
                     {l.sub && <p className="text-xs font-bold text-orange-500 uppercase tracking-wide">{l.sub}</p>}
 
