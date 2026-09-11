@@ -16,6 +16,7 @@ export const SERVICE_CONFIG: Record<string, ServiceCategoryConfig> = {
   'Hidrojateamento': {
     qtyLabel: 'Metragem (m)',
     priceLabel: 'Valor do metro (R$)',
+    allowFlatPrice: true,
   },
   'Limpeza': {
     subOptions: ['Caixa de Gordura', 'Fossa'],
@@ -32,14 +33,17 @@ export const SERVICE_CONFIG: Record<string, ServiceCategoryConfig> = {
   'Aplicação de CO2': {
     qtyLabel: 'Quantidade',
     priceLabel: 'Valor unitário (R$)',
+    allowFlatPrice: true,
   },
   'Outros': {
     qtyLabel: 'Quantidade',
     priceLabel: 'Valor (R$)',
+    allowFlatPrice: true,
   },
   'Reclamação': {
     qtyLabel: 'Quantidade',
     priceLabel: 'Valor (R$)',
+    allowFlatPrice: true,
   },
 }
 
