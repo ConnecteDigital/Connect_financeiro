@@ -291,6 +291,7 @@ export default function RelatoriosPage() {
                   { v: 'ligacao', l: '📞 Ligação' },
                   { v: 'cliente', l: '🏠 Cliente' },
                   { v: 'indicacao', l: '🤝 Indicação' },
+                  { v: 'google', l: '🔍 Google' },
                 ].map(ch => (
                   <button key={ch.v} onClick={() => setChannelFilter(ch.v)}
                     className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border transition ${channelFilter === ch.v ? 'text-white border-transparent' : 'text-slate-500 border-slate-200 hover:border-slate-400'}`}
