@@ -168,14 +168,23 @@ function gerarImagemCanvas(payload: any): Promise<Blob> {
       ])
       y += 16
 
-      if (data.byChannel?.length > 0) {
+      if (data.byOrigin?.length > 0) {
+        const sorted = [...data.byOrigin].sort((a: any, b: any) => b.calls - a.calls)
+        drawTable('Por Origem', ['Origem', 'Chamados', '%', 'Receita'],
+          sorted.map((o: any) => {
+            const pct = s.totalCalls > 0 ? Math.round((o.calls / s.totalCalls) * 100) : 0
+            return [o.name, String(o.calls), `${pct}%`, fmt(o.revenue)]
+          }),
+          ['left', 'right', 'right', 'right'])
+      }
+      const knownChannels = (data.byChannel ?? []).filter((c: any) =>
+        c.channel === '💬 WhatsApp' || c.channel === '📞 Ligação'
+      )
+      if (knownChannels.length > 0) {
         const total = s.totalCalls || 1
         drawTable('Canal de Atendimento', ['Canal', 'Chamados', '%'],
-          data.byChannel.map((c: any) => [c.channel, String(c.calls), `${Math.round((c.calls / total) * 100)}%`]),
+          knownChannels.map((c: any) => [c.channel, String(c.calls), `${Math.round((c.calls / total) * 100)}%`]),
           ['left', 'right', 'right'])
-      }
-      if (data.byOrigin?.length > 0) {
-        drawTable('Por Origem', ['Origem', 'Chamados', 'Receita'], data.byOrigin.map((o: any) => [o.name, String(o.calls), fmt(o.revenue)]), ['left', 'right', 'right'])
       }
       if (data.byCategory?.length > 0) {
         drawTable('Por Tipo de Serviço', ['Tipo', 'OS', 'Receita'], data.byCategory.map((c: any) => [c.category, String(c.calls), fmt(c.revenue)]), ['left', 'right', 'right'])
