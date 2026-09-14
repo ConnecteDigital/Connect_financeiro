@@ -177,14 +177,16 @@ function gerarImagemCanvas(payload: any): Promise<Blob> {
           }),
           ['left', 'right', 'right', 'right'])
       }
-      const knownChannels = (data.byChannel ?? []).filter((c: any) =>
-        c.channel === '💬 WhatsApp' || c.channel === '📞 Ligação'
-      )
-      if (knownChannels.length > 0) {
+      if (data.byChannel?.length > 0) {
         const total = s.totalCalls || 1
-        drawTable('Canal de Atendimento', ['Canal', 'Chamados', '%'],
-          knownChannels.map((c: any) => [c.channel, String(c.calls), `${Math.round((c.calls / total) * 100)}%`]),
-          ['left', 'right', 'right'])
+        drawTable('Canal de Atendimento', ['Canal', 'Chamados', '%', 'Receita'],
+          data.byChannel.map((c: any) => [
+            c.channel,
+            String(c.calls),
+            `${Math.round((c.calls / total) * 100)}%`,
+            fmt(c.revenue),
+          ]),
+          ['left', 'right', 'right', 'right'])
       }
       if (data.byCategory?.length > 0) {
         drawTable('Por Tipo de Serviço', ['Tipo', 'OS', 'Receita'], data.byCategory.map((c: any) => [c.category, String(c.calls), fmt(c.revenue)]), ['left', 'right', 'right'])

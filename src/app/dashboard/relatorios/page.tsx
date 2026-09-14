@@ -100,15 +100,13 @@ export default function RelatoriosPage() {
         linhas.push('─────────────────────')
       }
 
-      // Canal (WhatsApp vs Ligação) — só valores conhecidos
-      const knownChannels = (data.byChannel ?? []).filter((c: any) =>
-        c.channel === '💬 WhatsApp' || c.channel === '📞 Ligação'
-      )
-      if (knownChannels.length > 0) {
-        linhas.push('*📲 CANAL*')
-        knownChannels.forEach((c: any) => {
+      // Canal com faturamento — sempre mostra os dois (mesmo zerado)
+      if (data.byChannel?.length > 0) {
+        linhas.push('*📲 CANAL DE ATENDIMENTO*')
+        data.byChannel.forEach((c: any) => {
           const pct = s.totalCalls > 0 ? Math.round((c.calls / s.totalCalls) * 100) : 0
-          linhas.push(`• ${c.channel}: ${c.calls} (${pct}%)`)
+          const receita = c.revenue > 0 ? ` — ${fmt(c.revenue)}` : ' — R$ 0,00'
+          linhas.push(`• ${c.channel}: ${c.calls} chamados (${pct}%)${receita}`)
         })
         linhas.push('─────────────────────')
       }

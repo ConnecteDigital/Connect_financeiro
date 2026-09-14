@@ -39,6 +39,7 @@ export default function ChamadosPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<Status>('todos')
   const [originFilter, setOriginFilter] = useState('todos')
+  const [channelFilter, setChannelFilter] = useState('todos')
   const [calls, setCalls] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
@@ -92,11 +93,24 @@ export default function ChamadosPage() {
     return Object.keys(originCounts).filter(o => o !== 'sem_origem')
   }, [originCounts])
 
-  // Filtro de origem aplicado client-side (já que getCalls carregou tudo)
+  // Contagem por canal
+  const channelCounts = useMemo(() => {
+    const map: Record<string, number> = { whatsapp: 0, ligacao: 0 }
+    for (const c of calls) {
+      const ch = c.call_channel
+      if (ch === 'whatsapp' || ch === 'ligacao') map[ch]++
+    }
+    return map
+  }, [calls])
+
+  // Filtro de origem + canal aplicado client-side
   const filteredCalls = useMemo(() => {
-    if (originFilter === 'todos') return calls
-    return calls.filter(c => (c.origin ?? '') === originFilter)
-  }, [calls, originFilter])
+    return calls.filter(c => {
+      if (originFilter !== 'todos' && (c.origin ?? '') !== originFilter) return false
+      if (channelFilter !== 'todos' && (c.call_channel ?? '') !== channelFilter) return false
+      return true
+    })
+  }, [calls, originFilter, channelFilter])
 
   useEffect(() => { load() }, [load])
 
@@ -189,31 +203,53 @@ export default function ChamadosPage() {
         ))}
       </div>
 
-      {/* Origin filters — só aparece se houver origens */}
-      {presentOrigins.length > 0 && (
-        <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
-          <button onClick={() => setOriginFilter('todos')}
-            className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
-              originFilter === 'todos'
-                ? 'bg-zinc-800 text-white border-zinc-800'
-                : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400'
-            }`}>
-            Todas origens
-            <span className="text-[10px] opacity-70">({calls.length})</span>
-          </button>
-          {presentOrigins.map(origin => (
-            <button key={origin} onClick={() => setOriginFilter(origin)}
+      {/* Origin + Canal filters */}
+      <div className="space-y-2">
+        {presentOrigins.length > 0 && (
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
+            <button onClick={() => setOriginFilter('todos')}
               className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
-                originFilter === origin
+                originFilter === 'todos'
                   ? 'bg-zinc-800 text-white border-zinc-800'
                   : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400'
               }`}>
-              {getOriginLabel(origin)}
-              <span className="text-[10px] opacity-70">({originCounts[origin]})</span>
+              Todas origens
+              <span className="text-[10px] opacity-70">({calls.length})</span>
+            </button>
+            {presentOrigins.map(origin => (
+              <button key={origin} onClick={() => setOriginFilter(origin)}
+                className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
+                  originFilter === origin
+                    ? 'bg-zinc-800 text-white border-zinc-800'
+                    : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400'
+                }`}>
+                {getOriginLabel(origin)}
+                <span className="text-[10px] opacity-70">({originCounts[origin]})</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Canal filter */}
+        <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
+          {([
+            { value: 'todos', label: 'Todos canais', count: calls.length },
+            { value: 'whatsapp', label: '💬 WhatsApp', count: channelCounts.whatsapp },
+            { value: 'ligacao', label: '📞 Ligação', count: channelCounts.ligacao },
+          ] as { value: string; label: string; count: number }[]).map(ch => (
+            <button key={ch.value} onClick={() => setChannelFilter(ch.value)}
+              className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
+                channelFilter === ch.value
+                  ? 'text-white border-transparent shadow-sm'
+                  : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400'
+              }`}
+              style={channelFilter === ch.value ? { background: 'var(--primary)' } : {}}>
+              {ch.label}
+              <span className="text-[10px] opacity-70">({ch.count})</span>
             </button>
           ))}
         </div>
-      )}
+      </div>
 
       {/* Cards */}
       {loading ? (

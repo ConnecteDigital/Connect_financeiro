@@ -23,7 +23,7 @@ export async function getReportData(
       outsource_fuel_cost, outsource_meal_cost, outsource_truck_cost, outsource_other_cost,
       client:clients(name, city),
       items:service_order_items(description, quantity, unit_price, total),
-      call:calls(origin, service_category)
+      call:calls(origin, service_category, call_channel)
     `)
     .gte('date', startDate)
     .lte('date', endDate)
@@ -86,16 +86,27 @@ export async function getReportData(
 
   // Por canal de atendimento
   const CHANNEL_LABELS: Record<string, string> = { whatsapp: '💬 WhatsApp', ligacao: '📞 Ligação' }
-  const channelCount: Record<string, number> = {}
+  const KNOWN_CHANNELS = ['whatsapp', 'ligacao']
+  const channelMap: Record<string, { calls: number; revenue: number }> = {}
+  // inicializa todos os canais conhecidos com zero
+  KNOWN_CHANNELS.forEach(ch => { channelMap[ch] = { calls: 0, revenue: 0 } })
   calls.forEach(c => {
     const ch = (c as any).call_channel
-    if (ch) {
-      channelCount[ch] = (channelCount[ch] ?? 0) + 1
+    if (ch && KNOWN_CHANNELS.includes(ch)) {
+      channelMap[ch].calls++
     }
   })
-  const byChannel = Object.entries(channelCount)
-    .map(([key, count]) => ({ channel: CHANNEL_LABELS[key] ?? key, calls: count }))
-    .sort((a, b) => b.calls - a.calls)
+  orders.forEach(o => {
+    const ch = (o.call as any)?.call_channel
+    if (ch && KNOWN_CHANNELS.includes(ch)) {
+      channelMap[ch].revenue += liquidoOS(o)
+    }
+  })
+  const byChannel = KNOWN_CHANNELS.map(key => ({
+    channel: CHANNEL_LABELS[key],
+    calls: channelMap[key].calls,
+    revenue: channelMap[key].revenue,
+  }))
 
   // Por categoria de serviço
   const catMap: Record<string, { calls: number; revenue: number }> = {}
