@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { BarChart3, TrendingUp, MapPin, Globe, Tag, Loader2, CheckCircle, XCircle, Clock, TrendingDown, ArrowUpCircle, ArrowDownCircle, FileDown, Share2, ImageIcon } from 'lucide-react'
+import { BarChart3, TrendingUp, MapPin, Globe, Tag, Loader2, CheckCircle, XCircle, Clock, TrendingDown, ArrowUpCircle, ArrowDownCircle, FileDown, Share2, ImageIcon, MessageSquare } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { getReportData, getExpensesReport, getCashEntriesReport } from '@/lib/db/reports'
 import { getClients } from '@/lib/db/clients'
@@ -58,6 +58,86 @@ export default function RelatoriosPage() {
     const payload = { tab: mainTab, range, tenantName: tenant?.name, tenantCnpj: tenant?.cnpj, data, expData, ceData }
     sessionStorage.setItem('relatorio_print', JSON.stringify(payload))
     window.open(`/dashboard/relatorios/imprimir?mode=${mode}`, '_blank')
+    setShowShareMenu(false)
+  }
+
+  function compartilharResumoWhatsApp() {
+    const r = range.label || `${range.start} a ${range.end}`
+    const empresa = tenant?.name ?? 'Empresa'
+    const linhas: string[] = []
+
+    linhas.push(`📊 *RELATÓRIO ${empresa.toUpperCase()}*`)
+    linhas.push(`📅 Período: ${r}`)
+    linhas.push('')
+
+    if (mainTab === 'chamados' && data?.summary) {
+      const s = data.summary
+      const taxaAp = s.totalCalls > 0 ? Math.round((s.approvedCalls / s.totalCalls) * 100) : 0
+      linhas.push('*🔧 CHAMADOS*')
+      linhas.push(`• Total de chamados: ${s.totalCalls}`)
+      linhas.push(`• Aprovados: ${s.approvedCalls} (${taxaAp}% de aprovação)`)
+      if (s.scheduledCalls > 0) linhas.push(`• Agendados: ${s.scheduledCalls}`)
+      if (s.notApprovedCalls > 0) linhas.push(`• Não aprovados: ${s.notApprovedCalls}`)
+      if (s.cancelledCalls > 0) linhas.push(`• Cancelados: ${s.cancelledCalls}`)
+      linhas.push('')
+      linhas.push('*💰 FINANCEIRO*')
+      linhas.push(`• Receita bruta: ${fmt(s.grossRevenue ?? 0)}`)
+      linhas.push(`• Receita líquida: ${fmt(s.netRevenue ?? 0)}`)
+      linhas.push(`• Recebido: ${fmt(s.paidRevenue ?? 0)}`)
+      if ((s.pendingRevenue ?? 0) > 0) linhas.push(`• A receber: ${fmt(s.pendingRevenue ?? 0)}`)
+
+      if (data.byOrigin?.length > 0) {
+        linhas.push('')
+        linhas.push('*📍 POR ORIGEM*')
+        data.byOrigin.slice(0, 5).forEach((o: any) => {
+          linhas.push(`• ${o.name}: ${o.calls} chamados — ${fmt(o.revenue)}`)
+        })
+      }
+
+      if (data.byCategory?.length > 0) {
+        linhas.push('')
+        linhas.push('*🔩 POR TIPO DE SERVIÇO*')
+        data.byCategory.slice(0, 5).forEach((c: any) => {
+          linhas.push(`• ${c.category}: ${c.calls} OS — ${fmt(c.revenue)}`)
+        })
+      }
+
+      if (data.byCity?.length > 0) {
+        linhas.push('')
+        linhas.push('*🏙️ TOP CIDADES*')
+        data.byCity.slice(0, 5).forEach((c: any, i: number) => {
+          linhas.push(`${i + 1}. ${c.city}: ${c.calls} OS — ${fmt(c.revenue)}`)
+        })
+      }
+
+    } else if (mainTab === 'saidas' && expData) {
+      linhas.push('*💸 SAÍDAS (DESPESAS)*')
+      linhas.push(`• Total de despesas: ${fmt(expData.totalAmount ?? 0)}`)
+      linhas.push(`• Quantidade de lançamentos: ${expData.totalCount ?? 0}`)
+      if (expData.paidAmount > 0) linhas.push(`• Pagas: ${fmt(expData.paidAmount)}`)
+      if (expData.pendingAmount > 0) linhas.push(`• Pendentes: ${fmt(expData.pendingAmount)}`)
+      if (expData.byCategory?.length > 0) {
+        linhas.push('')
+        linhas.push('*Por categoria:*')
+        expData.byCategory.slice(0, 6).forEach((c: any) => {
+          linhas.push(`• ${c.category}: ${fmt(c.amount)}`)
+        })
+      }
+
+    } else if (mainTab === 'entradas' && ceData) {
+      linhas.push('*💵 ENTRADAS (CAIXA)*')
+      linhas.push(`• Total de entradas: ${fmt(ceData.totalAmount ?? 0)}`)
+      linhas.push(`• Quantidade de lançamentos: ${ceData.totalCount ?? 0}`)
+      if (ceData.receivedAmount > 0) linhas.push(`• Recebidos: ${fmt(ceData.receivedAmount)}`)
+      if (ceData.pendingAmount > 0) linhas.push(`• Pendentes: ${fmt(ceData.pendingAmount)}`)
+    }
+
+    linhas.push('')
+    linhas.push(`_Gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}_`)
+
+    const texto = linhas.join('\n')
+    const url = `https://wa.me/?text=${encodeURIComponent(texto)}`
+    window.open(url, '_blank')
     setShowShareMenu(false)
   }
 
@@ -137,6 +217,11 @@ export default function RelatoriosPage() {
                   className="flex items-center gap-2 w-full px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition border-t border-slate-100">
                   <ImageIcon className="w-4 h-4 text-slate-500" />
                   Compartilhar Imagem
+                </button>
+                <button onClick={compartilharResumoWhatsApp}
+                  className="flex items-center gap-2 w-full px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition border-t border-slate-100">
+                  <MessageSquare className="w-4 h-4 text-green-500" />
+                  Resumo no WhatsApp
                 </button>
               </div>
             )}
