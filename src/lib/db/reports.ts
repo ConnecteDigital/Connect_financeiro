@@ -9,7 +9,7 @@ export async function getReportData(
 
   let callsQuery = supabase
     .from('calls')
-    .select('id, status, origin, date, service_category, contact_name, client:clients(name, city)')
+    .select('id, status, origin, call_channel, date, service_category, contact_name, client:clients(name, city)')
     .gte('date', startDate)
     .lte('date', endDate)
 
@@ -84,6 +84,19 @@ export async function getReportData(
     name: ORIGIN_LABELS[key] ?? key, ...data, color: colors[i % colors.length]
   }))
 
+  // Por canal de atendimento
+  const CHANNEL_LABELS: Record<string, string> = { whatsapp: '💬 WhatsApp', ligacao: '📞 Ligação' }
+  const channelCount: Record<string, number> = {}
+  calls.forEach(c => {
+    const ch = (c as any).call_channel
+    if (ch) {
+      channelCount[ch] = (channelCount[ch] ?? 0) + 1
+    }
+  })
+  const byChannel = Object.entries(channelCount)
+    .map(([key, count]) => ({ channel: CHANNEL_LABELS[key] ?? key, calls: count }))
+    .sort((a, b) => b.calls - a.calls)
+
   // Por categoria de serviço
   const catMap: Record<string, { calls: number; revenue: number }> = {}
   calls.forEach(c => {
@@ -123,6 +136,7 @@ export async function getReportData(
   return {
     summary: { totalCalls, approvedCalls, scheduledCalls, cancelledCalls, noVisitCalls, notApprovedCalls, grossRevenue, liquidRevenue, netRevenue, paidRevenue, pendingRevenue, totalExpenses, outsourceCosts },
     byOrigin,
+    byChannel,
     byCategory,
     byCity,
     revenueByWeek,

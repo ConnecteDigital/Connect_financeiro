@@ -86,10 +86,19 @@ export default function RelatoriosPage() {
       linhas.push(`• Recebido: ${fmt(s.paidRevenue ?? 0)}`)
       if ((s.pendingRevenue ?? 0) > 0) linhas.push(`• A receber: ${fmt(s.pendingRevenue ?? 0)}`)
 
+      if (data.byChannel?.length > 0) {
+        linhas.push('')
+        linhas.push('*📲 CANAL DE ATENDIMENTO*')
+        data.byChannel.forEach((c: any) => {
+          const pct = s.totalCalls > 0 ? Math.round((c.calls / s.totalCalls) * 100) : 0
+          linhas.push(`• ${c.channel}: ${c.calls} chamados (${pct}%)`)
+        })
+      }
+
       if (data.byOrigin?.length > 0) {
         linhas.push('')
         linhas.push('*📍 POR ORIGEM*')
-        data.byOrigin.slice(0, 5).forEach((o: any) => {
+        data.byOrigin.forEach((o: any) => {
           linhas.push(`• ${o.name}: ${o.calls} chamados — ${fmt(o.revenue)}`)
         })
       }

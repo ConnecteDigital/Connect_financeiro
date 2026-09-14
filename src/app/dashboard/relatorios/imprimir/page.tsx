@@ -29,7 +29,7 @@ function gerarImagemCanvas(payload: any): Promise<Blob> {
     // measure height needed
     const baseRows =
       tab === 'chamados'
-        ? 4 + 4 + (data?.byOrigin?.length ?? 0) + (data?.byCategory?.length ?? 0) + (data?.byCity?.length ?? 0)
+        ? 4 + 4 + (data?.byChannel?.length ?? 0) + (data?.byOrigin?.length ?? 0) + (data?.byCategory?.length ?? 0) + (data?.byCity?.length ?? 0)
         : tab === 'saidas'
         ? 3 + (expData?.expenses?.length ?? 0)
         : 3 + (ceData?.entries?.length ?? 0)
@@ -168,6 +168,12 @@ function gerarImagemCanvas(payload: any): Promise<Blob> {
       ])
       y += 16
 
+      if (data.byChannel?.length > 0) {
+        const total = s.totalCalls || 1
+        drawTable('Canal de Atendimento', ['Canal', 'Chamados', '%'],
+          data.byChannel.map((c: any) => [c.channel, String(c.calls), `${Math.round((c.calls / total) * 100)}%`]),
+          ['left', 'right', 'right'])
+      }
       if (data.byOrigin?.length > 0) {
         drawTable('Por Origem', ['Origem', 'Chamados', 'Receita'], data.byOrigin.map((o: any) => [o.name, String(o.calls), fmt(o.revenue)]), ['left', 'right', 'right'])
       }
