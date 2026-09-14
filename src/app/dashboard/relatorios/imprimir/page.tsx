@@ -380,13 +380,40 @@ export default function RelatoriosImprimirPage() {
                   <h2 style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid #f3f4f6' }}>Por Origem</h2>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead><tr style={{ background: '#f9fafb' }}>
-                      <th style={th}>Origem</th><th style={{ ...th, textAlign: 'right' }}>Chamados</th><th style={{ ...th, textAlign: 'right' }}>Receita</th>
+                      <th style={th}>Origem</th><th style={{ ...th, textAlign: 'right' }}>Chamados</th><th style={{ ...th, textAlign: 'right' }}>%</th><th style={{ ...th, textAlign: 'right' }}>Receita</th>
                     </tr></thead>
-                    <tbody>{data.byOrigin.map((o: any) => (
-                      <tr key={o.name} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                        <td style={td}>{o.name}</td><td style={{ ...td, textAlign: 'right' }}>{o.calls}</td><td style={{ ...td, textAlign: 'right', fontWeight: 700 }}>{fmt(o.revenue)}</td>
-                      </tr>
-                    ))}</tbody>
+                    <tbody>{[...data.byOrigin].sort((a: any, b: any) => b.calls - a.calls).map((o: any) => {
+                      const pct = s.totalCalls > 0 ? Math.round((o.calls / s.totalCalls) * 100) : 0
+                      return (
+                        <tr key={o.name} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                          <td style={td}>{o.name}</td>
+                          <td style={{ ...td, textAlign: 'right' }}>{o.calls}</td>
+                          <td style={{ ...td, textAlign: 'right', color: '#6e6e73' }}>{pct}%</td>
+                          <td style={{ ...td, textAlign: 'right', fontWeight: 700 }}>{fmt(o.revenue)}</td>
+                        </tr>
+                      )
+                    })}</tbody>
+                  </table>
+                </div>
+              )}
+              {data.byChannel?.length > 0 && (
+                <div style={{ marginBottom: 20 }}>
+                  <h2 style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, paddingBottom: 6, borderBottom: '1px solid #f3f4f6' }}>Canal de Atendimento</h2>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead><tr style={{ background: '#f9fafb' }}>
+                      <th style={th}>Canal</th><th style={{ ...th, textAlign: 'right' }}>Chamados</th><th style={{ ...th, textAlign: 'right' }}>%</th><th style={{ ...th, textAlign: 'right' }}>Receita</th>
+                    </tr></thead>
+                    <tbody>{data.byChannel.map((c: any) => {
+                      const pct = s.totalCalls > 0 ? Math.round((c.calls / s.totalCalls) * 100) : 0
+                      return (
+                        <tr key={c.channel} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                          <td style={td}>{c.channel}</td>
+                          <td style={{ ...td, textAlign: 'right' }}>{c.calls}</td>
+                          <td style={{ ...td, textAlign: 'right', color: '#6e6e73' }}>{pct}%</td>
+                          <td style={{ ...td, textAlign: 'right', fontWeight: 700 }}>{fmt(c.revenue)}</td>
+                        </tr>
+                      )
+                    })}</tbody>
                   </table>
                 </div>
               )}
