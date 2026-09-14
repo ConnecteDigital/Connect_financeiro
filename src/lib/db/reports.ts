@@ -85,8 +85,8 @@ export async function getReportData(
   }))
 
   // Por canal de atendimento
-  const CHANNEL_LABELS: Record<string, string> = { whatsapp: '💬 WhatsApp', ligacao: '📞 Ligação' }
-  const KNOWN_CHANNELS = ['whatsapp', 'ligacao']
+  const CHANNEL_LABELS: Record<string, string> = { whatsapp: '💬 WhatsApp', ligacao: '📞 Ligação', cliente: '🏠 Cliente', indicacao: '🤝 Indicação' }
+  const KNOWN_CHANNELS = ['whatsapp', 'ligacao', 'cliente', 'indicacao']
   const channelMap: Record<string, { calls: number; revenue: number }> = {}
   // inicializa todos os canais conhecidos com zero
   KNOWN_CHANNELS.forEach(ch => { channelMap[ch] = { calls: 0, revenue: 0 } })
