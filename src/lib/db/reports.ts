@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/client'
 export async function getReportData(
   startDate: string,
   endDate: string,
-  filters?: { origin?: string; serviceCategory?: string }
+  filters?: { origin?: string; serviceCategory?: string; channel?: string }
 ) {
   const supabase = createClient()
 
@@ -15,6 +15,7 @@ export async function getReportData(
 
   if (filters?.origin && filters.origin !== 'todos') callsQuery = callsQuery.eq('origin', filters.origin)
   if (filters?.serviceCategory && filters.serviceCategory !== 'todos') callsQuery = callsQuery.eq('service_category', filters.serviceCategory)
+  if (filters?.channel && filters.channel !== 'todos') callsQuery = callsQuery.eq('call_channel', filters.channel)
 
   let ordersQuery = supabase
     .from('service_orders')
@@ -23,7 +24,8 @@ export async function getReportData(
       outsource_fuel_cost, outsource_meal_cost, outsource_truck_cost, outsource_other_cost,
       client:clients(name, city),
       items:service_order_items(description, quantity, unit_price, total),
-      call:calls(origin, service_category, call_channel)
+      call_id,
+      call:calls(id, origin, service_category, call_channel)
     `)
     .gte('date', startDate)
     .lte('date', endDate)
@@ -88,18 +90,29 @@ export async function getReportData(
   const CHANNEL_LABELS: Record<string, string> = { whatsapp: '💬 WhatsApp', ligacao: '📞 Ligação', cliente: '🏠 Cliente', indicacao: '🤝 Indicação' }
   const KNOWN_CHANNELS = ['whatsapp', 'ligacao', 'cliente', 'indicacao']
   const channelMap: Record<string, { calls: number; revenue: number }> = {}
-  // inicializa todos os canais conhecidos com zero
   KNOWN_CHANNELS.forEach(ch => { channelMap[ch] = { calls: 0, revenue: 0 } })
+
+  // Conta chamados pelos calls do período (inclui agendados sem OS)
+  const countedCallIds = new Set<string>()
   calls.forEach(c => {
     const ch = (c as any).call_channel
     if (ch && KNOWN_CHANNELS.includes(ch)) {
       channelMap[ch].calls++
+      countedCallIds.add(c.id)
     }
   })
+  // Conta revenue por orders e também inclui calls ligados a orders fora do range de datas de chamados
   orders.forEach(o => {
-    const ch = (o.call as any)?.call_channel
+    const callData = o.call as any
+    const ch = callData?.call_channel
     if (ch && KNOWN_CHANNELS.includes(ch)) {
       channelMap[ch].revenue += liquidoOS(o)
+      // Se o chamado vinculado à OS não estava no range de calls, conta agora
+      const linkedCallId = callData?.id ?? (o as any).call_id
+      if (linkedCallId && !countedCallIds.has(linkedCallId)) {
+        channelMap[ch].calls++
+        countedCallIds.add(linkedCallId)
+      }
     }
   })
   const byChannel = KNOWN_CHANNELS.map(key => ({

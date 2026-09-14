@@ -33,6 +33,7 @@ export default function RelatoriosPage() {
   // Chamados filters
   const [originFilter, setOriginFilter] = useState('todos')
   const [categoryFilter, setCategoryFilter] = useState('todos')
+  const [channelFilter, setChannelFilter] = useState('todos')
 
   // Saídas filters
   const [saidaCategory, setSaidaCategory] = useState('todos')
@@ -166,6 +167,7 @@ export default function RelatoriosPage() {
         const result = await getReportData(range.start, range.end, {
           origin: originFilter !== 'todos' ? originFilter : undefined,
           serviceCategory: categoryFilter !== 'todos' ? categoryFilter : undefined,
+          channel: channelFilter !== 'todos' ? channelFilter : undefined,
         })
         setData(result)
       } else if (mainTab === 'saidas') {
@@ -187,7 +189,7 @@ export default function RelatoriosPage() {
     } finally {
       setLoading(false)
     }
-  }, [range, mainTab, originFilter, categoryFilter, saidaCategory, saidaSupplier, saidaStatus, entradaClient, entradaStatus])
+  }, [range, mainTab, originFilter, categoryFilter, channelFilter, saidaCategory, saidaSupplier, saidaStatus, entradaClient, entradaStatus])
 
   useEffect(() => { load() }, [load])
 
@@ -276,6 +278,24 @@ export default function RelatoriosPage() {
                     className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border transition ${categoryFilter === c ? 'text-white border-transparent' : 'text-slate-500 border-slate-200 hover:border-slate-400'}`}
                     style={categoryFilter === c ? { background: 'var(--primary)' } : {}}>
                     {c === 'todos' ? 'Todos' : c.length > 20 ? c.slice(0, 18) + '...' : c}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Canal</p>
+              <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                {[
+                  { v: 'todos', l: 'Todos' },
+                  { v: 'whatsapp', l: '💬 WhatsApp' },
+                  { v: 'ligacao', l: '📞 Ligação' },
+                  { v: 'cliente', l: '🏠 Cliente' },
+                  { v: 'indicacao', l: '🤝 Indicação' },
+                ].map(ch => (
+                  <button key={ch.v} onClick={() => setChannelFilter(ch.v)}
+                    className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border transition ${channelFilter === ch.v ? 'text-white border-transparent' : 'text-slate-500 border-slate-200 hover:border-slate-400'}`}
+                    style={channelFilter === ch.v ? { background: 'var(--primary)' } : {}}>
+                    {ch.l}
                   </button>
                 ))}
               </div>
