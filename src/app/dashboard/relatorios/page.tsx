@@ -66,83 +66,83 @@ export default function RelatoriosPage() {
     const empresa = tenant?.name ?? 'Empresa'
     const linhas: string[] = []
 
-    linhas.push(`📊 *RELATÓRIO ${empresa.toUpperCase()}*`)
-    linhas.push(`📅 Período: ${r}`)
-    linhas.push('')
+    linhas.push(`📊 *${empresa.toUpperCase()}*`)
+    linhas.push(`📅 *${r}*`)
+    linhas.push('─────────────────────')
 
     if (mainTab === 'chamados' && data?.summary) {
       const s = data.summary
       const taxaAp = s.totalCalls > 0 ? Math.round((s.approvedCalls / s.totalCalls) * 100) : 0
-      linhas.push('*🔧 CHAMADOS*')
-      linhas.push(`• Total de chamados: ${s.totalCalls}`)
-      linhas.push(`• Aprovados: ${s.approvedCalls} (${taxaAp}% de aprovação)`)
-      if (s.scheduledCalls > 0) linhas.push(`• Agendados: ${s.scheduledCalls}`)
-      if (s.notApprovedCalls > 0) linhas.push(`• Não aprovados: ${s.notApprovedCalls}`)
-      if (s.cancelledCalls > 0) linhas.push(`• Cancelados: ${s.cancelledCalls}`)
+
+      // Resumo geral
+      linhas.push(`*Total de chamados:* ${s.totalCalls}`)
+      linhas.push(`*Aprovados:* ${s.approvedCalls} de ${s.totalCalls} *(${taxaAp}%)*`)
+      if (s.scheduledCalls > 0) linhas.push(`*Agendados:* ${s.scheduledCalls}`)
       linhas.push('')
-      linhas.push('*💰 FINANCEIRO*')
-      linhas.push(`• Receita bruta: ${fmt(s.grossRevenue ?? 0)}`)
-      linhas.push(`• Receita líquida: ${fmt(s.netRevenue ?? 0)}`)
-      linhas.push(`• Recebido: ${fmt(s.paidRevenue ?? 0)}`)
-      if ((s.pendingRevenue ?? 0) > 0) linhas.push(`• A receber: ${fmt(s.pendingRevenue ?? 0)}`)
 
-      if (data.byChannel?.length > 0) {
-        linhas.push('')
-        linhas.push('*📲 CANAL DE ATENDIMENTO*')
-        data.byChannel.forEach((c: any) => {
-          const pct = s.totalCalls > 0 ? Math.round((c.calls / s.totalCalls) * 100) : 0
-          linhas.push(`• ${c.channel}: ${c.calls} chamados (${pct}%)`)
-        })
-      }
+      // Financeiro — destaque principal
+      linhas.push('*💰 FATURAMENTO*')
+      linhas.push(`Bruto: *${fmt(s.grossRevenue ?? 0)}*`)
+      linhas.push(`Líquido: *${fmt(s.netRevenue ?? 0)}*`)
+      linhas.push(`Recebido: *${fmt(s.paidRevenue ?? 0)}*`)
+      if ((s.pendingRevenue ?? 0) > 0) linhas.push(`A receber: *${fmt(s.pendingRevenue ?? 0)}*`)
+      linhas.push('─────────────────────')
 
+      // Por origem — o que o usuário quer ver
       if (data.byOrigin?.length > 0) {
-        linhas.push('')
         linhas.push('*📍 POR ORIGEM*')
-        data.byOrigin.forEach((o: any) => {
-          linhas.push(`• ${o.name}: ${o.calls} chamados — ${fmt(o.revenue)}`)
+        const sorted = [...data.byOrigin].sort((a: any, b: any) => b.calls - a.calls)
+        sorted.forEach((o: any) => {
+          const pct = s.totalCalls > 0 ? Math.round((o.calls / s.totalCalls) * 100) : 0
+          const receita = o.revenue > 0 ? ` — ${fmt(o.revenue)}` : ''
+          linhas.push(`• *${o.name}:* ${o.calls} chamados (${pct}%)${receita}`)
         })
+        linhas.push('─────────────────────')
       }
 
+      // Canal (WhatsApp vs Ligação) — só valores conhecidos
+      const knownChannels = (data.byChannel ?? []).filter((c: any) =>
+        c.channel === '💬 WhatsApp' || c.channel === '📞 Ligação'
+      )
+      if (knownChannels.length > 0) {
+        linhas.push('*📲 CANAL*')
+        knownChannels.forEach((c: any) => {
+          const pct = s.totalCalls > 0 ? Math.round((c.calls / s.totalCalls) * 100) : 0
+          linhas.push(`• ${c.channel}: ${c.calls} (${pct}%)`)
+        })
+        linhas.push('─────────────────────')
+      }
+
+      // Top serviços
       if (data.byCategory?.length > 0) {
-        linhas.push('')
-        linhas.push('*🔩 POR TIPO DE SERVIÇO*')
+        linhas.push('*🔧 TOP SERVIÇOS*')
         data.byCategory.slice(0, 5).forEach((c: any) => {
-          linhas.push(`• ${c.category}: ${c.calls} OS — ${fmt(c.revenue)}`)
-        })
-      }
-
-      if (data.byCity?.length > 0) {
-        linhas.push('')
-        linhas.push('*🏙️ TOP CIDADES*')
-        data.byCity.slice(0, 5).forEach((c: any, i: number) => {
-          linhas.push(`${i + 1}. ${c.city}: ${c.calls} OS — ${fmt(c.revenue)}`)
+          if (c.revenue > 0) linhas.push(`• ${c.category}: ${c.calls} OS — ${fmt(c.revenue)}`)
         })
       }
 
     } else if (mainTab === 'saidas' && expData) {
-      linhas.push('*💸 SAÍDAS (DESPESAS)*')
-      linhas.push(`• Total de despesas: ${fmt(expData.totalAmount ?? 0)}`)
-      linhas.push(`• Quantidade de lançamentos: ${expData.totalCount ?? 0}`)
-      if (expData.paidAmount > 0) linhas.push(`• Pagas: ${fmt(expData.paidAmount)}`)
-      if (expData.pendingAmount > 0) linhas.push(`• Pendentes: ${fmt(expData.pendingAmount)}`)
+      linhas.push('*💸 SAÍDAS DO PERÍODO*')
+      linhas.push(`Total: *${fmt(expData.total ?? 0)}*`)
+      if ((expData.paid ?? 0) > 0) linhas.push(`Pago: *${fmt(expData.paid)}*`)
+      if ((expData.pending ?? 0) > 0) linhas.push(`Pendente: *${fmt(expData.pending)}*`)
       if (expData.byCategory?.length > 0) {
-        linhas.push('')
+        linhas.push('─────────────────────')
         linhas.push('*Por categoria:*')
         expData.byCategory.slice(0, 6).forEach((c: any) => {
-          linhas.push(`• ${c.category}: ${fmt(c.amount)}`)
+          linhas.push(`• ${c.cat}: ${fmt(c.total)}`)
         })
       }
 
     } else if (mainTab === 'entradas' && ceData) {
-      linhas.push('*💵 ENTRADAS (CAIXA)*')
-      linhas.push(`• Total de entradas: ${fmt(ceData.totalAmount ?? 0)}`)
-      linhas.push(`• Quantidade de lançamentos: ${ceData.totalCount ?? 0}`)
-      if (ceData.receivedAmount > 0) linhas.push(`• Recebidos: ${fmt(ceData.receivedAmount)}`)
-      if (ceData.pendingAmount > 0) linhas.push(`• Pendentes: ${fmt(ceData.pendingAmount)}`)
+      linhas.push('*💵 ENTRADAS DO PERÍODO*')
+      linhas.push(`Total: *${fmt(ceData.total ?? 0)}*`)
+      if ((ceData.paid ?? 0) > 0) linhas.push(`Recebido: *${fmt(ceData.paid)}*`)
+      if ((ceData.pending ?? 0) > 0) linhas.push(`A receber: *${fmt(ceData.pending)}*`)
     }
 
     linhas.push('')
-    linhas.push(`_Gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}_`)
+    linhas.push(`_${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}_`)
 
     const texto = linhas.join('\n')
     const url = `https://wa.me/?text=${encodeURIComponent(texto)}`
