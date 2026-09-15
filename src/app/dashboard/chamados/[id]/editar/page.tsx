@@ -24,6 +24,8 @@ interface ServiceLine {
   quantity: number
   unitPrice: number
   notes: string
+  flatPrice?: boolean
+  flatValue?: number
 }
 
 const CALL_STATUSES = [
@@ -171,12 +173,15 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
           const category = item.category ?? item.description
           const sub = item.sub_options || null
           if (!selected.includes(category)) selected.push(category)
+          const isFlatPrice = String(item.description ?? '').includes('(valor fechado)')
           lines.push({
             category,
             sub,
-            quantity: Number(item.quantity),
-            unitPrice: Number(item.unit_price),
+            quantity: isFlatPrice ? 0 : Number(item.quantity),
+            unitPrice: isFlatPrice ? 0 : Number(item.unit_price),
             notes: item.notes ?? '',
+            flatPrice: isFlatPrice || undefined,
+            flatValue: isFlatPrice ? Number(item.unit_price) : undefined,
           })
         }
       }
@@ -212,7 +217,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   }, [id])
 
   // ── Serviços ──
-  const lineTotal = (l: ServiceLine) => l.quantity * l.unitPrice
+  const lineTotal = (l: ServiceLine) => l.flatPrice ? (l.flatValue ?? 0) : l.quantity * l.unitPrice
   const subtotal = serviceLines.reduce((sum, l) => sum + lineTotal(l), 0)
   const bruto = subtotal + equipmentRentalValue - discount + taxes
   const isOutsourced = serviceType !== 'proprio'
@@ -323,9 +328,9 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         }
 
         const validItems = serviceLines.map(l => ({
-          quantity: l.quantity || 1,
-          description: l.category + (l.sub ? ` — ${l.sub}` : ''),
-          unit_price: l.unitPrice,
+          quantity: l.flatPrice ? 1 : (l.quantity || 1),
+          description: l.category + (l.sub ? ` — ${l.sub}` : '') + (l.flatPrice ? ' (valor fechado)' : ''),
+          unit_price: l.flatPrice ? (l.flatValue ?? 0) : l.unitPrice,
           category: l.category,
           sub_options: l.sub,
           notes: l.notes || null,
@@ -526,26 +531,56 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                 {isApproved && catLines.map(l => (
                   <div key={l.sub ?? cat} className="bg-white border border-slate-100 rounded-lg p-3 space-y-2">
                     {l.sub && <p className="text-xs font-bold text-orange-600 uppercase">{l.sub}</p>}
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+
+                    {/* Toggle valor fechado / por quantidade */}
+                    {cfg?.allowFlatPrice && (
+                      <div className="flex gap-2">
+                        <button type="button"
+                          onClick={() => updateLine(l.category, l.sub, { flatPrice: false })}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${!l.flatPrice ? 'text-white border-transparent bg-orange-500' : 'bg-white text-slate-500 border-slate-200'}`}>
+                          Por {cfg.qtyLabel.toLowerCase().includes('litro') ? 'litro' : 'quantidade'}
+                        </button>
+                        <button type="button"
+                          onClick={() => updateLine(l.category, l.sub, { flatPrice: true })}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${l.flatPrice ? 'text-white border-transparent bg-orange-500' : 'bg-white text-slate-500 border-slate-200'}`}>
+                          Valor fechado
+                        </button>
+                      </div>
+                    )}
+
+                    {l.flatPrice ? (
                       <div>
-                        <label className="block text-xs font-medium text-slate-600 mb-1">{cfg?.qtyLabel ?? 'Quantidade'}</label>
-                        <input type="number" min="0" step="0.01" value={l.quantity || ''}
-                          onChange={e => updateLine(l.category, l.sub, { quantity: Number(e.target.value) })}
+                        <label className="block text-xs font-medium text-slate-600 mb-1">Valor Total do Serviço (R$)</label>
+                        <input type="number" min="0" step="0.01" value={l.flatValue || ''}
+                          onChange={e => updateLine(l.category, l.sub, { flatValue: Number(e.target.value) })}
                           className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                        {(l.flatValue ?? 0) > 0 && (
+                          <p className="text-sm font-bold mt-1 text-orange-600">Total: R$ {(l.flatValue ?? 0).toFixed(2)}</p>
+                        )}
                       </div>
-                      <div>
-                        <label className="block text-xs font-medium text-slate-600 mb-1">{cfg?.priceLabel ?? 'Valor (R$)'}</label>
-                        <input type="number" min="0" step="0.01" value={l.unitPrice || ''}
-                          onChange={e => updateLine(l.category, l.sub, { unitPrice: Number(e.target.value) })}
-                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                    ) : (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">{cfg?.qtyLabel ?? 'Quantidade'}</label>
+                          <input type="number" min="0" step="0.01" value={l.quantity || ''}
+                            onChange={e => updateLine(l.category, l.sub, { quantity: Number(e.target.value) })}
+                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">{cfg?.priceLabel ?? 'Valor (R$)'}</label>
+                          <input type="number" min="0" step="0.01" value={l.unitPrice || ''}
+                            onChange={e => updateLine(l.category, l.sub, { unitPrice: Number(e.target.value) })}
+                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                        </div>
+                        <div className="col-span-2 sm:col-span-1">
+                          <label className="block text-xs font-medium text-slate-600 mb-1">Valor total</label>
+                          <p className="px-3 py-2 text-sm font-bold text-orange-600 bg-slate-50 border border-slate-100 rounded-lg">
+                            R$ {lineTotal(l).toFixed(2)}
+                          </p>
+                        </div>
                       </div>
-                      <div className="col-span-2 sm:col-span-1">
-                        <label className="block text-xs font-medium text-slate-600 mb-1">Valor total</label>
-                        <p className="px-3 py-2 text-sm font-bold text-orange-600 bg-slate-50 border border-slate-100 rounded-lg">
-                          R$ {lineTotal(l).toFixed(2)}
-                        </p>
-                      </div>
-                    </div>
+                    )}
+
                     <input type="text" value={l.notes}
                       onChange={e => updateLine(l.category, l.sub, { notes: e.target.value })}
                       placeholder="Descrição deste serviço..."
