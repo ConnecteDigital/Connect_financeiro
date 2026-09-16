@@ -37,8 +37,23 @@ export async function getReportData(
   ])
 
   const calls = callsRes.data ?? []
-  const orders = ordersRes.data ?? []
   const expenses = expensesRes.data ?? []
+
+  // Filtra orders pelos mesmos critérios de origem/canal/categoria aplicados às calls
+  const allOrders = ordersRes.data ?? []
+  const orders = allOrders.filter(o => {
+    const callData = o.call as any
+    if (filters?.origin && filters.origin !== 'todos') {
+      if (callData?.origin !== filters.origin) return false
+    }
+    if (filters?.channel && filters.channel !== 'todos') {
+      if (callData?.call_channel !== filters.channel) return false
+    }
+    if (filters?.serviceCategory && filters.serviceCategory !== 'todos') {
+      if (callData?.service_category !== filters.serviceCategory) return false
+    }
+    return true
+  })
 
   // Status dos chamados
   const totalCalls = calls.length
