@@ -44,6 +44,16 @@ export async function createServiceOrderAuxiliaries(
   if (error) throw error
 }
 
+export async function replaceServiceOrderAuxiliaries(
+  serviceOrderId: string,
+  auxiliaries: Array<{ auxiliary_id: string; percentage: number; amount: number }>
+) {
+  const supabase = createClient()
+  await supabase.from('service_order_auxiliaries').delete().eq('service_order_id', serviceOrderId)
+  if (auxiliaries.length === 0) return
+  await createServiceOrderAuxiliaries(serviceOrderId, auxiliaries)
+}
+
 export async function updateServiceOrder(id: string, values: Record<string, unknown>) {
   const supabase = createClient()
   const { data, error } = await supabase

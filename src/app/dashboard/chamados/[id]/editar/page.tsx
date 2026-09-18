@@ -1,18 +1,19 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ArrowLeft, Save, Loader2, CalendarDays } from 'lucide-react'
+import { ArrowLeft, Save, Loader2, CalendarDays, Plus, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { use } from 'react'
 import { useRouter } from 'next/navigation'
 import { getCall, updateCall } from '@/lib/db/calls'
-import { createServiceOrder, updateServiceOrder } from '@/lib/db/service-orders'
+import { createServiceOrder, updateServiceOrder, replaceServiceOrderAuxiliaries } from '@/lib/db/service-orders'
 import { getTeams } from '@/lib/db/teams'
 import { getClients } from '@/lib/db/clients'
 import { getServiceTypes } from '@/lib/db/service-types'
 import { getAuxiliaries } from '@/lib/db/auxiliaries'
 import { createClient } from '@/lib/supabase/client'
 import { useCallOrigins } from '@/lib/use-call-origins'
+import { useTenant } from '@/lib/tenant-context'
 import { SERVICE_CONFIG } from '@/lib/service-config'
 
 type ServiceType = 'proprio' | 'terceirizado_saida' | 'terceirizado_entrada'
@@ -38,6 +39,13 @@ const CALL_STATUSES = [
 
 const PAYMENT_METHODS = ['Dinheiro', 'Cartão', 'PIX', 'Boleto']
 
+interface SelectedAuxiliary {
+  auxiliary_id: string
+  name: string
+  type: string
+  percentage: number
+}
+
 export default function EditarChamadoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
@@ -49,6 +57,8 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const [auxiliaries, setAuxiliaries] = useState<any[]>([])
   const [categoryNames, setCategoryNames] = useState<string[]>([])
   const { origins: callOrigins } = useCallOrigins()
+  const { tenant } = useTenant()
+  const commissionsEnabled = tenant?.enable_commissions ?? false
 
   // Chamado
   const [callDate, setCallDate] = useState('')
@@ -76,6 +86,8 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('pendente')
   const [partnerPct, setPartnerPct] = useState(50)
   const [auxiliaryId, setAuxiliaryId] = useState('')
+  const [selectedAuxiliaries, setSelectedAuxiliaries] = useState<SelectedAuxiliary[]>([])
+  const [addingAuxId, setAddingAuxId] = useState('')
   const [discount, setDiscount] = useState(0)
   const [taxes, setTaxes] = useState(0)
   const [equipmentRentalValue, setEquipmentRentalValue] = useState(0)
@@ -140,6 +152,15 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         setPaymentStatus(so.payment_status)
         setPartnerPct(Number(so.outsource_profit_pct ?? 50))
         setAuxiliaryId(so.auxiliary_id ?? '')
+        const soAuxs = (so.service_order_auxiliaries ?? []) as any[]
+        if (soAuxs.length > 0) {
+          setSelectedAuxiliaries(soAuxs.map(a => ({
+            auxiliary_id: a.auxiliary_id,
+            name: a.auxiliary?.name ?? '—',
+            type: a.auxiliary?.type ?? 'tecnico',
+            percentage: Number(a.percentage),
+          })))
+        }
         setDiscount(Number(so.discount ?? 0))
         setTaxes(Number(so.taxes ?? 0))
         setEquipmentRentalValue(Number(so.equipment_rental_value ?? 0))
@@ -184,6 +205,17 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
             flatValue: isFlatPrice ? Number(item.unit_price) : undefined,
           })
         }
+      } else if (commissionsEnabled) {
+        // Nova OS: auto-adiciona o dono padrão como auxiliar
+        const defaultDono = auxs.find((a: any) => a.type === 'dono' && a.is_default)
+        if (defaultDono) {
+          setSelectedAuxiliaries([{
+            auxiliary_id: defaultDono.id,
+            name: defaultDono.name,
+            type: 'dono',
+            percentage: Number(defaultDono.percentage),
+          }])
+        }
       }
 
       // Categorias do chamado sem item correspondente (ex: chamado não aprovado)
@@ -214,7 +246,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
       setSelectedCategories(selected)
       setServiceLines(lines)
     }).catch(console.error).finally(() => setLoading(false))
-  }, [id])
+  }, [id, commissionsEnabled])
 
   // ── Serviços ──
   const lineTotal = (l: ServiceLine) => l.flatPrice ? (l.flatValue ?? 0) : l.quantity * l.unitPrice
@@ -222,9 +254,40 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const bruto = subtotal + equipmentRentalValue - discount + taxes
   const isOutsourced = serviceType !== 'proprio'
   const liquidoParceria = isOutsourced ? bruto * partnerPct / 100 : bruto
+
+  // Single aux (commissions disabled)
   const selectedAux = auxiliaries.find(a => a.id === auxiliaryId)
   const auxValue = selectedAux ? bruto * Number(selectedAux.percentage) / 100 : 0
-  const liquidoFinal = liquidoParceria - auxValue
+
+  // Multi aux (commissions enabled)
+  const totalAuxValue = selectedAuxiliaries.reduce((s, a) => s + bruto * a.percentage / 100, 0)
+
+  const liquidoFinal = commissionsEnabled
+    ? liquidoParceria - totalAuxValue
+    : liquidoParceria - auxValue
+
+  const availableAuxToAdd = auxiliaries.filter(a => !selectedAuxiliaries.some(s => s.auxiliary_id === a.id))
+
+  function addAuxiliary() {
+    if (!addingAuxId) return
+    const aux = auxiliaries.find(a => a.id === addingAuxId)
+    if (!aux) return
+    setSelectedAuxiliaries(prev => [...prev, {
+      auxiliary_id: aux.id,
+      name: aux.name,
+      type: aux.type ?? 'tecnico',
+      percentage: Number(aux.percentage),
+    }])
+    setAddingAuxId('')
+  }
+
+  function removeAuxiliary(auxId: string) {
+    setSelectedAuxiliaries(prev => prev.filter(a => a.auxiliary_id !== auxId))
+  }
+
+  function updateAuxPercentage(auxId: string, pct: number) {
+    setSelectedAuxiliaries(prev => prev.map(a => a.auxiliary_id === auxId ? { ...a, percentage: pct } : a))
+  }
 
   function toggleCategory(name: string) {
     const cfg = SERVICE_CONFIG[name]
@@ -287,13 +350,20 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
 
       // 2. Se aprovado, criar ou atualizar OS
       if (isApproved) {
+        const primaryAuxId = commissionsEnabled
+          ? (selectedAuxiliaries[0]?.auxiliary_id ?? null)
+          : (auxiliaryId || null)
+        const primaryAuxValue = commissionsEnabled
+          ? (selectedAuxiliaries[0] ? bruto * selectedAuxiliaries[0].percentage / 100 : 0)
+          : auxValue
+
         const orderData = {
           call_id: id,
           date: callDate,
           client_id: clientId || null,
           team_id: teamId || null,
-          auxiliary_id: auxiliaryId || null,
-          auxiliary_value: auxValue,
+          auxiliary_id: primaryAuxId,
+          auxiliary_value: primaryAuxValue,
           driver: driver || null,
           nf_number: nfNumber || null,
           vehicle: vehicle || null,
@@ -336,6 +406,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
           notes: l.notes || null,
         }))
 
+        let soId = existingSoId
         if (existingSoId) {
           // Atualizar OS existente
           await updateServiceOrder(existingSoId, orderData)
@@ -349,7 +420,20 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
           }
         } else {
           // Criar nova OS
-          await createServiceOrder(orderData, validItems)
+          const order = await createServiceOrder(orderData, validItems)
+          soId = order.id
+        }
+
+        // Salvar múltiplos auxiliares (comissões)
+        if (commissionsEnabled && soId) {
+          await replaceServiceOrderAuxiliaries(
+            soId,
+            selectedAuxiliaries.map(a => ({
+              auxiliary_id: a.auxiliary_id,
+              percentage: a.percentage,
+              amount: bruto * a.percentage / 100,
+            }))
+          )
         }
       }
 
@@ -616,14 +700,16 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                   {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                 </select>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">Auxiliar</label>
-                <select value={auxiliaryId} onChange={e => setAuxiliaryId(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
-                  <option value="">Sem auxiliar</option>
-                  {auxiliaries.map(a => <option key={a.id} value={a.id}>{a.name} ({Number(a.percentage)}%)</option>)}
-                </select>
-              </div>
+              {!commissionsEnabled && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Auxiliar</label>
+                  <select value={auxiliaryId} onChange={e => setAuxiliaryId(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
+                    <option value="">Sem auxiliar</option>
+                    {auxiliaries.map(a => <option key={a.id} value={a.id}>{a.name} ({Number(a.percentage)}%)</option>)}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Motorista</label>
                 <input type="text" value={driver} onChange={e => setDriver(e.target.value)}
@@ -645,6 +731,74 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                   className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
               </div>
             </div>
+
+            {/* Múltiplos auxiliares (comissões habilitadas) */}
+            {commissionsEnabled && (
+              <div className="space-y-3">
+                <label className="block text-sm font-medium text-slate-700">Auxiliares / Técnicos / Comissões</label>
+
+                {selectedAuxiliaries.length > 0 && (
+                  <div className="space-y-2">
+                    {selectedAuxiliaries.map(a => {
+                      const amount = bruto * a.percentage / 100
+                      return (
+                        <div key={a.auxiliary_id} className="flex items-center gap-3 p-3 rounded-lg bg-orange-50 border border-orange-100">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-slate-800">{a.name}</span>
+                              <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+                                style={a.type === 'dono'
+                                  ? { background: 'rgba(139,92,246,0.15)', color: '#7c3aed' }
+                                  : { background: 'rgba(249,115,22,0.15)', color: '#f97316' }
+                                }>
+                                {a.type === 'dono' ? 'Dono' : 'Técnico'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input type="number" min="0" max="100" step="0.1"
+                              value={a.percentage}
+                              onChange={e => updateAuxPercentage(a.auxiliary_id, Number(e.target.value))}
+                              className="w-16 px-2 py-1 border border-slate-200 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
+                            <span className="text-xs text-slate-500">%</span>
+                            <span className="text-sm font-semibold text-orange-600 w-24 text-right">
+                              R$ {amount.toFixed(2)}
+                            </span>
+                            <button type="button" onClick={() => removeAuxiliary(a.auxiliary_id)}
+                              className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {availableAuxToAdd.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <select value={addingAuxId} onChange={e => setAddingAuxId(e.target.value)}
+                      className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
+                      <option value="">Selecionar auxiliar...</option>
+                      {availableAuxToAdd.map(a => (
+                        <option key={a.id} value={a.id}>
+                          {a.name} — {a.type === 'dono' ? 'Dono' : 'Técnico'} ({Number(a.percentage)}%)
+                        </option>
+                      ))}
+                    </select>
+                    <button type="button" onClick={addAuxiliary} disabled={!addingAuxId}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-40 text-white text-sm font-medium rounded-lg transition">
+                      <Plus className="w-4 h-4" />
+                      Adicionar
+                    </button>
+                  </div>
+                )}
+
+                {selectedAuxiliaries.length === 0 && (
+                  <p className="text-xs text-slate-400">Nenhum auxiliar adicionado</p>
+                )}
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Forma de Pagamento</label>
@@ -751,13 +905,24 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                 <span className="font-semibold text-emerald-600">R$ {liquidoParceria.toFixed(2)}</span>
               </div>
             )}
-            {selectedAux && (
+            {!commissionsEnabled && selectedAux && (
               <div className="flex justify-between text-sm">
                 <span className="text-slate-600">Auxiliar {selectedAux.name} ({Number(selectedAux.percentage)}%)</span>
                 <span className="font-semibold text-red-500">− R$ {auxValue.toFixed(2)}</span>
               </div>
             )}
-            {(isOutsourced || selectedAux) && (
+            {commissionsEnabled && selectedAuxiliaries.map(a => {
+              const amount = bruto * a.percentage / 100
+              return (
+                <div key={a.auxiliary_id} className="flex justify-between text-sm">
+                  <span className="text-slate-600">
+                    {a.type === 'dono' ? 'Dono' : 'Técnico'} {a.name} ({a.percentage}%)
+                  </span>
+                  <span className="font-semibold text-red-500">− R$ {amount.toFixed(2)}</span>
+                </div>
+              )
+            })}
+            {(isOutsourced || (commissionsEnabled ? selectedAuxiliaries.length > 0 : selectedAux)) && (
               <div className="flex justify-between text-base font-bold border-t border-slate-100 pt-2">
                 <span className="text-slate-800">Valor Líquido</span>
                 <span className="text-emerald-600">R$ {liquidoFinal.toFixed(2)}</span>
