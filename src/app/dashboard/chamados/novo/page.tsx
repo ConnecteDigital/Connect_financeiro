@@ -44,6 +44,12 @@ const CALL_STATUSES = [
 ]
 
 const PAYMENT_METHODS = ['Dinheiro', 'Cartão', 'PIX', 'Boleto']
+const AUX_TYPE_LABEL: Record<string, string> = { dono: 'Dono', tecnico: 'Técnico', auxiliar: 'Auxiliar' }
+const AUX_TYPE_STYLE: Record<string, { background: string; color: string }> = {
+  dono: { background: 'rgba(139,92,246,0.15)', color: '#7c3aed' },
+  tecnico: { background: 'rgba(249,115,22,0.15)', color: '#f97316' },
+  auxiliar: { background: 'rgba(8,145,178,0.15)', color: '#0891b2' },
+}
 
 const emptyNewClient = { address: '', state: '' }
 
@@ -1029,11 +1035,8 @@ export default function NovoChamadoPage() {
                             <div className="flex items-center gap-2">
                               <span className="text-sm font-medium text-slate-800">{a.name}</span>
                               <span className="text-xs px-2 py-0.5 rounded-full font-medium"
-                                style={a.type === 'dono'
-                                  ? { background: 'rgba(139,92,246,0.15)', color: '#7c3aed' }
-                                  : { background: 'rgba(249,115,22,0.15)', color: '#f97316' }
-                                }>
-                                {a.type === 'dono' ? 'Dono' : 'Técnico'}
+                                style={AUX_TYPE_STYLE[a.type] ?? AUX_TYPE_STYLE.tecnico}>
+                                {AUX_TYPE_LABEL[a.type] ?? 'Técnico'}
                               </span>
                             </div>
                           </div>
@@ -1064,7 +1067,7 @@ export default function NovoChamadoPage() {
                       <option value="">Selecionar auxiliar...</option>
                       {availableAuxToAdd.map(a => (
                         <option key={a.id} value={a.id}>
-                          {a.name} — {a.type === 'dono' ? 'Dono' : 'Técnico'} ({Number(a.percentage)}%)
+                          {a.name} — {AUX_TYPE_LABEL[a.type] ?? 'Técnico'} ({Number(a.percentage)}%)
                         </option>
                       ))}
                     </select>
@@ -1206,7 +1209,7 @@ export default function NovoChamadoPage() {
               return (
                 <div key={a.auxiliary_id} className="flex justify-between text-sm">
                   <span className="text-slate-600">
-                    {a.type === 'dono' ? 'Dono' : 'Técnico'} {a.name} ({a.percentage}%)
+                    {AUX_TYPE_LABEL[a.type] ?? 'Técnico'} {a.name} ({a.percentage}%)
                   </span>
                   <span className="font-semibold text-red-500">− R$ {amt.toFixed(2)}</span>
                 </div>

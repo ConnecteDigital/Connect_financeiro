@@ -18,8 +18,11 @@ const PRESET_COLORS = [
   '#ef4444', '#f59e0b', '#06b6d4', '#ec4899',
 ]
 
+const AUX_TYPE_LABELS: Record<string, string> = { dono: 'Dono', tecnico: 'Técnico', auxiliar: 'Auxiliar' }
+const AUX_TYPE_COLORS: Record<string, string> = { dono: '#7c3aed', tecnico: 'var(--primary)', auxiliar: '#0891b2' }
+
 function AddAuxForm({ type, savingAux, onAdd }: {
-  type: 'tecnico' | 'dono'
+  type: 'tecnico' | 'dono' | 'auxiliar'
   savingAux: boolean
   onAdd: (name: string, pct: number) => Promise<void>
 }) {
@@ -33,12 +36,13 @@ function AddAuxForm({ type, savingAux, onAdd }: {
     setPct('')
   }
 
-  const isDono = type === 'dono'
+  const label = AUX_TYPE_LABELS[type]
+  const color = AUX_TYPE_COLORS[type]
   return (
     <div className="flex gap-2 flex-wrap sm:flex-nowrap">
       <input type="text" value={name} onChange={e => setName(e.target.value)}
         onKeyDown={e => e.key === 'Enter' && submit()}
-        placeholder={isDono ? 'Nome do dono...' : 'Nome do técnico...'}
+        placeholder={`Nome do ${label.toLowerCase()}...`}
         className="input-field py-2.5 text-sm flex-1 min-w-[140px]" />
       <input type="number" min="0" max="100" step="0.01" value={pct}
         onChange={e => setPct(e.target.value)}
@@ -47,9 +51,9 @@ function AddAuxForm({ type, savingAux, onAdd }: {
         className="input-field py-2.5 text-sm w-20" />
       <button onClick={submit} disabled={savingAux || !name.trim()}
         className="btn-primary text-sm px-4 py-2.5 flex-shrink-0"
-        style={isDono ? { background: '#7c3aed' } : {}}>
+        style={type !== 'tecnico' ? { background: color } : {}}>
         {savingAux ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-        {isDono ? 'Adicionar Dono' : 'Adicionar Técnico'}
+        Adicionar {label}
       </button>
     </div>
   )
@@ -392,8 +396,9 @@ export default function ConfiguracoesPage() {
     )
   }
 
-  const tecnicos = auxiliaries.filter(a => a.type !== 'dono')
+  const tecnicos = auxiliaries.filter(a => a.type === 'tecnico' || !a.type)
   const donos = auxiliaries.filter(a => a.type === 'dono')
+  const auxiliaresPuros = auxiliaries.filter(a => a.type === 'auxiliar')
 
   return (
     <div className="space-y-6 max-w-3xl mx-auto">
@@ -593,12 +598,12 @@ export default function ConfiguracoesPage() {
         />
       </div>
 
-      {/* Técnicos Auxiliares */}
+      {/* Técnicos */}
       <div className="rounded-xl border p-6 space-y-4"
         style={{ background: 'var(--surface)', borderColor: 'var(--border)', boxShadow: 'var(--shadow-sm)' }}>
         <div className="flex items-center gap-2 border-b pb-3" style={{ borderColor: 'var(--border)' }}>
           <UserCog className="w-5 h-5" style={{ color: 'var(--primary)' }} />
-          <h2 className="font-semibold" style={{ color: 'var(--text-primary)' }}>Técnicos Auxiliares</h2>
+          <h2 className="font-semibold" style={{ color: 'var(--text-primary)' }}>Técnicos</h2>
         </div>
 
         <div className="space-y-2">
@@ -625,6 +630,48 @@ export default function ConfiguracoesPage() {
             setSavingAux(true)
             try {
               const aux = await createAuxiliary(name, pct, 'tecnico')
+              setAuxiliaries(a => [...a, aux])
+            } finally { setSavingAux(false) }
+          }}
+        />
+      </div>
+
+      {/* Auxiliares */}
+      <div className="rounded-xl border p-6 space-y-4"
+        style={{ background: 'var(--surface)', borderColor: 'var(--border)', boxShadow: 'var(--shadow-sm)' }}>
+        <div className="flex items-center gap-2 border-b pb-3" style={{ borderColor: 'var(--border)' }}>
+          <Users className="w-5 h-5" style={{ color: '#0891b2' }} />
+          <h2 className="font-semibold" style={{ color: 'var(--text-primary)' }}>Auxiliares</h2>
+        </div>
+
+        <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+          Auxiliares são um cadastro separado dos técnicos — use para quem ajuda no serviço mas não é o técnico responsável.
+        </p>
+
+        <div className="space-y-2">
+          {auxiliaresPuros.length === 0 && (
+            <p className="text-sm text-center py-4" style={{ color: 'var(--text-tertiary)' }}>Nenhum auxiliar cadastrado</p>
+          )}
+          {auxiliaresPuros.map(a => (
+            <div key={a.id} className="flex items-center justify-between p-3 rounded-lg" style={{ background: 'var(--surface-secondary)' }}>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{a.name}</span>
+                <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{Number(a.percentage)}%</span>
+              </div>
+              <button onClick={() => handleDeleteAuxiliary(a.id)} className="text-red-400 hover:text-red-600 transition">
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <AddAuxForm
+          type="auxiliar"
+          savingAux={savingAux}
+          onAdd={async (name, pct) => {
+            setSavingAux(true)
+            try {
+              const aux = await createAuxiliary(name, pct, 'auxiliar')
               setAuxiliaries(a => [...a, aux])
             } finally { setSavingAux(false) }
           }}

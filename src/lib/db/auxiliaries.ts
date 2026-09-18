@@ -8,7 +8,7 @@ export async function getAuxiliaries() {
   return data ?? []
 }
 
-export async function createAuxiliary(name: string, percentage: number, type: 'tecnico' | 'dono' = 'tecnico') {
+export async function createAuxiliary(name: string, percentage: number, type: 'tecnico' | 'dono' | 'auxiliar' = 'tecnico') {
   const supabase = createClient()
   const tenant_id = await getMyTenantId()
   const { data, error } = await supabase
