@@ -1,10 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ArrowLeft, MapPin, Phone, Mail, FileText, User, Clock, CheckCircle } from 'lucide-react'
+import { ArrowLeft, MapPin, Phone, Mail, FileText, User, Clock, CheckCircle, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { use } from 'react'
-import { getClient } from '@/lib/db/clients'
+import { useRouter } from 'next/navigation'
+import { getClient, deleteClient } from '@/lib/db/clients'
 
 const fmt = (v: number) => `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
 
@@ -17,12 +18,27 @@ const statusConfig: Record<string, { label: string; color: string }> = {
 
 export default function ClienteDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
+  const router = useRouter()
   const [client, setClient] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     getClient(id).then(setClient).catch(console.error).finally(() => setLoading(false))
   }, [id])
+
+  async function handleDelete() {
+    if (!confirm('Excluir este cliente? Esta ação não pode ser desfeita. Os chamados e OS relacionados serão mantidos, mas desvinculados do cliente.')) return
+    setDeleting(true)
+    try {
+      await deleteClient(id)
+      router.push('/dashboard/clientes')
+    } catch (err) {
+      console.error(err)
+      alert('Erro ao excluir o cliente.')
+      setDeleting(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -52,16 +68,29 @@ export default function ClienteDetailPage({ params }: { params: Promise<{ id: st
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <Link href="/dashboard/clientes" className="p-2 hover:bg-slate-100 rounded-lg transition text-slate-500">
-          <ArrowLeft className="w-5 h-5" />
-        </Link>
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-slate-800">{client.name}</h1>
-            <span className="text-xs font-mono text-slate-400 bg-slate-100 px-2 py-0.5 rounded">{client.code}</span>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Link href="/dashboard/clientes" className="p-2 hover:bg-slate-100 rounded-lg transition text-slate-500">
+            <ArrowLeft className="w-5 h-5" />
+          </Link>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold text-slate-800">{client.name}</h1>
+              <span className="text-xs font-mono text-slate-400 bg-slate-100 px-2 py-0.5 rounded">{client.code}</span>
+            </div>
+            <p className="text-slate-500 text-sm mt-0.5">Cliente desde {new Date(client.created_at).toLocaleDateString('pt-BR')}</p>
           </div>
-          <p className="text-slate-500 text-sm mt-0.5">Cliente desde {new Date(client.created_at).toLocaleDateString('pt-BR')}</p>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <Link href={`/dashboard/clientes/${id}/editar`}
+            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg transition">
+            Editar
+          </Link>
+          <button onClick={handleDelete} disabled={deleting}
+            className="flex items-center gap-1.5 bg-red-50 hover:bg-red-100 disabled:opacity-50 text-red-600 text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg transition border border-red-200">
+            <Trash2 className="w-3.5 h-3.5" />
+            {deleting ? 'Excluindo...' : 'Excluir'}
+          </button>
         </div>
       </div>
 

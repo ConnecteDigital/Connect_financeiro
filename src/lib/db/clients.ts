@@ -35,3 +35,9 @@ export async function updateClient(id: string, values: Record<string, unknown>) 
   if (error) throw error
   return data
 }
+
+export async function deleteClient(id: string) {
+  const supabase = createSupabaseClient()
+  const { error } = await supabase.from('clients').delete().eq('id', id)
+  if (error) throw error
+}
