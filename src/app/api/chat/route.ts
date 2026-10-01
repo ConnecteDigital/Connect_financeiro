@@ -43,7 +43,7 @@ function buildTools(origins: string[]): { functionDeclarations: { name: string; 
           type: SchemaType.OBJECT,
           properties: {
             contact_name:      { type: SchemaType.STRING, description: 'Nome real do cliente (nunca use placeholder)' },
-            service_category:  { type: SchemaType.STRING, description: 'Desentupimento | Hidrojateamento | Limpeza | Sucção | Aplicação de CO2 | Reclamação | Outros' },
+            service_category:  { type: SchemaType.STRING, description: 'Desobstrução | Hidrojateamento | Limpeza | Sucção | Aplicação de CO2 | Reclamação | Outros' },
             status:            { type: SchemaType.STRING, description: 'agendado ou aprovado' },
             origin:            { type: SchemaType.STRING, description: `Chave confirmada pelo usuário. ${originKeys}` },
             scheduled_date:    { type: SchemaType.STRING, description: 'YYYY-MM-DD (obrigatório se agendado)' },
@@ -403,7 +403,7 @@ Hoje: ${t} | Amanhã: ${addDays(t, 1)}
 Origens: ${originsText}
 
 SERVIÇOS (mapeie sempre — nunca coloque em notes):
-Desentupimento | Hidrojateamento | Limpeza (fossa/caixa gordura) | Sucção (esvaziar fossa) | Aplicação de CO2 | Reclamação | Outros
+Desobstrução | Hidrojateamento | Limpeza (fossa/caixa gordura) | Sucção (esvaziar fossa) | Aplicação de CO2 | Reclamação | Outros
 
 MAPEAMENTO DE INTENÇÃO (MUITO IMPORTANTE):
 - "romaneio", "preciso de um romaneio", "gerar romaneio" → o usuário quer CRIAR UM CHAMADO (agendado). Romaneio é o comprovante que é gerado após criar o chamado.
