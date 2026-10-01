@@ -40,7 +40,7 @@ on conflict (tenant_id, name) do nothing;
 
 insert into profiles (id, tenant_id, name, role)
 select
-  'COLE_O_UID_AQUI'::uuid,
+  '2ef74728-7771-4ba4-8cae-9e6aead07386'::uuid,
   t.id,
   'Desentupidora HS',
   'admin'
