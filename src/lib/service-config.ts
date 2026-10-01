@@ -48,3 +48,14 @@ export const SERVICE_CONFIG: Record<string, ServiceCategoryConfig> = {
 }
 
 export const SERVICE_CATEGORIES = Object.keys(SERVICE_CONFIG)
+
+// Para o tenant Millenium: Sucção e Hidrojateamento não usam sub-opção fixa
+// (o técnico digita livremente no campo de observações da linha).
+export function getServiceConfig(cat: string, milleniumCustomOS: boolean): ServiceCategoryConfig | undefined {
+  const base = SERVICE_CONFIG[cat]
+  if (!base) return base
+  if (milleniumCustomOS && (cat === 'Sucção' || cat === 'Hidrojateamento') && base.subOptions) {
+    return { ...base, subOptions: undefined }
+  }
+  return base
+}

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import {
   UserCog, TrendingUp, CalendarDays, ChevronDown, ChevronUp,
-  Wallet, CheckCircle2, FileText, Loader2, Share2, X, Clock,
+  Wallet, CheckCircle2, FileText, Loader2, Share2, X, Clock, Trash2,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useTenant } from '@/lib/tenant-context'
@@ -62,6 +62,7 @@ interface PaymentReport {
 export default function ComissoesPage() {
   const { tenant } = useTenant()
   const commissionsEnabled = tenant?.enable_commissions ?? false
+  const isMillenium = tenant?.call_form_config?.millenium_custom_os === true
   const primaryColor = tenant?.primary_color ?? '#f97316'
   const logoUrl = tenant?.logo_url
   const companyName = tenant?.name ?? 'Empresa'
@@ -76,6 +77,7 @@ export default function ComissoesPage() {
   const [payingAuxId, setPayingAuxId] = useState<string | null>(null)
   const [paymentDate, setPaymentDate] = useState(localDate)
   const [paymentLoading, setPaymentLoading] = useState(false)
+  const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null)
 
   // Report state
   const [report, setReport] = useState<PaymentReport | null>(null)
@@ -308,6 +310,25 @@ export default function ComissoesPage() {
     }
   }
 
+  async function handleDeleteCommission(ord: Order) {
+    if (!confirm('Excluir esta comissão já paga? Esta ação não pode ser desfeita.')) return
+    setDeletingOrderId(ord.order_id)
+    try {
+      const supabase = createClient()
+      if (ord.soa_id) {
+        await supabase.from('service_order_auxiliaries').delete().eq('id', ord.soa_id)
+      } else {
+        await supabase.from('expenses').delete().eq('source_service_order_id', ord.order_id)
+      }
+      await load()
+    } catch (e) {
+      console.error(e)
+      alert('Erro ao excluir comissão. Tente novamente.')
+    } finally {
+      setDeletingOrderId(null)
+    }
+  }
+
   async function handleShareReport() {
     if (!reportRef.current || sharingReport) return
     setSharingReport(true)
@@ -532,6 +553,16 @@ export default function ComissoesPage() {
                                 <span className="inline-flex items-center gap-1 text-xs text-emerald-700 font-medium">
                                   <CheckCircle2 className="w-3 h-3" />
                                   {ord.paid_at ? ptDate(ord.paid_at) : 'Pago'}
+                                  {isMillenium && (
+                                    <button type="button" onClick={() => handleDeleteCommission(ord)}
+                                      disabled={deletingOrderId === ord.order_id}
+                                      className="ml-1 p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-full transition disabled:opacity-40">
+                                      {deletingOrderId === ord.order_id
+                                        ? <Loader2 className="w-3 h-3 animate-spin" />
+                                        : <Trash2 className="w-3 h-3" />
+                                      }
+                                    </button>
+                                  )}
                                 </span>
                               ) : (
                                 <span className="inline-flex items-center gap-1 text-xs text-amber-600 font-medium">

@@ -318,9 +318,9 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
               </h2>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm mb-4">
-              {so.team && <div>
+              {(so.team || so.team_name) && <div>
                 <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Equipe</p>
-                <p className="text-slate-700 font-medium mt-0.5">{so.team.name}</p>
+                <p className="text-slate-700 font-medium mt-0.5">{so.team?.name ?? so.team_name}</p>
               </div>}
               {so.driver && <div>
                 <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Motorista</p>
@@ -336,7 +336,16 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
               </div>}
               {so.payment_method && <div>
                 <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Forma de Pag.</p>
-                <p className="text-slate-700 mt-0.5">{so.payment_method}</p>
+                <p className="text-slate-700 mt-0.5">
+                  {so.payment_method}
+                  {so.card_type && ` (${so.card_type === 'credito' ? 'Crédito' : 'Débito'}${so.card_type === 'credito' && so.card_fee_pct ? ` — taxa ${so.card_fee_pct}%` : ''})`}
+                </p>
+              </div>}
+              {so.partner_name && <div>
+                <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">
+                  {so.service_type === 'terceirizado_entrada' ? 'Recebido de' : 'Passado para'}
+                </p>
+                <p className="text-slate-700 mt-0.5">{so.partner_name}</p>
               </div>}
               <div>
                 <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Tipo</p>

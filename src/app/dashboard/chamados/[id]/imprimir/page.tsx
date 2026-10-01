@@ -103,6 +103,7 @@ function ImprimirContent({ id }: { id: string }) {
   const so = call.service_orders?.[0]
   if (!so) return <div className="flex items-center justify-center h-screen text-slate-500">Este chamado não possui ordem de serviço.</div>
 
+  const isMillenium = tenant?.call_form_config?.millenium_custom_os === true
   const companyName = tenant?.name ?? 'Empresa'
   const tenantTagline = 'Atendimento 24h · Domingos e Feriados'
   const origin = call.origin as string | null
@@ -246,7 +247,11 @@ function ImprimirContent({ id }: { id: string }) {
           <tbody>
             {items.map((it: any, idx: number) => (
               <tr key={it.id ?? idx}>
-                <td style={{ border: B, padding: '5px 8px', textAlign: 'left', verticalAlign: 'top' }}>{it.quantity}</td>
+                <td style={{ border: B, padding: '5px 8px', textAlign: 'left', verticalAlign: 'top' }}>
+                  {it.quantity}
+                  {isMillenium && it.category === 'Hidrojateamento' && ' M'}
+                  {isMillenium && it.category === 'Sucção' && ' L'}
+                </td>
                 <td style={{ border: B, padding: '5px 8px', verticalAlign: 'top' }}>
                   {it.description}
                   {it.notes && <span style={{ display: 'block', fontSize: 9, color: '#555', marginTop: 2 }}>{it.notes}</span>}
@@ -279,6 +284,41 @@ function ImprimirContent({ id }: { id: string }) {
           <span style={labelSt}>Forma de Pagamento</span>
           <span style={valueSt}>{so.payment_method || ''}</span>
         </div>
+
+        {/* ── Levantamento (Millenium) ── */}
+        {isMillenium && (() => {
+          const garantia = so.has_guarantee ? 'Garantia 30 dias'
+            : so.has_guarantee_60 ? 'Garantia 60 dias'
+            : so.has_guarantee_90 ? 'Garantia 90 dias'
+            : so.has_no_guarantee ? 'Sem garantia' : ''
+          const plantaBaixa = so.has_floor_plan ? 'Com planta baixa'
+            : so.has_no_floor_plan ? 'Sem planta baixa'
+            : so.has_no_knowledge ? 'Sem conhecimento' : ''
+          const plantaHidraulica = so.has_hydraulic_plan ? 'Com planta hidráulica'
+            : so.has_no_hydraulic_plan ? 'Sem planta hidráulica' : ''
+          if (!garantia && !plantaBaixa && !plantaHidraulica) return null
+          return (
+            <>
+              <div style={{ border: B, borderTop: 'none', background: '#f5f5f5', padding: '3px 8px', textAlign: 'center', fontWeight: 700, fontSize: 11, letterSpacing: '0.04em' }}>
+                LEVANTAMENTO
+              </div>
+              <div style={{ display: 'flex', border: B, borderTop: 'none' }}>
+                <div style={{ flex: 1, ...cellSt, borderRight: B }}>
+                  <span style={labelSt}>Planta Baixa</span>
+                  <span style={valueSt}>{plantaBaixa || '—'}</span>
+                </div>
+                <div style={{ flex: 1, ...cellSt, borderRight: B }}>
+                  <span style={labelSt}>Planta Hidráulica</span>
+                  <span style={valueSt}>{plantaHidraulica || '—'}</span>
+                </div>
+                <div style={{ flex: 1, ...cellSt }}>
+                  <span style={labelSt}>Garantia</span>
+                  <span style={valueSt}>{garantia || '—'}</span>
+                </div>
+              </div>
+            </>
+          )
+        })()}
 
         {/* ── Signature row ── */}
         <div style={{ display: 'flex', border: B, borderTop: 'none' }}>

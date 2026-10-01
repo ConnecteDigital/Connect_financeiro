@@ -9,8 +9,8 @@ import { createServiceOrder, createServiceOrderAuxiliaries } from '@/lib/db/serv
 import { createExpense } from '@/lib/db/expenses'
 import { getClients, createClient_ } from '@/lib/db/clients'
 import { getTeams } from '@/lib/db/teams'
-import { getAuxiliaries } from '@/lib/db/auxiliaries'
-import { SERVICE_CATEGORIES, SERVICE_CONFIG } from '@/lib/service-config'
+import { getAuxiliaries, createAuxiliary } from '@/lib/db/auxiliaries'
+import { SERVICE_CATEGORIES, SERVICE_CONFIG, getServiceConfig } from '@/lib/service-config'
 import { useCallOrigins } from '@/lib/use-call-origins'
 import { useTenant } from '@/lib/tenant-context'
 import { createClient } from '@/lib/supabase/client'
@@ -60,6 +60,7 @@ export default function NovoChamadoPage() {
   const { tenant } = useTenant()
   const commissionsEnabled = tenant?.enable_commissions ?? false
   const isSimplified = tenant?.call_form_config?.simplified === true
+  const isMillenium = tenant?.call_form_config?.millenium_custom_os === true
   const [selectedCategory, setSelectedCategory] = useState('')
   const serviceCategory = selectedCategory
   const [saving, setSaving] = useState(false)
@@ -132,11 +133,15 @@ export default function NovoChamadoPage() {
   const [hasGuarantee90, setHasGuarantee90] = useState(false)
   const [hasNoGuarantee, setHasNoGuarantee] = useState(false)
   const [teamId, setTeamId] = useState('')
+  const [teamName, setTeamName] = useState('')
   const [driver, setDriver] = useState('')
   const [nfNumber, setNfNumber] = useState('')
   const [vehicle, setVehicle] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [paymentMethods, setPaymentMethods] = useState<string[]>([])
+  const [cardType, setCardType] = useState('')
+  const [cardFeePct, setCardFeePct] = useState(0)
+  const [partnerName, setPartnerName] = useState('')
   const [amountPaid, setAmountPaid] = useState(0)
   const [remainingAmount, setRemainingAmount] = useState(0)
   const [remainingDueDate, setRemainingDueDate] = useState('')
@@ -183,7 +188,7 @@ export default function NovoChamadoPage() {
   // Multi aux (commissions enabled)
   const totalAuxValue = selectedAuxiliaries.reduce((s, a) => s + bruto * a.percentage / 100, 0)
 
-  const liquidoFinal = commissionsEnabled
+  const liquidoFinal = (commissionsEnabled || isMillenium)
     ? liquidoParceria - totalAuxValue
     : liquidoParceria - auxValue
 
@@ -202,6 +207,39 @@ export default function NovoChamadoPage() {
     setAddingAuxId('')
   }
 
+  // Millenium: digita o nome livremente em vez de escolher de uma lista —
+  // reaproveita um auxiliar já cadastrado com esse nome, ou cadastra um novo.
+  const [freeAuxName, setFreeAuxName] = useState('')
+  const [freeAuxPct, setFreeAuxPct] = useState('')
+  const [addingFreeAux, setAddingFreeAux] = useState(false)
+
+  async function addFreeTextAuxiliary() {
+    const name = freeAuxName.trim()
+    const pct = Number(freeAuxPct) || 0
+    if (!name) return
+    setAddingFreeAux(true)
+    try {
+      const existing = auxiliaries.find(a => a.name.trim().toLowerCase() === name.toLowerCase())
+      if (existing) {
+        setSelectedAuxiliaries(prev => {
+          const already = prev.some(s => s.auxiliary_id === existing.id)
+          if (already) {
+            return prev.map(s => s.auxiliary_id === existing.id ? { ...s, percentage: pct } : s)
+          }
+          return [...prev, { auxiliary_id: existing.id, name: existing.name, type: existing.type ?? 'tecnico', percentage: pct }]
+        })
+      } else {
+        const created = await createAuxiliary(name, pct, 'tecnico')
+        setAuxiliaries(prev => [...prev, created])
+        setSelectedAuxiliaries(prev => [...prev, { auxiliary_id: created.id, name: created.name, type: created.type ?? 'tecnico', percentage: pct }])
+      }
+      setFreeAuxName('')
+      setFreeAuxPct('')
+    } finally {
+      setAddingFreeAux(false)
+    }
+  }
+
   function removeAuxiliary(auxId: string) {
     setSelectedAuxiliaries(prev => prev.filter(a => a.auxiliary_id !== auxId))
   }
@@ -212,7 +250,7 @@ export default function NovoChamadoPage() {
 
   // ── Services ──
   function toggleCategory(name: string) {
-    const cfg = SERVICE_CONFIG[name]
+    const cfg = getServiceConfig(name, isMillenium)
     if (selectedCategories.includes(name)) {
       setSelectedCategories(prev => prev.filter(c => c !== name))
       setServiceLines(prev => prev.filter(l => l.category !== name))
@@ -337,10 +375,10 @@ export default function NovoChamadoPage() {
         await uploadPendingFiles(call.id)
 
         // Determine auxiliary_id / auxiliary_value for legacy column
-        const primaryAuxId = commissionsEnabled
+        const primaryAuxId = (commissionsEnabled || isMillenium)
           ? (selectedAuxiliaries[0]?.auxiliary_id ?? null)
           : (auxiliaryId || null)
-        const primaryAuxValue = commissionsEnabled
+        const primaryAuxValue = (commissionsEnabled || isMillenium)
           ? (selectedAuxiliaries[0] ? bruto * selectedAuxiliaries[0].percentage / 100 : 0)
           : auxValue
 
@@ -348,7 +386,8 @@ export default function NovoChamadoPage() {
           call_id: call.id,
           date: callDate,
           client_id: finalClientId || null,
-          team_id: teamId || null,
+          team_id: isMillenium ? null : (teamId || null),
+          team_name: isMillenium ? (teamName || null) : null,
           auxiliary_id: primaryAuxId,
           auxiliary_value: primaryAuxValue,
           driver: driver || null,
@@ -376,6 +415,9 @@ export default function NovoChamadoPage() {
           own_other_cost: ownOtherCost,
           other_service_value: otherServiceValue,
           payment_method: paymentMethods.length > 0 ? paymentMethods.join(', ') : null,
+          card_type: isMillenium ? (cardType || null) : null,
+          card_fee_pct: isMillenium ? cardFeePct : 0,
+          partner_name: isMillenium ? (partnerName || null) : null,
           payment_status: paymentStatus,
           amount_paid: amountPaid,
           remaining_amount: remainingAmount,
@@ -394,7 +436,7 @@ export default function NovoChamadoPage() {
         const order = await createServiceOrder(orderData, validItems)
 
         // Save multiple auxiliaries when commissions enabled
-        if (commissionsEnabled && selectedAuxiliaries.length > 0) {
+        if ((commissionsEnabled || isMillenium) && selectedAuxiliaries.length > 0) {
           await createServiceOrderAuxiliaries(
             order.id,
             selectedAuxiliaries.map(a => ({
@@ -406,7 +448,7 @@ export default function NovoChamadoPage() {
         }
 
         // Auto-generate expenses when commissions enabled
-        if (commissionsEnabled) {
+        if (commissionsEnabled || isMillenium) {
           const expenseDate = callDate
 
           // Commission expense for each auxiliary (tecnico + dono)
@@ -886,7 +928,7 @@ export default function NovoChamadoPage() {
           )}
 
           {selectedCategories.map(cat => {
-            const cfg = SERVICE_CONFIG[cat]
+            const cfg = getServiceConfig(cat, isMillenium)
             const catLines = serviceLines.filter(l => l.category === cat)
             return (
               <div key={cat} className="border border-orange-200 bg-orange-50/40 rounded-xl p-4 mt-3 space-y-3">
@@ -960,7 +1002,7 @@ export default function NovoChamadoPage() {
 
                     <input type="text" value={l.notes}
                       onChange={e => updateLine(l.category, l.sub, { notes: e.target.value })}
-                      placeholder="Descrição do serviço..."
+                      placeholder={isMillenium && (cat === 'Sucção' || cat === 'Hidrojateamento') ? 'O que foi feito (ex: caixa de passagem, coluna, tubular)...' : 'Descrição do serviço...'}
                       className={inputCls} />
                   </div>
                 ))}
@@ -985,14 +1027,19 @@ export default function NovoChamadoPage() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Equipe</label>
-                <select value={teamId} onChange={e => setTeamId(e.target.value)} className={inputCls}>
-                  <option value="">Selecione...</option>
-                  {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select>
+                {isMillenium ? (
+                  <input type="text" value={teamName} onChange={e => setTeamName(e.target.value)}
+                    placeholder="Digite o nome da equipe..." className={inputCls} />
+                ) : (
+                  <select value={teamId} onChange={e => setTeamId(e.target.value)} className={inputCls}>
+                    <option value="">Selecione...</option>
+                    {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                )}
               </div>
 
-              {/* Single auxiliary (commissions disabled) */}
-              {!commissionsEnabled && (
+              {/* Single auxiliary (commissions disabled, não-Millenium) */}
+              {!commissionsEnabled && !isMillenium && (
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Auxiliar</label>
                   <select value={auxiliaryId} onChange={e => setAuxiliaryId(e.target.value)} className={inputCls}>
@@ -1020,8 +1067,8 @@ export default function NovoChamadoPage() {
               </div>
             </div>
 
-            {/* Multiple auxiliaries (commissions enabled) */}
-            {commissionsEnabled && (
+            {/* Multiple auxiliaries (commissions enabled, ou Millenium) */}
+            {(commissionsEnabled || isMillenium) && (
               <div className="space-y-3">
                 <label className="block text-sm font-medium text-slate-700">Auxiliares / Comissões</label>
 
@@ -1060,7 +1107,22 @@ export default function NovoChamadoPage() {
                   </div>
                 )}
 
-                {availableAuxToAdd.length > 0 && (
+                {isMillenium ? (
+                  <div className="flex items-center gap-2">
+                    <input type="text" value={freeAuxName} onChange={e => setFreeAuxName(e.target.value)}
+                      placeholder="Nome do técnico/auxiliar..."
+                      className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                    <input type="number" min="0" max="100" step="0.1" value={freeAuxPct}
+                      onChange={e => setFreeAuxPct(e.target.value)}
+                      placeholder="%"
+                      className="w-20 px-2 py-2 border border-slate-200 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                    <button type="button" onClick={addFreeTextAuxiliary} disabled={!freeAuxName.trim() || addingFreeAux}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-orange-500 hover:bg-orange-600 disabled:opacity-40 text-white text-sm font-medium rounded-lg transition">
+                      <Plus className="w-4 h-4" />
+                      Adicionar
+                    </button>
+                  </div>
+                ) : availableAuxToAdd.length > 0 && (
                   <div className="flex items-center gap-2">
                     <select value={addingAuxId} onChange={e => setAddingAuxId(e.target.value)}
                       className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
@@ -1098,6 +1160,27 @@ export default function NovoChamadoPage() {
               {paymentMethods.length > 1 && (
                 <p className="text-xs mt-1.5 text-orange-600 font-medium">{paymentMethods.join(' + ')}</p>
               )}
+              {isMillenium && paymentMethods.includes('Cartão') && (
+                <div className="mt-3 p-3 rounded-lg border border-orange-100 bg-orange-50/50 space-y-2">
+                  <label className="block text-xs font-semibold text-slate-700">Cartão: débito ou crédito?</label>
+                  <div className="flex gap-2">
+                    {[{ v: 'debito', l: 'Débito' }, { v: 'credito', l: 'Crédito' }].map(opt => (
+                      <button key={opt.v} type="button" onClick={() => setCardType(opt.v)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${cardType === opt.v ? 'text-white border-transparent bg-orange-500' : 'bg-white text-slate-500 border-slate-200'}`}>
+                        {opt.l}
+                      </button>
+                    ))}
+                  </div>
+                  {cardType === 'credito' && (
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">% de desconto da maquininha</label>
+                      <input type="number" min="0" max="100" step="0.01" value={cardFeePct || ''}
+                        onChange={e => setCardFeePct(Number(e.target.value))}
+                        className="w-28 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -1116,6 +1199,15 @@ export default function NovoChamadoPage() {
                 </button>
               ))}
             </div>
+            {isMillenium && serviceType !== 'proprio' && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  {serviceType === 'terceirizado_entrada' ? 'Recebido de quem?' : 'Passado para quem?'}
+                </label>
+                <input type="text" value={partnerName} onChange={e => setPartnerName(e.target.value)}
+                  placeholder="Ex: Alan..." className={inputCls} />
+              </div>
+            )}
             {serviceType === 'proprio' ? (
               <>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -1156,7 +1248,7 @@ export default function NovoChamadoPage() {
                     {' → '}líquido ({partnerPct}%): <span className="font-bold text-emerald-600">R$ {liquidoParceria.toFixed(2)}</span>
                   </p>
                 </div>
-                {commissionsEnabled && serviceType === 'terceirizado_saida' && (
+                {(commissionsEnabled || isMillenium) && serviceType === 'terceirizado_saida' && (
                   <p className="text-xs text-orange-600 mt-2">
                     Uma saída de R$ {(bruto * (100 - partnerPct) / 100).toFixed(2)} será gerada automaticamente para o custo do parceiro.
                   </p>
@@ -1195,16 +1287,16 @@ export default function NovoChamadoPage() {
               </div>
             )}
 
-            {/* Single aux (commissions disabled) */}
-            {!commissionsEnabled && selectedAux && (
+            {/* Single aux (commissions disabled, não-Millenium) */}
+            {!commissionsEnabled && !isMillenium && selectedAux && (
               <div className="flex justify-between text-sm">
                 <span className="text-slate-600">Auxiliar {selectedAux.name} ({Number(selectedAux.percentage)}%)</span>
                 <span className="font-semibold text-red-500">− R$ {auxValue.toFixed(2)}</span>
               </div>
             )}
 
-            {/* Multi aux (commissions enabled) */}
-            {commissionsEnabled && selectedAuxiliaries.map(a => {
+            {/* Multi aux (commissions enabled, ou Millenium) */}
+            {(commissionsEnabled || isMillenium) && selectedAuxiliaries.map(a => {
               const amt = bruto * a.percentage / 100
               return (
                 <div key={a.auxiliary_id} className="flex justify-between text-sm">
@@ -1216,14 +1308,14 @@ export default function NovoChamadoPage() {
               )
             })}
 
-            {(isOutsourced || (commissionsEnabled ? selectedAuxiliaries.length > 0 : selectedAux)) && (
+            {(isOutsourced || ((commissionsEnabled || isMillenium) ? selectedAuxiliaries.length > 0 : selectedAux)) && (
               <div className="flex justify-between text-base font-bold border-t border-slate-100 pt-2">
                 <span className="text-slate-800">Valor Líquido</span>
                 <span className="text-emerald-600">R$ {liquidoFinal.toFixed(2)}</span>
               </div>
             )}
 
-            {commissionsEnabled && selectedAuxiliaries.length > 0 && (
+            {(commissionsEnabled || isMillenium) && selectedAuxiliaries.length > 0 && (
               <p className="text-xs text-orange-500 mt-1">
                 {selectedAuxiliaries.length} saída{selectedAuxiliaries.length > 1 ? 's' : ''} de comissão serão geradas automaticamente.
               </p>
