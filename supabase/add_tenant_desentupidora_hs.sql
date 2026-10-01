@@ -14,8 +14,8 @@ insert into tenants (slug, name, primary_color, call_origins)
 values (
   'desentupidora-hs',
   'Desentupidora HS',
-  '#f97316', -- cor principal padrão (laranja) — troque se quiser outra
-  array['Indicação', 'WhatsApp', 'Terceirizado', 'Telefone', 'Google']
+  '#2563eb', -- azul
+  array['WhatsApp', 'Ligação', 'Indicação', 'Expert SP', 'Proxima']
 )
 on conflict (slug) do nothing;
 
