@@ -41,7 +41,7 @@ on conflict (tenant_id, name) do nothing;
 
 insert into profiles (id, tenant_id, name, role)
 select
-  '19f03784-0d9b-4149-856b-4d769fb36ac5'::uuid,
+  '2241c05c-b31a-41e8-a63e-f14b73739ff9'::uuid,
   t.id,
   'Debora Castro',
   'admin'
