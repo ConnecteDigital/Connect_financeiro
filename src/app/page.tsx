@@ -10,6 +10,11 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [showForgot, setShowForgot] = useState(false)
+  const [forgotEmail, setForgotEmail] = useState('')
+  const [forgotLoading, setForgotLoading] = useState(false)
+  const [forgotSent, setForgotSent] = useState(false)
+  const [forgotError, setForgotError] = useState('')
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -28,6 +33,28 @@ export default function LoginPage() {
       setError('Erro ao conectar. Tente novamente.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleForgotPassword(e: React.FormEvent) {
+    e.preventDefault()
+    setForgotLoading(true)
+    setForgotError('')
+    try {
+      const { createClient } = await import('@/lib/supabase/client')
+      const supabase = createClient()
+      const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+        redirectTo: `${window.location.origin}/redefinir-senha`,
+      })
+      if (error) {
+        setForgotError('Não foi possível enviar o link. Confira o email e tente novamente.')
+      } else {
+        setForgotSent(true)
+      }
+    } catch {
+      setForgotError('Erro ao conectar. Tente novamente.')
+    } finally {
+      setForgotLoading(false)
     }
   }
 
@@ -133,7 +160,60 @@ export default function LoginPage() {
               className="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-orange-500/50 text-white font-semibold py-3 rounded-xl transition text-sm mt-2">
               {loading ? 'Entrando...' : 'Entrar no sistema'}
             </button>
+
+            <button type="button" onClick={() => { setShowForgot(true); setForgotEmail(email); setForgotSent(false); setForgotError('') }}
+              className="w-full text-center text-zinc-500 hover:text-zinc-300 text-xs transition">
+              Esqueci minha senha
+            </button>
           </form>
+
+          {showForgot && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
+              <div className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+                {forgotSent ? (
+                  <div className="text-center space-y-3">
+                    <p className="text-white font-semibold text-sm">Link enviado!</p>
+                    <p className="text-zinc-400 text-xs">
+                      Confira o email <span className="text-zinc-200">{forgotEmail}</span> e clique no link para criar sua nova senha.
+                    </p>
+                    <button type="button" onClick={() => setShowForgot(false)}
+                      className="w-full bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-medium py-2.5 rounded-xl transition mt-2">
+                      Fechar
+                    </button>
+                  </div>
+                ) : (
+                  <form onSubmit={handleForgotPassword} className="space-y-4">
+                    <div>
+                      <p className="text-white font-semibold text-sm mb-1">Redefinir senha</p>
+                      <p className="text-zinc-500 text-xs">Enviaremos um link para você criar uma nova senha.</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-300 mb-2">Email</label>
+                      <div className="relative">
+                        <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                        <input type="email" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)}
+                          placeholder="seu@email.com" required
+                          className="w-full pl-10 pr-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition" />
+                      </div>
+                    </div>
+                    {forgotError && (
+                      <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-xl px-4 py-3">{forgotError}</div>
+                    )}
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => setShowForgot(false)}
+                        className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-medium py-2.5 rounded-xl transition">
+                        Cancelar
+                      </button>
+                      <button type="submit" disabled={forgotLoading}
+                        className="flex-1 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-500/50 text-white text-sm font-semibold py-2.5 rounded-xl transition">
+                        {forgotLoading ? 'Enviando...' : 'Enviar link'}
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="mt-8 pt-6 border-t border-zinc-800 flex items-center justify-center gap-2">
             <ConnectDigitalLogo size={18} />
