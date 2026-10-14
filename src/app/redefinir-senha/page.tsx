@@ -24,11 +24,17 @@ export default function RedefinirSenhaPage() {
       const code = params.get('code')
       if (code) {
         const { error } = await supabase.auth.exchangeCodeForSession(code)
-        if (!error) setSessionReady(true)
+        if (error) {
+          console.error('exchangeCodeForSession error:', error)
+        } else {
+          setSessionReady(true)
+        }
       } else {
         // Fallback: fluxo antigo com #access_token= já processado pelo client
-        const { data } = await supabase.auth.getSession()
+        const { data, error } = await supabase.auth.getSession()
+        if (error) console.error('getSession error:', error)
         if (data.session) setSessionReady(true)
+        else console.warn('Sem code na URL e sem sessão ativa.', window.location.href)
       }
       setCheckingSession(false)
     })()

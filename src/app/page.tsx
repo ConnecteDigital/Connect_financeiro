@@ -58,7 +58,8 @@ export default function LoginPage() {
         redirectTo: `${window.location.origin}/redefinir-senha`,
       })
       if (error) {
-        setForgotError('Não foi possível enviar o link. Confira o email e tente novamente.')
+        console.error('resetPasswordForEmail error:', error)
+        setForgotError(`Erro: ${error.message || 'não foi possível enviar o link'} (${(error as any).status ?? '?'})`)
       } else {
         setForgotSent(true)
       }
