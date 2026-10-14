@@ -7,7 +7,7 @@ import {
   LayoutDashboard, PhoneCall, Users,
   BarChart3, Settings, LogOut, Building2,
   Plus, MoreHorizontal, UserCog, Moon, Sun, Sparkles,
-  Wallet, FileText, ShieldCheck,
+  Wallet, FileText, ShieldCheck, KeyRound,
 } from 'lucide-react'
 import { ConnectDigitalLogo } from '@/components/logos'
 import { useTenant } from '@/lib/tenant-context'
@@ -190,7 +190,12 @@ function MoreDrawer({ open, onClose, isMaster }: { open: boolean; onClose: () =>
             )
           })}
         </div>
-        <div className="px-4 mt-2 border-t border-zinc-100 pt-3">
+        <div className="px-4 mt-2 border-t border-zinc-100 pt-3 space-y-2">
+          <Link href="/redefinir-senha" onClick={onClose}
+            className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl text-sm font-medium text-zinc-500 bg-zinc-50 transition active:scale-95">
+            <KeyRound className="w-5 h-5" />
+            Trocar senha
+          </Link>
           <button onClick={handleLogout}
             className="flex items-center gap-3 w-full px-4 py-3 rounded-2xl text-sm font-medium text-red-500 bg-red-50 transition active:scale-95">
             <LogOut className="w-5 h-5" />
@@ -269,6 +274,11 @@ function Sidebar({ theme, onToggleTheme, isMaster }: { theme: 'light' | 'dark'; 
           {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           {theme === 'dark' ? 'Modo claro' : 'Modo escuro'}
         </button>
+        <Link href="/redefinir-senha"
+          className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-sm font-medium text-zinc-500 hover:bg-zinc-800 hover:text-white transition">
+          <KeyRound className="w-4 h-4" />
+          Trocar senha
+        </Link>
         <button onClick={handleLogout}
           className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-sm font-medium text-zinc-500 hover:bg-zinc-800 hover:text-white transition">
           <LogOut className="w-4 h-4" />
