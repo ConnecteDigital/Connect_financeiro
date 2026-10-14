@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Eye, EyeOff, Lock, Mail } from 'lucide-react'
 import { ConnectDigitalLogo } from '@/components/logos'
 
@@ -15,6 +15,17 @@ export default function LoginPage() {
   const [forgotLoading, setForgotLoading] = useState(false)
   const [forgotSent, setForgotSent] = useState(false)
   const [forgotError, setForgotError] = useState('')
+
+  // Link de convite/recuperação do Supabase caindo na raiz em vez de
+  // /redefinir-senha (ex: botão "Send invitation" do Dashboard, que não
+  // permite customizar o redirect) — encaminha preservando code/hash.
+  useEffect(() => {
+    const hasCode = new URLSearchParams(window.location.search).has('code')
+    const hasAuthHash = /access_token|type=invite|type=recovery/.test(window.location.hash)
+    if (hasCode || hasAuthHash) {
+      window.location.replace(`/redefinir-senha${window.location.search}${window.location.hash}`)
+    }
+  }, [])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
