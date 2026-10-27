@@ -285,8 +285,8 @@ function ImprimirContent({ id }: { id: string }) {
           <span style={valueSt}>{so.payment_method || ''}</span>
         </div>
 
-        {/* ── Levantamento (Millenium) ── */}
-        {isMillenium && (() => {
+        {/* ── Levantamento (garantia / planta) ── */}
+        {(() => {
           const garantia = so.has_guarantee ? 'Garantia 30 dias'
             : so.has_guarantee_60 ? 'Garantia 60 dias'
             : so.has_guarantee_90 ? 'Garantia 90 dias'
