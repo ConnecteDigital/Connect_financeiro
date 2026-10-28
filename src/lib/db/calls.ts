@@ -26,6 +26,35 @@ export async function getCalls(filters?: { status?: string; origin?: string; sea
   return data
 }
 
+// Busca chamados antigos por nome/telefone/endereço do contato — útil pra
+// achar alguém que já apareceu num chamado mas nunca virou um cliente
+// cadastrado (a busca de clientes sozinha não encontraria essa pessoa).
+export async function searchCallContacts(search: string) {
+  const supabase = createClient()
+  const term = search.replace(/[%,]/g, ' ').trim()
+  if (!term) return []
+  const { data, error } = await supabase
+    .from('calls')
+    .select('id, contact_name, contact_phone, contact_cpf, call_address, call_city, call_neighborhood, client_id, date')
+    .is('client_id', null)
+    .or(`contact_name.ilike.%${term}%,contact_phone.ilike.%${term}%,call_address.ilike.%${term}%,call_city.ilike.%${term}%`)
+    .not('contact_name', 'is', null)
+    .order('date', { ascending: false })
+    .limit(20)
+  if (error) throw error
+
+  // Deduplica por nome+telefone (o mesmo contato pode ter vários chamados)
+  const seen = new Set<string>()
+  const unique: typeof data = []
+  for (const c of data ?? []) {
+    const key = `${(c.contact_name ?? '').toLowerCase()}|${c.contact_phone ?? ''}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    unique.push(c)
+  }
+  return unique.slice(0, 6)
+}
+
 export async function getCall(id: string) {
   const supabase = createClient()
   const { data, error } = await supabase

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { ArrowLeft, Save, Loader2, CalendarDays, Camera, Paperclip, FileText, X, Plus, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { createCall } from '@/lib/db/calls'
+import { createCall, searchCallContacts } from '@/lib/db/calls'
 import { createServiceOrder, createServiceOrderAuxiliaries } from '@/lib/db/service-orders'
 import { createExpense } from '@/lib/db/expenses'
 import { getClients, createClient_ } from '@/lib/db/clients'
@@ -282,16 +282,22 @@ export default function NovoChamadoPage() {
 
   const [clientSearch, setClientSearch] = useState('')
   const [clientSuggestions, setClientSuggestions] = useState<any[]>([])
+  const [callSuggestions, setCallSuggestions] = useState<any[]>([])
   const [selectedClientName, setSelectedClientName] = useState('')
 
   useEffect(() => {
     if (clientId || clientSearch.trim().length < 2) {
       setClientSuggestions([])
+      setCallSuggestions([])
       return
     }
+    const term = clientSearch.trim()
     const t = setTimeout(() => {
-      getClients(clientSearch.trim())
+      getClients(term)
         .then(res => setClientSuggestions((res ?? []).slice(0, 6)))
+        .catch(console.error)
+      searchCallContacts(term)
+        .then(res => setCallSuggestions(res ?? []))
         .catch(console.error)
     }, 300)
     return () => clearTimeout(t)
@@ -778,10 +784,10 @@ export default function NovoChamadoPage() {
             onChange={e => setClientSearch(e.target.value)}
             placeholder="Digite nome, telefone ou endereço..."
             className={inputCls} />
-          {clientSuggestions.length > 0 && (
-            <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden">
+          {(clientSuggestions.length > 0 || callSuggestions.length > 0) && (
+            <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden max-h-72 overflow-y-auto">
               {clientSuggestions.map(c => (
-                <button key={c.id} type="button"
+                <button key={`client-${c.id}`} type="button"
                   onClick={() => {
                     setClientId(c.id)
                     setSelectedClientName(c.name)
@@ -794,8 +800,31 @@ export default function NovoChamadoPage() {
                     setClientSearch('')
                   }}
                   className="w-full text-left px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 border-b border-slate-50 last:border-0 transition">
-                  <p className="font-medium">{c.name}</p>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">Cliente cadastrado</span>
+                  </div>
+                  <p className="font-medium mt-0.5">{c.name}</p>
                   <p className="text-xs text-slate-400 mt-0.5">{[c.phone, c.city, c.address].filter(Boolean).join(' · ')}</p>
+                </button>
+              ))}
+              {callSuggestions.map(c => (
+                <button key={`call-${c.id}`} type="button"
+                  onClick={() => {
+                    setSelectedClientName(c.contact_name)
+                    setContactName(c.contact_name ?? '')
+                    if (c.contact_phone) setContactPhone(c.contact_phone)
+                    if (c.contact_cpf) setContactCpf(c.contact_cpf)
+                    if (c.call_city) setCallCity(c.call_city)
+                    if (c.call_neighborhood) setCallNeighborhood(c.call_neighborhood)
+                    if (c.call_address) setCallAddress(c.call_address)
+                    setClientSearch('')
+                  }}
+                  className="w-full text-left px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 border-b border-slate-50 last:border-0 transition">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700">Chamado anterior · sem cadastro</span>
+                  </div>
+                  <p className="font-medium mt-0.5">{c.contact_name}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">{[c.contact_phone, c.call_city, c.call_address].filter(Boolean).join(' · ')}</p>
                 </button>
               ))}
             </div>
