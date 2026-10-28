@@ -14,7 +14,7 @@ import { getAuxiliaries, createAuxiliary } from '@/lib/db/auxiliaries'
 import { createClient } from '@/lib/supabase/client'
 import { useCallOrigins } from '@/lib/use-call-origins'
 import { useTenant } from '@/lib/tenant-context'
-import { SERVICE_CONFIG, getServiceConfig } from '@/lib/service-config'
+import { getServiceConfig } from '@/lib/service-config'
 
 type ServiceType = 'proprio' | 'terceirizado_saida' | 'terceirizado_entrada'
 type PaymentStatus = 'pago' | 'pago_parcial' | 'pendente'
@@ -249,7 +249,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
             for (const sub of m[1].split(', ')) {
               lines.push({ category: cat, sub, quantity: 0, unitPrice: 0, notes: '' })
             }
-          } else if (!SERVICE_CONFIG[cat]?.subOptions) {
+          } else if (!getServiceConfig(cat, isMillenium)?.subOptions) {
             lines.push({ category: cat, sub: null, quantity: 0, unitPrice: 0, notes: '' })
           }
         }

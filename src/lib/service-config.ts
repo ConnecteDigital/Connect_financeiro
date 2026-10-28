@@ -49,12 +49,25 @@ export const SERVICE_CONFIG: Record<string, ServiceCategoryConfig> = {
 
 export const SERVICE_CATEGORIES = Object.keys(SERVICE_CONFIG)
 
+// Nomes antigos de categoria que tenants/chamados podem ainda ter salvos
+// (ex: "Desentupimento" era o nome de "Desobstrução" antes do rename).
+// Mantém o comportamento correto (sub-opções, valor fechado) pra dados
+// e tenants que não foram atualizados pro nome novo.
+const CATEGORY_ALIASES: Record<string, string> = {
+  'Desentupimento': 'Desobstrução',
+}
+
+export function resolveCategoryName(cat: string): string {
+  return CATEGORY_ALIASES[cat] ?? cat
+}
+
 // Para o tenant Millenium: Sucção e Hidrojateamento não usam sub-opção fixa
 // (o técnico digita livremente no campo de observações da linha).
 export function getServiceConfig(cat: string, milleniumCustomOS: boolean): ServiceCategoryConfig | undefined {
-  const base = SERVICE_CONFIG[cat]
+  const resolvedCat = resolveCategoryName(cat)
+  const base = SERVICE_CONFIG[resolvedCat]
   if (!base) return base
-  if (milleniumCustomOS && (cat === 'Sucção' || cat === 'Hidrojateamento') && base.subOptions) {
+  if (milleniumCustomOS && (resolvedCat === 'Sucção' || resolvedCat === 'Hidrojateamento') && base.subOptions) {
     return { ...base, subOptions: undefined }
   }
   return base

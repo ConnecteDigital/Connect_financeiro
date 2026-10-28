@@ -10,7 +10,7 @@ import { createServiceOrder, createServiceOrderAuxiliaries } from '@/lib/db/serv
 import { getTeams } from '@/lib/db/teams'
 import { getAuxiliaries, createAuxiliary } from '@/lib/db/auxiliaries'
 import { getServiceTypes } from '@/lib/db/service-types'
-import { SERVICE_CONFIG, getServiceConfig } from '@/lib/service-config'
+import { getServiceConfig } from '@/lib/service-config'
 import { useTenant } from '@/lib/tenant-context'
 
 type ServiceType = 'proprio' | 'terceirizado_saida' | 'terceirizado_entrada'
