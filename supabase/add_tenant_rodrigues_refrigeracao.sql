@@ -31,7 +31,7 @@ on conflict (slug) do nothing;
 
 insert into profiles (id, tenant_id, name, role)
 select
-  'COLE_O_UID_AQUI'::uuid,
+  '10d2f84d-1c9c-4edf-89fe-155546bc4121'::uuid,
   t.id,
   'Rodrigues Refrigeração',
   'admin'
