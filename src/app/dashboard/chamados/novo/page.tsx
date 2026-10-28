@@ -66,7 +66,6 @@ export default function NovoChamadoPage() {
   const serviceCategory = selectedCategory
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [clients, setClients] = useState<any[]>([])
   const [teams, setTeams] = useState<any[]>([])
   const [auxiliaries, setAuxiliaries] = useState<any[]>([])
   const [categoryNames, setCategoryNames] = useState<string[]>([])
@@ -155,9 +154,8 @@ export default function NovoChamadoPage() {
   const [otherServiceValue, setOtherServiceValue] = useState(0)
 
   useEffect(() => {
-    Promise.all([getClients(), getTeams(), getAuxiliaries(), getServiceTypes()])
-      .then(([c, t, aux, sts]) => {
-        setClients(c)
+    Promise.all([getTeams(), getAuxiliaries(), getServiceTypes()])
+      .then(([t, aux, sts]) => {
         setTeams(t)
         setAuxiliaries(aux)
         setCategoryNames(sts.map((s: any) => s.name))
@@ -283,16 +281,21 @@ export default function NovoChamadoPage() {
   }).join(', ')
 
   const [clientSearch, setClientSearch] = useState('')
-  const clientSuggestions = !clientId && clientSearch.trim().length >= 2
-    ? clients.filter(c => {
-        const q = clientSearch.trim().toLowerCase()
-        const phoneQ = q.replace(/\D/g, '')
-        return c.name.toLowerCase().includes(q)
-          || (c.phone && c.phone.replace(/\D/g, '').includes(phoneQ) && phoneQ.length >= 3)
-          || (c.address && c.address.toLowerCase().includes(q))
-      }).slice(0, 6)
-    : []
-  const linkedClient = clients.find(c => c.id === clientId)
+  const [clientSuggestions, setClientSuggestions] = useState<any[]>([])
+  const [selectedClientName, setSelectedClientName] = useState('')
+
+  useEffect(() => {
+    if (clientId || clientSearch.trim().length < 2) {
+      setClientSuggestions([])
+      return
+    }
+    const t = setTimeout(() => {
+      getClients(clientSearch.trim())
+        .then(res => setClientSuggestions((res ?? []).slice(0, 6)))
+        .catch(console.error)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [clientSearch, clientId])
 
   function addFiles(fileList: FileList | null) {
     if (!fileList) return
@@ -781,6 +784,7 @@ export default function NovoChamadoPage() {
                 <button key={c.id} type="button"
                   onClick={() => {
                     setClientId(c.id)
+                    setSelectedClientName(c.name)
                     setContactName(c.name)
                     if (c.phone) setContactPhone(c.phone)
                     if (c.cpf_cnpj) setContactCpf(c.cpf_cnpj)
@@ -798,8 +802,8 @@ export default function NovoChamadoPage() {
           )}
           {clientId && (
             <div className="mt-2 flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
-              <p className="text-sm text-emerald-700">✓ Vinculado: <span className="font-semibold">{linkedClient?.name}</span></p>
-              <button type="button" onClick={() => { setClientId(''); setClientSearch('') }}
+              <p className="text-sm text-emerald-700">✓ Vinculado: <span className="font-semibold">{selectedClientName}</span></p>
+              <button type="button" onClick={() => { setClientId(''); setClientSearch(''); setSelectedClientName('') }}
                 className="text-xs text-emerald-600 hover:text-emerald-800 font-medium underline">Desvincular</button>
             </div>
           )}

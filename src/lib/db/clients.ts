@@ -4,7 +4,10 @@ import { getMyTenantId } from './tenant'
 export async function getClients(search?: string) {
   const supabase = createSupabaseClient()
   let query = supabase.from('clients').select('*').order('name')
-  if (search) query = query.ilike('name', `%${search}%`)
+  if (search) {
+    const term = search.replace(/[%,]/g, ' ').trim()
+    query = query.or(`name.ilike.%${term}%,phone.ilike.%${term}%,address.ilike.%${term}%,city.ilike.%${term}%`)
+  }
   const { data, error } = await query
   if (error) throw error
   return data
