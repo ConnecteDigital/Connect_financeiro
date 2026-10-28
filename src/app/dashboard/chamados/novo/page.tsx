@@ -10,7 +10,8 @@ import { createExpense } from '@/lib/db/expenses'
 import { getClients, createClient_ } from '@/lib/db/clients'
 import { getTeams } from '@/lib/db/teams'
 import { getAuxiliaries, createAuxiliary } from '@/lib/db/auxiliaries'
-import { SERVICE_CATEGORIES, getServiceConfig } from '@/lib/service-config'
+import { getServiceTypes } from '@/lib/db/service-types'
+import { getServiceConfig } from '@/lib/service-config'
 import { useCallOrigins } from '@/lib/use-call-origins'
 import { useTenant } from '@/lib/tenant-context'
 import { createClient } from '@/lib/supabase/client'
@@ -68,6 +69,7 @@ export default function NovoChamadoPage() {
   const [clients, setClients] = useState<any[]>([])
   const [teams, setTeams] = useState<any[]>([])
   const [auxiliaries, setAuxiliaries] = useState<any[]>([])
+  const [categoryNames, setCategoryNames] = useState<string[]>([])
   const { origins: callOrigins } = useCallOrigins()
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -153,11 +155,12 @@ export default function NovoChamadoPage() {
   const [otherServiceValue, setOtherServiceValue] = useState(0)
 
   useEffect(() => {
-    Promise.all([getClients(), getTeams(), getAuxiliaries()])
-      .then(([c, t, aux]) => {
+    Promise.all([getClients(), getTeams(), getAuxiliaries(), getServiceTypes()])
+      .then(([c, t, aux, sts]) => {
         setClients(c)
         setTeams(t)
         setAuxiliaries(aux)
+        setCategoryNames(sts.map((s: any) => s.name))
         // Auto-add default dono when commissions enabled
         if (commissionsEnabled) {
           const defaultDono = aux.find((a: any) => a.type === 'dono' && a.is_default)
@@ -644,7 +647,7 @@ export default function NovoChamadoPage() {
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">Tipo de Serviço</label>
             <div className="flex flex-wrap gap-2">
-              {SERVICE_CATEGORIES.map(cat => (
+              {categoryNames.map(cat => (
                 <button key={cat} type="button" onClick={() => setSelectedCategory(prev => prev === cat ? '' : cat)}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${selectedCategory === cat ? 'bg-orange-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
                   {cat}
@@ -914,7 +917,7 @@ export default function NovoChamadoPage() {
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">Tipo(s) de Serviço</label>
           <div className="flex flex-wrap gap-2 mb-2">
-            {SERVICE_CATEGORIES.map(name => (
+            {categoryNames.map(name => (
               <button key={name} type="button" onClick={() => toggleCategory(name)}
                 className={`px-3 py-2 rounded-xl text-sm font-medium border transition ${selectedCategories.includes(name) ? 'bg-orange-500 border-orange-500 text-white shadow-sm' : 'border-slate-200 text-slate-600 hover:border-orange-300 bg-white'}`}>
                 {name}

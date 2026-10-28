@@ -14,7 +14,7 @@ export interface Tenant {
   cnpj: string | null
   phone: string | null
   origin_branding: Record<string, { color?: string; logo_url?: string }> | null
-  call_form_config: { simplified?: boolean; millenium_custom_os?: boolean } | null
+  call_form_config: { simplified?: boolean; millenium_custom_os?: boolean; vertical?: string } | null
 }
 
 interface TenantContextValue {

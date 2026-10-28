@@ -4,9 +4,10 @@ import { useState, useRef, useEffect } from 'react'
 import Image from 'next/image'
 import {
   PhoneCall, BarChart3, DollarSign, ChevronRight,
-  Upload, Check, Palette, Building2, X, Globe, Plus,
+  Upload, Check, Palette, Building2, X, Globe, Plus, Wrench,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { SERVICE_CATEGORIES, GELADEIRA_PRESET_CATEGORIES } from '@/lib/service-config'
 
 const STORAGE_KEY = 'connect_onboarding_done'
 
@@ -26,31 +27,57 @@ const ORIGIN_PRESETS = [
   'Facebook', 'Google', 'Terceirizado', 'Telefone',
 ]
 
+type Vertical = 'desentupidora' | 'geladeira'
+
+const VERTICALS: { value: Vertical; label: string; categories: string[] }[] = [
+  { value: 'desentupidora', label: 'Desentupidora / Hidráulica', categories: SERVICE_CATEGORIES },
+  { value: 'geladeira', label: 'Conserto de Geladeira e Eletrodomésticos', categories: GELADEIRA_PRESET_CATEGORIES },
+]
+
 interface Props {
   tenantId: string
   initialName: string
   onComplete: () => void
 }
 
-// 0=welcome  1=brand  2=origins  3=done
+// 0=welcome  1=brand  2=área/categorias  3=origins  4=done
 export default function OnboardingWizard({ tenantId, initialName, onComplete }: Props) {
   const [step, setStep] = useState(0)
   const [companyName, setCompanyName] = useState(initialName)
   const [primaryColor, setPrimaryColor] = useState('#f97316')
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
+  const [vertical, setVertical] = useState<Vertical>('desentupidora')
+  const [serviceCategories, setServiceCategories] = useState<string[]>(VERTICALS[0].categories)
+  const [customCategory, setCustomCategory] = useState('')
   const [origins, setOrigins] = useState<string[]>(['Indicação', 'Terceirizado'])
   const [customOrigin, setCustomOrigin] = useState('')
   const [saving, setSaving] = useState(false)
   const [featureIdx, setFeatureIdx] = useState(0)
   const logoRef = useRef<HTMLInputElement>(null)
-  const TOTAL_STEPS = 4 // 0..3
+  const TOTAL_STEPS = 5 // 0..4
 
   useEffect(() => {
     if (step !== 0) return
     const t = setInterval(() => setFeatureIdx(i => (i + 1) % FEATURES.length), 3000)
     return () => clearInterval(t)
   }, [step])
+
+  function pickVertical(v: Vertical) {
+    setVertical(v)
+    setServiceCategories(VERTICALS.find(x => x.value === v)?.categories ?? [])
+  }
+
+  function toggleCategory(c: string) {
+    setServiceCategories(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c])
+  }
+
+  function addCustomCategory() {
+    const v = customCategory.trim()
+    if (!v || serviceCategories.includes(v)) return
+    setServiceCategories(prev => [...prev, v])
+    setCustomCategory('')
+  }
 
   function pickLogo(files: FileList | null) {
     const file = files?.[0]
@@ -84,16 +111,29 @@ export default function OnboardingWizard({ tenantId, initialName, onComplete }: 
         logo_url = data.publicUrl
       }
 
+      // Preserva flags que já possam existir (ex: millenium_custom_os) —
+      // nunca sobrescreve call_form_config inteiro.
+      const { data: current } = await supabase.from('tenants').select('call_form_config').eq('id', tenantId).single()
+      const mergedConfig = { ...(current?.call_form_config ?? {}), vertical }
+
       const { error } = await supabase.from('tenants').update({
         name: companyName,
         primary_color: primaryColor,
         call_origins: origins,
+        call_form_config: mergedConfig,
         ...(logo_url ? { logo_url } : {}),
       }).eq('id', tenantId).select('id').single()
       if (error) throw error
 
+      if (serviceCategories.length > 0) {
+        await supabase.from('service_types').upsert(
+          serviceCategories.map(name => ({ name, tenant_id: tenantId })),
+          { onConflict: 'tenant_id,name', ignoreDuplicates: true }
+        )
+      }
+
       localStorage.setItem(STORAGE_KEY, '1')
-      setStep(3)
+      setStep(4)
       setTimeout(() => {
         onComplete()
         window.location.reload()
@@ -118,7 +158,7 @@ export default function OnboardingWizard({ tenantId, initialName, onComplete }: 
 
         <div className="sm:hidden w-10 h-1 bg-zinc-200 rounded-full mx-auto mt-3 mb-1" />
 
-        {step < 3 && (
+        {step < 4 && (
           <button onClick={skip}
             className="absolute top-4 right-4 z-10 w-8 h-8 rounded-full flex items-center justify-center transition"
             style={{ background: 'rgba(0,0,0,0.06)' }}>
@@ -249,8 +289,87 @@ export default function OnboardingWizard({ tenantId, initialName, onComplete }: 
             </div>
           )}
 
-          {/* ── Step 2: Origens dos chamados ── */}
+          {/* ── Step 2: Área de atuação + categorias ── */}
           {step === 2 && (
+            <div className="p-6 space-y-5 overflow-y-auto" style={{ maxHeight: '75dvh' }}>
+              <div>
+                <h2 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>
+                  <Wrench className="w-5 h-5 inline mr-2" style={{ color: 'var(--primary)' }} />
+                  Qual a área da sua empresa?
+                </h2>
+                <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
+                  Isso define as categorias de serviço sugeridas — você pode ajustar como quiser.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                {VERTICALS.map(v => (
+                  <button key={v.value} type="button" onClick={() => pickVertical(v.value)}
+                    className="text-left px-4 py-3 rounded-xl text-sm font-medium border-2 transition"
+                    style={{
+                      background: vertical === v.value ? 'var(--primary)' : 'var(--surface-secondary)',
+                      borderColor: vertical === v.value ? 'var(--primary)' : 'transparent',
+                      color: vertical === v.value ? '#fff' : 'var(--text-primary)',
+                    }}>
+                    {vertical === v.value && <Check className="w-3.5 h-3.5 inline mr-1.5" strokeWidth={3} />}
+                    {v.label}
+                  </button>
+                ))}
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>
+                  Categorias de serviço (desmarque, adicione ou edite)
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {serviceCategories.map(c => (
+                    <span key={c} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-white"
+                      style={{ background: 'var(--primary)' }}>
+                      {c}
+                      <button type="button" onClick={() => toggleCategory(c)} className="opacity-70 hover:opacity-100 transition">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                  {serviceCategories.length === 0 && (
+                    <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Nenhuma categoria selecionada</p>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>Adicionar categoria</p>
+                <div className="flex gap-2">
+                  <input
+                    className="input-field flex-1"
+                    value={customCategory}
+                    onChange={e => setCustomCategory(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addCustomCategory())}
+                    placeholder="Ex: Troca de Mangueira, Instalação..."
+                  />
+                  <button type="button" onClick={addCustomCategory} disabled={!customCategory.trim()}
+                    className="btn-primary px-3 disabled:opacity-40">
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-1">
+                <button type="button" onClick={() => setStep(1)}
+                  className="flex-1 py-3 rounded-xl text-sm font-medium transition"
+                  style={{ background: 'var(--surface-secondary)', color: 'var(--text-secondary)' }}>
+                  Voltar
+                </button>
+                <button type="button" onClick={() => setStep(3)} disabled={serviceCategories.length === 0}
+                  className="btn-primary flex-[2]">
+                  Próximo <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Step 3: Origens dos chamados ── */}
+          {step === 3 && (
             <div className="p-6 space-y-5 overflow-y-auto" style={{ maxHeight: '75dvh' }}>
               <div>
                 <h2 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>
@@ -320,7 +439,7 @@ export default function OnboardingWizard({ tenantId, initialName, onComplete }: 
               )}
 
               <div className="flex gap-3 pt-1">
-                <button type="button" onClick={() => setStep(1)}
+                <button type="button" onClick={() => setStep(2)}
                   className="flex-1 py-3 rounded-xl text-sm font-medium transition"
                   style={{ background: 'var(--surface-secondary)', color: 'var(--text-secondary)' }}>
                   Voltar
@@ -334,8 +453,8 @@ export default function OnboardingWizard({ tenantId, initialName, onComplete }: 
             </div>
           )}
 
-          {/* ── Step 3: Done ── */}
-          {step === 3 && (
+          {/* ── Step 4: Done ── */}
+          {step === 4 && (
             <div className="p-8 flex flex-col items-center gap-4 text-center">
               <div className="w-20 h-20 rounded-full flex items-center justify-center"
                 style={{ background: 'var(--primary-light)' }}>

@@ -49,6 +49,25 @@ export const SERVICE_CONFIG: Record<string, ServiceCategoryConfig> = {
 
 export const SERVICE_CATEGORIES = Object.keys(SERVICE_CONFIG)
 
+// Sugestões prontas pro passo de onboarding de "Conserto de Geladeira e
+// Eletrodomésticos" — apenas uma lista inicial pro usuário escolher/editar,
+// não precisa de configuração especial (usa o padrão genérico abaixo).
+export const GELADEIRA_PRESET_CATEGORIES = [
+  'Troca de Compressor',
+  'Recarga de Gás',
+  'Troca de Termostato',
+  'Não Está Gelando',
+  'Troca de Borracha de Vedação',
+  'Troca de Placa Eletrônica',
+  'Outros',
+]
+
+const GENERIC_CATEGORY_CONFIG: ServiceCategoryConfig = {
+  qtyLabel: 'Quantidade',
+  priceLabel: 'Valor (R$)',
+  allowFlatPrice: true,
+}
+
 // Nomes antigos de categoria que tenants/chamados podem ainda ter salvos
 // (ex: "Desentupimento" era o nome de "Desobstrução" antes do rename).
 // Mantém o comportamento correto (sub-opções, valor fechado) pra dados
@@ -63,10 +82,14 @@ export function resolveCategoryName(cat: string): string {
 
 // Para o tenant Millenium: Sucção e Hidrojateamento não usam sub-opção fixa
 // (o técnico digita livremente no campo de observações da linha).
-export function getServiceConfig(cat: string, milleniumCustomOS: boolean): ServiceCategoryConfig | undefined {
+//
+// Categorias que a empresa cadastrou por conta própria (ex: tipos de
+// serviço de conserto de geladeira, ou qualquer nome digitado em
+// Configurações) não têm entrada no SERVICE_CONFIG — nesse caso cai no
+// padrão genérico, que já permite quantidade/valor e valor fechado.
+export function getServiceConfig(cat: string, milleniumCustomOS: boolean): ServiceCategoryConfig {
   const resolvedCat = resolveCategoryName(cat)
-  const base = SERVICE_CONFIG[resolvedCat]
-  if (!base) return base
+  const base = SERVICE_CONFIG[resolvedCat] ?? GENERIC_CATEGORY_CONFIG
   if (milleniumCustomOS && (resolvedCat === 'Sucção' || resolvedCat === 'Hidrojateamento') && base.subOptions) {
     return { ...base, subOptions: undefined }
   }
