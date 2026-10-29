@@ -122,6 +122,7 @@ export default function NovoChamadoPage() {
     if (isRodrigues) setRecentVisitFees(getRecentVisitFees())
   }, [isRodrigues])
   const [scheduledDriver, setScheduledDriver] = useState('')
+  const [technicianId, setTechnicianId] = useState('')
   const [applianceType, setApplianceType] = useState('')
   const [deviceBrand, setDeviceBrand] = useState('')
   const [deviceBrandOther, setDeviceBrandOther] = useState('')
@@ -436,6 +437,7 @@ export default function NovoChamadoPage() {
         device_brand: isRodrigues ? ((deviceBrand === 'Outra' ? deviceBrandOther : deviceBrand) || null) : null,
         appliance_type: isRodrigues ? (applianceType || null) : null,
         visit_fee: isRodrigues && isScheduled && visitFee > 0 ? visitFee : null,
+        technician_id: isRodrigues ? (technicianId || null) : null,
       })
       if (isRodrigues && isScheduled && visitFee > 0) addRecentVisitFee(visitFee)
 
@@ -1064,10 +1066,14 @@ export default function NovoChamadoPage() {
               <div className="sm:col-span-2">
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Técnico Responsável</label>
                 {isRodrigues ? (
-                  <select value={scheduledDriver} onChange={e => setScheduledDriver(e.target.value)}
+                  <select value={technicianId} onChange={e => {
+                    const aux = auxiliaries.find(a => a.id === e.target.value)
+                    setTechnicianId(e.target.value)
+                    setScheduledDriver(aux?.name ?? '')
+                  }}
                     className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white">
                     <option value="">Selecione o técnico...</option>
-                    {teams.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+                    {auxiliaries.filter(a => a.type === 'tecnico').map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                   </select>
                 ) : (
                   <input type="text" value={scheduledDriver} onChange={e => setScheduledDriver(e.target.value)}

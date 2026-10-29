@@ -50,7 +50,7 @@ function localToday() {
 
 export default function ChamadosPage() {
   const router = useRouter()
-  const { tenant } = useTenant()
+  const { tenant, isTecnico } = useTenant()
   const isRodrigues = tenant?.call_form_config?.rodrigues_custom === true
   const [dayFilter, setDayFilter] = useState(localToday)
   const [search, setSearch] = useState('')
@@ -183,24 +183,28 @@ export default function ChamadosPage() {
               </button>
             </div>
           )}
-          <button
-            onClick={() => {
-              const today = new Date()
-              const d = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
-              sessionStorage.setItem('resumo_dia_date', d)
-              window.open('/resumo-dia', '_blank')
-            }}
-            className="flex items-center gap-2 text-sm px-4 py-2.5 rounded-xl border font-semibold transition"
-            style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)', background: 'var(--surface)' }}>
-            <FileText className="w-4 h-4" />
-            <span className="hidden sm:inline">Resumo do Dia</span>
-          </button>
-          <Link href="/dashboard/chamados/novo"
-            className="flex items-center gap-2 btn-primary text-sm px-4 py-2.5 rounded-xl">
-            <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">Novo Chamado</span>
-            <span className="sm:hidden">Novo</span>
-          </Link>
+          {!isTecnico && (
+            <>
+              <button
+                onClick={() => {
+                  const today = new Date()
+                  const d = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
+                  sessionStorage.setItem('resumo_dia_date', d)
+                  window.open('/resumo-dia', '_blank')
+                }}
+                className="flex items-center gap-2 text-sm px-4 py-2.5 rounded-xl border font-semibold transition"
+                style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)', background: 'var(--surface)' }}>
+                <FileText className="w-4 h-4" />
+                <span className="hidden sm:inline">Resumo do Dia</span>
+              </button>
+              <Link href="/dashboard/chamados/novo"
+                className="flex items-center gap-2 btn-primary text-sm px-4 py-2.5 rounded-xl">
+                <Plus className="w-4 h-4" />
+                <span className="hidden sm:inline">Novo Chamado</span>
+                <span className="sm:hidden">Novo</span>
+              </Link>
+            </>
+          )}
         </div>
       </div>
 

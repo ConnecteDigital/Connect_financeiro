@@ -38,7 +38,7 @@ const fmt = (v: number) => `R$ ${Number(v).toLocaleString('pt-BR', { minimumFrac
 export default function ChamadoDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
-  const { tenant } = useTenant()
+  const { tenant, isTecnico } = useTenant()
   const isRodrigues = tenant?.call_form_config?.rodrigues_custom === true
   const [call, setCall] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -193,7 +193,7 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
               Compartilhar OS
             </Link>
           )}
-          {(call.status === 'agendado' || call.status === 'aprovado') && (
+          {!isTecnico && (call.status === 'agendado' || call.status === 'aprovado') && (
             <Link href={`/dashboard/orcamentos/novo?from_call=${id}`}
               className="flex items-center gap-1.5 bg-violet-600 hover:bg-violet-700 text-white text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg transition">
               <ClipboardList className="w-3.5 h-3.5" />
@@ -205,11 +205,13 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
             <Edit className="w-3.5 h-3.5" />
             Editar
           </Link>
-          <button onClick={handleDeleteCall} disabled={deleting}
-            className="flex items-center gap-1.5 bg-red-50 hover:bg-red-100 disabled:opacity-50 text-red-600 text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg transition border border-red-200">
-            <Trash2 className="w-3.5 h-3.5" />
-            {deleting ? 'Excluindo...' : 'Excluir'}
-          </button>
+          {!isTecnico && (
+            <button onClick={handleDeleteCall} disabled={deleting}
+              className="flex items-center gap-1.5 bg-red-50 hover:bg-red-100 disabled:opacity-50 text-red-600 text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg transition border border-red-200">
+              <Trash2 className="w-3.5 h-3.5" />
+              {deleting ? 'Excluindo...' : 'Excluir'}
+            </button>
+          )}
         </div>
       </div>
 

@@ -150,6 +150,8 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const [partsCost, setPartsCost] = useState(0)
   const [applianceType, setApplianceType] = useState('')
   const [deviceBrand, setDeviceBrand] = useState('')
+  const [technicianId, setTechnicianId] = useState('')
+  const [callDriverName, setCallDriverName] = useState('')
   const [deviceBrandOther, setDeviceBrandOther] = useState('')
   const [visitFee, setVisitFee] = useState(0)
   const [recentVisitFees, setRecentVisitFees] = useState<number[]>([])
@@ -184,6 +186,8 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         if (!APPLIANCE_BRANDS.includes(call.device_brand)) setDeviceBrandOther(call.device_brand)
       }
       setApplianceType(call.appliance_type ?? '')
+      setTechnicianId(call.technician_id ?? '')
+      setCallDriverName(call.driver ?? '')
       setVisitFee(Number(call.visit_fee ?? 0))
       setIsApproved(call.status === 'aprovado')
       setIsScheduled(call.status === 'agendado')
@@ -460,6 +464,8 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
           device_brand: (deviceBrand === 'Outra' ? deviceBrandOther : deviceBrand) || null,
           appliance_type: applianceType || null,
           visit_fee: visitFee > 0 ? visitFee : null,
+          technician_id: technicianId || null,
+          driver: callDriverName || null,
         } : {}),
       })
       if (isRodrigues && visitFee > 0) addRecentVisitFee(visitFee)
@@ -747,6 +753,20 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                   </a>
                 )}
               </div>
+              {isRodrigues && (
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Técnico Responsável</label>
+                  <select value={technicianId} onChange={e => {
+                    const aux = auxiliaries.find(a => a.id === e.target.value)
+                    setTechnicianId(e.target.value)
+                    setCallDriverName(aux?.name ?? '')
+                  }}
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white">
+                    <option value="">Selecione o técnico...</option>
+                    {auxiliaries.filter(a => a.type === 'tecnico').map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select>
+                </div>
+              )}
             </div>
           </div>
         )}

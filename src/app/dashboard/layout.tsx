@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, PhoneCall, Users,
   BarChart3, Settings, LogOut, Building2,
@@ -31,6 +31,14 @@ const moreNav = [
 ]
 
 const allNav = [...mainNav, ...moreNav]
+
+// Nav restrita pro login de técnico (Rodrigues Refrigeração) — sem
+// Financeiro, Clientes, Relatórios, Configurações etc. O acesso de
+// verdade é travado no banco (RLS); isso é só a vitrine condizente.
+const tecnicoNav = [
+  { href: '/dashboard/chamados', label: 'Chamados', icon: PhoneCall },
+  { href: '/dashboard/comissao', label: 'Comissão',  icon: Wallet },
+]
 
 async function handleLogout() {
   const { createClient } = await import('@/lib/supabase/client')
@@ -65,11 +73,47 @@ function TenantAvatar({ size = 36 }: { size?: number }) {
 /* ── Mobile bottom nav ───────────────────────────────────────── */
 function BottomNav({ onMoreClick, moreOpen, visible }: { onMoreClick: () => void; moreOpen: boolean; visible: boolean }) {
   const pathname = usePathname()
+  const { isTecnico } = useTenant()
 
   function isActive(href: string) {
     return href === '/dashboard'
       ? pathname === '/dashboard'
       : pathname.startsWith(href)
+  }
+
+  if (isTecnico) {
+    return (
+      <nav
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 transition-transform duration-300 ease-out"
+        style={{ transform: visible ? 'translateY(0)' : 'translateY(110%)' }}>
+        <div style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+          <div className="mx-3 mb-3 rounded-2xl"
+            style={{
+              background: 'var(--nav-bg)',
+              backdropFilter: 'blur(24px) saturate(180%)',
+              WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.14), 0 0 0 0.5px var(--border)',
+            }}>
+            <div className="flex items-center justify-around px-1 py-2.5">
+              {tecnicoNav.map(({ href, label, icon: Icon }) => {
+                const active = isActive(href)
+                return (
+                  <Link key={href} href={href}
+                    className="flex flex-col items-center gap-0.5 px-6 py-1 rounded-xl transition-all min-w-0"
+                    style={{ color: active ? 'var(--primary)' : '#8e8e93' }}>
+                    <div className="w-10 h-7 flex items-center justify-center rounded-xl transition-all"
+                      style={active ? { background: 'rgba(var(--primary-rgb),0.1)' } : {}}>
+                      <Icon className="w-5 h-5" strokeWidth={active ? 2.2 : 1.8} />
+                    </div>
+                    <span className="text-[10px] font-medium leading-none truncate">{label}</span>
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      </nav>
+    )
   }
 
   return (
@@ -210,7 +254,7 @@ function MoreDrawer({ open, onClose, isMaster }: { open: boolean; onClose: () =>
 /* ── Desktop sidebar ─────────────────────────────────────────── */
 function Sidebar({ theme, onToggleTheme, isMaster }: { theme: 'light' | 'dark'; onToggleTheme: () => void; isMaster: boolean }) {
   const pathname = usePathname()
-  const { tenant } = useTenant()
+  const { tenant, isTecnico } = useTenant()
 
   function isActive(href: string) {
     return href === '/dashboard'
@@ -218,7 +262,7 @@ function Sidebar({ theme, onToggleTheme, isMaster }: { theme: 'light' | 'dark'; 
       : pathname.startsWith(href)
   }
 
-  const sidebarNav = isMaster
+  const sidebarNav = isTecnico ? tecnicoNav : isMaster
     ? [...allNav, { href: '/dashboard/master', label: 'Painel Master', icon: ShieldCheck }]
     : allNav
 
@@ -291,10 +335,10 @@ function Sidebar({ theme, onToggleTheme, isMaster }: { theme: 'light' | 'dark'; 
 
 /* ── Mobile top header ───────────────────────────────────────── */
 function MobileHeader({ visible, theme, onToggleTheme }: { visible: boolean; theme: 'light' | 'dark'; onToggleTheme: () => void }) {
-  const { tenant } = useTenant()
+  const { tenant, isTecnico } = useTenant()
   const pathname = usePathname()
 
-  const currentPage = allNav.find(n =>
+  const currentPage = [...allNav, ...tecnicoNav].find(n =>
     n.href === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(n.href)
   )
 
@@ -334,11 +378,13 @@ function MobileHeader({ visible, theme, onToggleTheme }: { visible: boolean; the
             ? <Sun className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
             : <Moon className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />}
         </button>
-        <Link href="/dashboard/configuracoes"
-          className="w-9 h-9 rounded-full flex items-center justify-center transition"
-          style={{ background: 'var(--chip-bg)' }}>
-          <Settings className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
-        </Link>
+        {!isTecnico && (
+          <Link href="/dashboard/configuracoes"
+            className="w-9 h-9 rounded-full flex items-center justify-center transition"
+            style={{ background: 'var(--chip-bg)' }}>
+            <Settings className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
+          </Link>
+        )}
       </div>
     </header>
   )
@@ -355,11 +401,21 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
   const [navVisible, setNavVisible] = useState(true)
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
   const [isMaster, setIsMaster] = useState(false)
-  const { tenant } = useTenant()
+  const { tenant, isTecnico } = useTenant()
   const pathname = usePathname()
+  const router = useRouter()
   const mainRef = useRef<HTMLElement>(null)
   const lastScrollY = useRef(0)
   const scrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Técnico não tem Início/Financeiro/etc. — manda ele direto pros
+  // chamados se cair em alguma rota fora da nav restrita dele.
+  const TECNICO_ALLOWED_PREFIXES = ['/dashboard/chamados', '/dashboard/comissao']
+  useEffect(() => {
+    if (isTecnico && !TECNICO_ALLOWED_PREFIXES.some(p => pathname.startsWith(p))) {
+      router.replace('/dashboard/chamados')
+    }
+  }, [isTecnico, pathname, router])
 
   const isPrintPage = pathname.includes('/imprimir')
   // Documentos (OS, romaneio) são sempre claros, mesmo no modo escuro
@@ -374,8 +430,9 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
     })
   }, [])
 
-  // Show onboarding only on first visit
+  // Show onboarding only on first visit (nunca pro login de técnico)
   useEffect(() => {
+    if (isTecnico) return
     if (typeof window !== 'undefined' && !localStorage.getItem('connect_onboarding_done')) {
       setShowOnboarding(true)
     }
