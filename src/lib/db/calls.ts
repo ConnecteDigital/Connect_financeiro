@@ -59,7 +59,7 @@ export async function getCall(id: string) {
   const supabase = createClient()
   const { data, error } = await supabase
     .from('calls')
-    .select('*, client:clients(*), service_orders(*, items:service_order_items(*), team:teams(*), service_order_auxiliaries(*, auxiliary:auxiliaries(*)))')
+    .select('*, client:clients(*), created_by_profile:profiles!calls_created_by_fkey(name), service_orders(*, items:service_order_items(*), team:teams(*), service_order_auxiliaries(*, auxiliary:auxiliaries(*)))')
     .eq('id', id)
     .single()
   if (error) throw error

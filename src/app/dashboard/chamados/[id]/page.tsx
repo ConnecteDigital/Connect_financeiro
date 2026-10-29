@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { ArrowLeft, Phone, CheckCircle, XCircle, Clock, Edit, DollarSign, User, FileText, Wrench, Paperclip, Upload, Trash2, Download, Printer, ClipboardList, Navigation } from 'lucide-react'
+import { ArrowLeft, Phone, CheckCircle, XCircle, Clock, Edit, DollarSign, User, FileText, Wrench, Paperclip, Upload, Trash2, Download, Printer, ClipboardList, Navigation, Copy, Check, MoreVertical, CalendarClock } from 'lucide-react'
 import Link from 'next/link'
 import { use } from 'react'
 import { useRouter } from 'next/navigation'
@@ -47,7 +47,17 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
   const [attachments, setAttachments] = useState<any[]>([])
   const [uploading, setUploading] = useState(false)
   const [attachError, setAttachError] = useState('')
+  const [moreOpen, setMoreOpen] = useState(false)
+  const [addressCopied, setAddressCopied] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  async function copyAddress(text: string) {
+    try {
+      await navigator.clipboard.writeText(text)
+      setAddressCopied(true)
+      setTimeout(() => setAddressCopied(false), 2000)
+    } catch { /* clipboard pode não estar disponível */ }
+  }
 
   useEffect(() => {
     getCall(id).then(setCall).catch(console.error).finally(() => setLoading(false))
@@ -148,6 +158,7 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
   }
 
   const so = call.service_orders?.[0]
+  const fullAddress = [call.call_address, call.call_neighborhood, call.call_city].filter(Boolean).join(', ')
   const StatusIcon = statusConfig[call.status]?.icon || Phone
   const cfg = statusConfig[call.status]
 
@@ -178,159 +189,258 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
         </div>
 
         {/* Action buttons — wrap, compact on mobile */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {call.status === 'agendado' && (
-            <Link href={`/dashboard/chamados/${id}/romaneio`}
-              className="flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg transition">
-              <FileText className="w-3.5 h-3.5" />
-              Romaneio
+        {isRodrigues ? (
+          <div className="flex items-center gap-2">
+            <Link href={`/dashboard/chamados/${id}/editar`}
+              className="flex-1 flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-3 py-2.5 rounded-lg transition">
+              <Edit className="w-4 h-4" />
+              Editar
             </Link>
-          )}
-          {so && call.status !== 'agendado' && (
-            <Link href={`/dashboard/chamados/${id}/imprimir`}
-              className="flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg transition">
-              <Printer className="w-3.5 h-3.5" />
-              Compartilhar OS
+            {so && call.status !== 'agendado' && (
+              <Link href={`/dashboard/chamados/${id}/imprimir`}
+                className="flex-1 flex items-center justify-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold px-3 py-2.5 rounded-lg transition">
+                <Printer className="w-4 h-4" />
+                Compartilhar OS
+              </Link>
+            )}
+            <div className="relative flex-shrink-0">
+              <button onClick={() => setMoreOpen(o => !o)}
+                className="p-2.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 transition">
+                <MoreVertical className="w-4 h-4" />
+              </button>
+              {moreOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setMoreOpen(false)} />
+                  <div className="absolute right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 overflow-hidden w-48">
+                    {call.status === 'agendado' && (
+                      <Link href={`/dashboard/chamados/${id}/romaneio`} onClick={() => setMoreOpen(false)}
+                        className="flex items-center gap-2 px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition">
+                        <FileText className="w-4 h-4" /> Romaneio
+                      </Link>
+                    )}
+                    {!isTecnico && (call.status === 'agendado' || call.status === 'aprovado') && (
+                      <Link href={`/dashboard/orcamentos/novo?from_call=${id}`} onClick={() => setMoreOpen(false)}
+                        className="flex items-center gap-2 px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition">
+                        <ClipboardList className="w-4 h-4" /> Gerar Orçamento
+                      </Link>
+                    )}
+                    {!isTecnico && (
+                      <button onClick={() => { setMoreOpen(false); handleDeleteCall() }} disabled={deleting}
+                        className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 transition">
+                        <Trash2 className="w-4 h-4" /> {deleting ? 'Excluindo...' : 'Excluir'}
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 flex-wrap">
+            {call.status === 'agendado' && (
+              <Link href={`/dashboard/chamados/${id}/romaneio`}
+                className="flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg transition">
+                <FileText className="w-3.5 h-3.5" />
+                Romaneio
+              </Link>
+            )}
+            {so && call.status !== 'agendado' && (
+              <Link href={`/dashboard/chamados/${id}/imprimir`}
+                className="flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg transition">
+                <Printer className="w-3.5 h-3.5" />
+                Compartilhar OS
+              </Link>
+            )}
+            {!isTecnico && (call.status === 'agendado' || call.status === 'aprovado') && (
+              <Link href={`/dashboard/orcamentos/novo?from_call=${id}`}
+                className="flex items-center gap-1.5 bg-violet-600 hover:bg-violet-700 text-white text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg transition">
+                <ClipboardList className="w-3.5 h-3.5" />
+                Gerar Orçamento
+              </Link>
+            )}
+            <Link href={`/dashboard/chamados/${id}/editar`}
+              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg transition">
+              <Edit className="w-3.5 h-3.5" />
+              Editar
             </Link>
-          )}
-          {!isTecnico && (call.status === 'agendado' || call.status === 'aprovado') && (
-            <Link href={`/dashboard/orcamentos/novo?from_call=${id}`}
-              className="flex items-center gap-1.5 bg-violet-600 hover:bg-violet-700 text-white text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg transition">
-              <ClipboardList className="w-3.5 h-3.5" />
-              Gerar Orçamento
-            </Link>
-          )}
-          <Link href={`/dashboard/chamados/${id}/editar`}
-            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg transition">
-            <Edit className="w-3.5 h-3.5" />
-            Editar
-          </Link>
-          {!isTecnico && (
-            <button onClick={handleDeleteCall} disabled={deleting}
-              className="flex items-center gap-1.5 bg-red-50 hover:bg-red-100 disabled:opacity-50 text-red-600 text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg transition border border-red-200">
-              <Trash2 className="w-3.5 h-3.5" />
-              {deleting ? 'Excluindo...' : 'Excluir'}
-            </button>
-          )}
-        </div>
+            {!isTecnico && (
+              <button onClick={handleDeleteCall} disabled={deleting}
+                className="flex items-center gap-1.5 bg-red-50 hover:bg-red-100 disabled:opacity-50 text-red-600 text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg transition border border-red-200">
+                <Trash2 className="w-3.5 h-3.5" />
+                {deleting ? 'Excluindo...' : 'Excluir'}
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Info do chamado */}
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
-        <h2 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
-          <Phone className="w-4 h-4 text-blue-600" />
-          Informações do Chamado
-        </h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
-          {(call.contact_name || call.client?.name) && (
-            <div>
-              <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Contato</p>
-              <p className="text-slate-700 font-medium mt-0.5">{call.client?.name ?? call.contact_name}</p>
-            </div>
-          )}
-          <div>
-            <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Origem</p>
-            <p className="text-slate-700 font-medium mt-0.5">{getOriginLabel(call.origin)}</p>
+      {isRodrigues ? (
+        <>
+          {/* Serviço Previsto */}
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
+            <h2 className="font-semibold text-slate-800 mb-3 flex items-center gap-2 text-sm">
+              <Wrench className="w-4 h-4 text-blue-600" />
+              Serviço Previsto
+            </h2>
+            <p className="text-lg font-bold text-slate-800">
+              {[call.appliance_type, call.device_brand].filter(Boolean).join(' ') || call.service_category || '—'}
+            </p>
+            {call.service_category && (call.appliance_type || call.device_brand) && (
+              <p className="text-sm text-slate-500 mt-0.5">{call.service_category}</p>
+            )}
           </div>
-          <div>
-            <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Status</p>
-            <p className="text-slate-700 font-medium mt-0.5">{cfg?.label}</p>
+
+          {/* Agendamento */}
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
+            <h2 className="font-semibold text-slate-800 mb-3 flex items-center gap-2 text-sm">
+              <CalendarClock className="w-4 h-4 text-blue-600" />
+              Agendamento
+            </h2>
+            <p className="text-slate-700 font-medium">
+              {cfg?.label}
+              {call.created_by_profile?.name && ` · agendado por ${call.created_by_profile.name}`}
+            </p>
+            <p className="text-sm text-slate-500 mt-0.5">
+              {call.scheduled_date
+                ? new Date(call.scheduled_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' })
+                : new Date(call.date).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' })}
+              {' · '}
+              {call.scheduled_time ? `às ${String(call.scheduled_time).slice(0, 5)}` : 'qualquer horário'}
+            </p>
+            {call.visit_fee > 0 && (
+              <p className="text-sm text-slate-500 mt-1.5">Valor da visita: R$ {Number(call.visit_fee).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+            )}
+            {call.notes && <p className="text-sm text-slate-500 mt-2 pt-2 border-t border-slate-50">{call.notes}</p>}
           </div>
-          {call.contact_phone && (
-            <div>
-              <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Telefone</p>
-              <p className="text-slate-700 font-medium mt-0.5">{call.contact_phone}</p>
-            </div>
-          )}
-          {call.scheduled_date && (
-            <div>
-              <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Data do Serviço</p>
-              <p className="text-slate-700 font-medium mt-0.5">{new Date(call.scheduled_date + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
-            </div>
-          )}
-          {call.service_category && (
-            <div>
-              <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Tipo de Serviço</p>
-              <p className="text-slate-700 font-medium mt-0.5">{call.service_category}</p>
-            </div>
-          )}
-          {isRodrigues && (call.appliance_type || call.device_brand) && (
-            <div>
-              <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Aparelho</p>
-              <p className="text-slate-700 font-medium mt-0.5">{[call.appliance_type, call.device_brand].filter(Boolean).join(' · ')}</p>
-            </div>
-          )}
-          {call.scheduled_time && (
-            <div>
-              <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Horário Agendado</p>
-              <p className="text-blue-600 font-semibold mt-0.5">🕐 {String(call.scheduled_time).slice(0,5)}</p>
-            </div>
-          )}
-          {(call.call_city || call.call_neighborhood) && (
-            <div>
-              <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Cidade / Bairro</p>
-              <p className="text-slate-700 font-medium mt-0.5">{[call.call_city, call.call_neighborhood].filter(Boolean).join(' / ')}</p>
-            </div>
-          )}
-          {call.call_address && (
-            <div className="col-span-2">
-              <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Endereço do Serviço</p>
-              <p className="text-slate-700 mt-0.5">📍 {call.call_address}</p>
-              {isRodrigues && (
-                <a href={mapsUrl([call.call_address, call.call_neighborhood, call.call_city].filter(Boolean).join(', '))}
-                  target="_blank" rel="noopener noreferrer"
-                  className="mt-2 flex items-center justify-center gap-2 text-sm font-bold px-4 py-3 rounded-xl bg-blue-600 text-white hover:bg-blue-700 active:scale-[0.98] transition shadow-sm max-w-xs">
+
+          {/* Cliente */}
+          {(call.client || call.contact_name) && (
+            <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
+              <h2 className="font-semibold text-slate-800 mb-3 flex items-center gap-2 text-sm">
+                <User className="w-4 h-4 text-blue-600" />
+                Cliente
+              </h2>
+              <p className="text-slate-800 font-semibold">{call.client?.name ?? call.contact_name}</p>
+              {call.contact_phone && <p className="text-sm text-slate-500 mt-0.5">{call.contact_phone}</p>}
+              {fullAddress && (
+                <div className="flex items-start justify-between gap-2 mt-2 pt-2 border-t border-slate-50">
+                  <p className="text-sm text-slate-600 flex-1">📍 {fullAddress}</p>
+                  <button onClick={() => copyAddress(fullAddress)}
+                    className="flex-shrink-0 p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition">
+                    {addressCopied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                </div>
+              )}
+              {fullAddress && (
+                <a href={mapsUrl(fullAddress)} target="_blank" rel="noopener noreferrer"
+                  className="mt-3 flex items-center justify-center gap-2 text-sm font-bold px-4 py-3 rounded-xl bg-blue-600 text-white hover:bg-blue-700 active:scale-[0.98] transition shadow-sm">
                   <Navigation className="w-4 h-4" />
                   Abrir no Google Maps
                 </a>
               )}
             </div>
           )}
-          {isRodrigues && call.visit_fee > 0 && (
-            <div>
-              <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Valor da Visita</p>
-              <p className="text-slate-700 font-semibold mt-0.5">R$ {Number(call.visit_fee).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+        </>
+      ) : (
+        <>
+          {/* Info do chamado */}
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
+            <h2 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
+              <Phone className="w-4 h-4 text-blue-600" />
+              Informações do Chamado
+            </h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+              {(call.contact_name || call.client?.name) && (
+                <div>
+                  <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Contato</p>
+                  <p className="text-slate-700 font-medium mt-0.5">{call.client?.name ?? call.contact_name}</p>
+                </div>
+              )}
+              <div>
+                <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Origem</p>
+                <p className="text-slate-700 font-medium mt-0.5">{getOriginLabel(call.origin)}</p>
+              </div>
+              <div>
+                <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Status</p>
+                <p className="text-slate-700 font-medium mt-0.5">{cfg?.label}</p>
+              </div>
+              {call.contact_phone && (
+                <div>
+                  <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Telefone</p>
+                  <p className="text-slate-700 font-medium mt-0.5">{call.contact_phone}</p>
+                </div>
+              )}
+              {call.scheduled_date && (
+                <div>
+                  <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Data do Serviço</p>
+                  <p className="text-slate-700 font-medium mt-0.5">{new Date(call.scheduled_date + 'T12:00:00').toLocaleDateString('pt-BR')}</p>
+                </div>
+              )}
+              {call.service_category && (
+                <div>
+                  <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Tipo de Serviço</p>
+                  <p className="text-slate-700 font-medium mt-0.5">{call.service_category}</p>
+                </div>
+              )}
+              {call.scheduled_time && (
+                <div>
+                  <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Horário Agendado</p>
+                  <p className="text-blue-600 font-semibold mt-0.5">🕐 {String(call.scheduled_time).slice(0,5)}</p>
+                </div>
+              )}
+              {(call.call_city || call.call_neighborhood) && (
+                <div>
+                  <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Cidade / Bairro</p>
+                  <p className="text-slate-700 font-medium mt-0.5">{[call.call_city, call.call_neighborhood].filter(Boolean).join(' / ')}</p>
+                </div>
+              )}
+              {call.call_address && (
+                <div className="col-span-2">
+                  <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Endereço do Serviço</p>
+                  <p className="text-slate-700 mt-0.5">📍 {call.call_address}</p>
+                </div>
+              )}
+              {call.notes && (
+                <div className="col-span-2 sm:col-span-3">
+                  <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Observações</p>
+                  <p className="text-slate-700 mt-0.5">{call.notes}</p>
+                </div>
+              )}
             </div>
-          )}
-          {call.notes && (
-            <div className="col-span-2 sm:col-span-3">
-              <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Observações</p>
-              <p className="text-slate-700 mt-0.5">{call.notes}</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Cliente */}
-      {call.client && (
-        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
-          <h2 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
-            <User className="w-4 h-4 text-blue-600" />
-            Cliente
-          </h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
-            <div>
-              <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Nome</p>
-              <p className="text-slate-700 font-medium mt-0.5">{call.client.name}</p>
-            </div>
-            {call.client.cpf_cnpj && <div>
-              <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">CPF/CNPJ</p>
-              <p className="text-slate-700 mt-0.5">{call.client.cpf_cnpj}</p>
-            </div>}
-            {call.client.phone && <div>
-              <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Telefone</p>
-              <p className="text-slate-700 mt-0.5">{call.client.phone}</p>
-            </div>}
-            {call.client.city && <div>
-              <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Cidade</p>
-              <p className="text-slate-700 mt-0.5">{call.client.city}{call.client.state ? ` - ${call.client.state}` : ''}</p>
-            </div>}
-            {call.client.address && <div className="col-span-2">
-              <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Endereço</p>
-              <p className="text-slate-700 mt-0.5">{call.client.address}</p>
-            </div>}
           </div>
-        </div>
+
+          {/* Cliente */}
+          {call.client && (
+            <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
+              <h2 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                <User className="w-4 h-4 text-blue-600" />
+                Cliente
+              </h2>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+                <div>
+                  <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Nome</p>
+                  <p className="text-slate-700 font-medium mt-0.5">{call.client.name}</p>
+                </div>
+                {call.client.cpf_cnpj && <div>
+                  <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">CPF/CNPJ</p>
+                  <p className="text-slate-700 mt-0.5">{call.client.cpf_cnpj}</p>
+                </div>}
+                {call.client.phone && <div>
+                  <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Telefone</p>
+                  <p className="text-slate-700 mt-0.5">{call.client.phone}</p>
+                </div>}
+                {call.client.city && <div>
+                  <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Cidade</p>
+                  <p className="text-slate-700 mt-0.5">{call.client.city}{call.client.state ? ` - ${call.client.state}` : ''}</p>
+                </div>}
+                {call.client.address && <div className="col-span-2">
+                  <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Endereço</p>
+                  <p className="text-slate-700 mt-0.5">{call.client.address}</p>
+                </div>}
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Ordem de Serviço */}

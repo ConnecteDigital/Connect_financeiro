@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { Plus, Search, CheckCircle, XCircle, Clock, ChevronRight, ChevronLeft, List, CalendarDays, FileText, Wallet } from 'lucide-react'
+import { Plus, Search, CheckCircle, XCircle, Clock, ChevronRight, ChevronLeft, List, CalendarDays, FileText, Wallet, SlidersHorizontal } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { getCalls, updateCall } from '@/lib/db/calls'
@@ -53,6 +53,7 @@ export default function ChamadosPage() {
   const { tenant, isTecnico } = useTenant()
   const isRodrigues = tenant?.call_form_config?.rodrigues_custom === true
   const [dayFilter, setDayFilter] = useState(localToday)
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<Status>('todos')
@@ -230,79 +231,148 @@ export default function ChamadosPage() {
         </div>
       )}
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-        <input type="text" placeholder="Buscar cliente, contato ou código OS..."
-          value={search} onChange={e => handleSearchChange(e.target.value)}
-          className="w-full pl-9 pr-4 py-2.5 bg-white border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] shadow-sm" />
-      </div>
-
-      {/* Status filters */}
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
-        {(isRodrigues ? filtersRodrigues : filters).map(f => (
-          <button key={f.value} onClick={() => setStatusFilter(f.value)}
-            className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-semibold border transition ${
-              statusFilter === f.value
-                ? 'text-white border-transparent shadow-sm'
-                : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400'
-            }`}
-            style={statusFilter === f.value ? { background: 'var(--primary)' } : {}}>
-            {f.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Origin + Canal filters */}
-      <div className="space-y-2">
-        {presentOrigins.length > 0 && (
-          <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
-            <button onClick={() => setOriginFilter('todos')}
-              className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
-                originFilter === 'todos'
-                  ? 'bg-zinc-800 text-white border-zinc-800'
-                  : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400'
-              }`}>
-              Todas origens
-              <span className="text-[10px] opacity-70">({calls.length})</span>
+      {isRodrigues ? (
+        <>
+          {/* Busca + status (dropdown) + botão de filtros extras — tudo compacto */}
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+              <input type="text" placeholder="Buscar cliente, contato ou OS..."
+                value={search} onChange={e => handleSearchChange(e.target.value)}
+                className="w-full pl-9 pr-4 py-2.5 bg-white border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] shadow-sm" />
+            </div>
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as Status)}
+              className="flex-shrink-0 px-3 py-2.5 bg-white border border-zinc-200 rounded-xl text-xs font-semibold text-zinc-600 shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]">
+              {filtersRodrigues.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+            </select>
+            <button onClick={() => setFiltersOpen(o => !o)}
+              className={`flex-shrink-0 p-2.5 rounded-xl border shadow-sm transition ${filtersOpen ? 'text-white border-transparent' : 'bg-white text-zinc-500 border-zinc-200'}`}
+              style={filtersOpen ? { background: 'var(--primary)' } : {}}>
+              <SlidersHorizontal className="w-4 h-4" />
             </button>
-            {presentOrigins.map(origin => (
-              <button key={origin} onClick={() => setOriginFilter(origin)}
-                className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
-                  originFilter === origin
-                    ? 'bg-zinc-800 text-white border-zinc-800'
+          </div>
+
+          {filtersOpen && (
+            <div className="space-y-2">
+              {presentOrigins.length > 0 && (
+                <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
+                  <button onClick={() => setOriginFilter('todos')}
+                    className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
+                      originFilter === 'todos' ? 'bg-zinc-800 text-white border-zinc-800' : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400'
+                    }`}>
+                    Todas origens
+                    <span className="text-[10px] opacity-70">({calls.length})</span>
+                  </button>
+                  {presentOrigins.map(origin => (
+                    <button key={origin} onClick={() => setOriginFilter(origin)}
+                      className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
+                        originFilter === origin ? 'bg-zinc-800 text-white border-zinc-800' : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400'
+                      }`}>
+                      {getOriginLabel(origin)}
+                      <span className="text-[10px] opacity-70">({originCounts[origin]})</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
+                {([
+                  { value: 'todos', label: 'Todos canais', count: calls.length },
+                  { value: 'whatsapp', label: '💬 WhatsApp', count: channelCounts.whatsapp },
+                  { value: 'ligacao', label: '📞 Ligação', count: channelCounts.ligacao },
+                  { value: 'cliente', label: '🏠 Cliente', count: channelCounts.cliente },
+                  { value: 'indicacao', label: '🤝 Indicação', count: channelCounts.indicacao },
+                  { value: 'google', label: '🔍 Google', count: channelCounts.google },
+                ] as { value: string; label: string; count: number }[]).map(ch => (
+                  <button key={ch.value} onClick={() => setChannelFilter(ch.value)}
+                    className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
+                      channelFilter === ch.value ? 'text-white border-transparent shadow-sm' : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400'
+                    }`}
+                    style={channelFilter === ch.value ? { background: 'var(--primary)' } : {}}>
+                    {ch.label}
+                    <span className="text-[10px] opacity-70">({ch.count})</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+            <input type="text" placeholder="Buscar cliente, contato ou código OS..."
+              value={search} onChange={e => handleSearchChange(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 bg-white border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] shadow-sm" />
+          </div>
+
+          {/* Status filters */}
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
+            {filters.map(f => (
+              <button key={f.value} onClick={() => setStatusFilter(f.value)}
+                className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-semibold border transition ${
+                  statusFilter === f.value
+                    ? 'text-white border-transparent shadow-sm'
                     : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400'
-                }`}>
-                {getOriginLabel(origin)}
-                <span className="text-[10px] opacity-70">({originCounts[origin]})</span>
+                }`}
+                style={statusFilter === f.value ? { background: 'var(--primary)' } : {}}>
+                {f.label}
               </button>
             ))}
           </div>
-        )}
 
-        {/* Canal filter */}
-        <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
-          {([
-            { value: 'todos', label: 'Todos canais', count: calls.length },
-            { value: 'whatsapp', label: '💬 WhatsApp', count: channelCounts.whatsapp },
-            { value: 'ligacao', label: '📞 Ligação', count: channelCounts.ligacao },
-            { value: 'cliente', label: '🏠 Cliente', count: channelCounts.cliente },
-            { value: 'indicacao', label: '🤝 Indicação', count: channelCounts.indicacao },
-            { value: 'google', label: '🔍 Google', count: channelCounts.google },
-          ] as { value: string; label: string; count: number }[]).map(ch => (
-            <button key={ch.value} onClick={() => setChannelFilter(ch.value)}
-              className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
-                channelFilter === ch.value
-                  ? 'text-white border-transparent shadow-sm'
-                  : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400'
-              }`}
-              style={channelFilter === ch.value ? { background: 'var(--primary)' } : {}}>
-              {ch.label}
-              <span className="text-[10px] opacity-70">({ch.count})</span>
-            </button>
-          ))}
-        </div>
-      </div>
+          {/* Origin + Canal filters */}
+          <div className="space-y-2">
+            {presentOrigins.length > 0 && (
+              <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
+                <button onClick={() => setOriginFilter('todos')}
+                  className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
+                    originFilter === 'todos'
+                      ? 'bg-zinc-800 text-white border-zinc-800'
+                      : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400'
+                  }`}>
+                  Todas origens
+                  <span className="text-[10px] opacity-70">({calls.length})</span>
+                </button>
+                {presentOrigins.map(origin => (
+                  <button key={origin} onClick={() => setOriginFilter(origin)}
+                    className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
+                      originFilter === origin
+                        ? 'bg-zinc-800 text-white border-zinc-800'
+                        : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400'
+                    }`}>
+                    {getOriginLabel(origin)}
+                    <span className="text-[10px] opacity-70">({originCounts[origin]})</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Canal filter */}
+            <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
+              {([
+                { value: 'todos', label: 'Todos canais', count: calls.length },
+                { value: 'whatsapp', label: '💬 WhatsApp', count: channelCounts.whatsapp },
+                { value: 'ligacao', label: '📞 Ligação', count: channelCounts.ligacao },
+                { value: 'cliente', label: '🏠 Cliente', count: channelCounts.cliente },
+                { value: 'indicacao', label: '🤝 Indicação', count: channelCounts.indicacao },
+                { value: 'google', label: '🔍 Google', count: channelCounts.google },
+              ] as { value: string; label: string; count: number }[]).map(ch => (
+                <button key={ch.value} onClick={() => setChannelFilter(ch.value)}
+                  className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
+                    channelFilter === ch.value
+                      ? 'text-white border-transparent shadow-sm'
+                      : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400'
+                  }`}
+                  style={channelFilter === ch.value ? { background: 'var(--primary)' } : {}}>
+                  {ch.label}
+                  <span className="text-[10px] opacity-70">({ch.count})</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Cards */}
       {loading ? (
