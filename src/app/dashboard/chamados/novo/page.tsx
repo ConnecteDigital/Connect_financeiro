@@ -16,6 +16,7 @@ import { useCallOrigins } from '@/lib/use-call-origins'
 import { useTenant } from '@/lib/tenant-context'
 import { createClient } from '@/lib/supabase/client'
 import { mapsUrl } from '@/lib/maps'
+import { lookupCep } from '@/lib/cep'
 
 type ServiceType = 'proprio' | 'terceirizado_saida' | 'terceirizado_entrada'
 type PaymentStatus = 'pago' | 'pago_parcial' | 'pendente'
@@ -110,6 +111,9 @@ export default function NovoChamadoPage() {
   const [scheduledDate, setScheduledDate] = useState(localToday)
   const [scheduledTime, setScheduledTime] = useState('')
   const [callAddress, setCallAddress] = useState('')
+  const [callCep, setCallCep] = useState('')
+  const [cepLoading, setCepLoading] = useState(false)
+  const [cepError, setCepError] = useState(false)
   const [scheduledDriver, setScheduledDriver] = useState('')
   const [deviceBrand, setDeviceBrand] = useState('')
   const [deviceBrandOther, setDeviceBrandOther] = useState('')
@@ -346,6 +350,28 @@ export default function NovoChamadoPage() {
       const path = `${callId}/${Date.now()}_${safeName}`
       return supabase.storage.from('chamados-anexos').upload(path, file)
     }))
+  }
+
+  async function handleCepChange(value: string) {
+    setCallCep(value)
+    setCepError(false)
+    const digits = value.replace(/\D/g, '')
+    if (!isRodrigues || digits.length !== 8) return
+    setCepLoading(true)
+    try {
+      const result = await lookupCep(digits)
+      if (result) {
+        setCallAddress(result.address)
+        setCallNeighborhood(result.neighborhood)
+        setCallCity(result.city)
+      } else {
+        setCepError(true)
+      }
+    } catch {
+      setCepError(true)
+    } finally {
+      setCepLoading(false)
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -923,6 +949,18 @@ export default function NovoChamadoPage() {
 
         {!isScheduled && (
           <div className="space-y-3">
+            {isRodrigues && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">CEP</label>
+                <div className="relative">
+                  <input type="text" value={callCep} onChange={e => handleCepChange(e.target.value)}
+                    placeholder="00000-000" maxLength={9} className={inputCls} />
+                  {cepLoading && <Loader2 className="w-4 h-4 animate-spin absolute right-3 top-1/2 -translate-y-1/2 text-orange-400" />}
+                </div>
+                {cepError && <p className="text-xs text-red-500 mt-1">CEP não encontrado — preencha o endereço manualmente.</p>}
+                {!cepError && <p className="text-xs text-slate-400 mt-1">Digite o CEP e o endereço é preenchido automaticamente.</p>}
+              </div>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Cidade</label>
@@ -967,10 +1005,23 @@ export default function NovoChamadoPage() {
                 <input type="time" value={scheduledTime} onChange={e => setScheduledTime(e.target.value)}
                   className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
               </div>
+              {isRodrigues && (
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">CEP</label>
+                  <div className="relative">
+                    <input type="text" value={callCep} onChange={e => handleCepChange(e.target.value)}
+                      placeholder="00000-000" maxLength={9}
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
+                    {cepLoading && <Loader2 className="w-4 h-4 animate-spin absolute right-3 top-1/2 -translate-y-1/2 text-orange-400" />}
+                  </div>
+                  {cepError && <p className="text-xs text-red-500 mt-1">CEP não encontrado — preencha o endereço manualmente.</p>}
+                  {!cepError && <p className="text-xs text-slate-400 mt-1">Digite o CEP e o endereço é preenchido automaticamente.</p>}
+                </div>
+              )}
               <div className="sm:col-span-2">
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Endereço do Serviço</label>
                 <input type="text" value={callAddress} onChange={e => setCallAddress(e.target.value)}
-                  placeholder="Rua, número, bairro, cidade"
+                  placeholder={isRodrigues ? 'Rua, número...' : 'Rua, número, bairro, cidade'}
                   className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
                 {isRodrigues && callAddress && (
                   <a href={mapsUrl([callAddress, callNeighborhood, callCity].filter(Boolean).join(', '))}
@@ -1035,7 +1086,21 @@ export default function NovoChamadoPage() {
                     })}
                   </div>
                 )}
-                {(isApproved || isScheduled) && catLines.map(l => (
+                {isRodrigues && (
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Marca do Aparelho</label>
+                    <select value={deviceBrand} onChange={e => setDeviceBrand(e.target.value)} className={inputCls}>
+                      <option value="">Selecione...</option>
+                      {APPLIANCE_BRANDS.map(b => <option key={b} value={b}>{b}</option>)}
+                    </select>
+                    {deviceBrand === 'Outra' && (
+                      <input type="text" value={deviceBrandOther} onChange={e => setDeviceBrandOther(e.target.value)}
+                        placeholder="Digite a marca..." className={`${inputCls} mt-2`} />
+                    )}
+                  </div>
+                )}
+                {/* Pra Rodrigues, valor/descrição do serviço só aparece quando o chamado é aprovado — enquanto só agendado, não tem o que cobrar ainda */}
+                {(isApproved || (isScheduled && !isRodrigues)) && catLines.map(l => (
                   <div key={l.sub ?? cat} className="bg-white border border-orange-100 rounded-xl p-3 space-y-3">
                     {l.sub && <p className="text-xs font-bold text-orange-500 uppercase tracking-wide">{l.sub}</p>}
 
@@ -1099,20 +1164,6 @@ export default function NovoChamadoPage() {
             )
           })}
         </div>
-
-        {isRodrigues && selectedCategories.length > 0 && (
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Marca do Aparelho</label>
-            <select value={deviceBrand} onChange={e => setDeviceBrand(e.target.value)} className={inputCls}>
-              <option value="">Selecione...</option>
-              {APPLIANCE_BRANDS.map(b => <option key={b} value={b}>{b}</option>)}
-            </select>
-            {deviceBrand === 'Outra' && (
-              <input type="text" value={deviceBrandOther} onChange={e => setDeviceBrandOther(e.target.value)}
-                placeholder="Digite a marca..." className={`${inputCls} mt-2`} />
-            )}
-          </div>
-        )}
 
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1.5">Observações</label>

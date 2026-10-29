@@ -705,6 +705,22 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                   </div>
                 )}
 
+                {isRodrigues && (
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Marca do Aparelho</label>
+                    <select value={deviceBrand} onChange={e => setDeviceBrand(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
+                      <option value="">Selecione...</option>
+                      {APPLIANCE_BRANDS.map(b => <option key={b} value={b}>{b}</option>)}
+                    </select>
+                    {deviceBrand === 'Outra' && (
+                      <input type="text" value={deviceBrandOther} onChange={e => setDeviceBrandOther(e.target.value)}
+                        placeholder="Digite a marca..."
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 mt-2" />
+                    )}
+                  </div>
+                )}
+
                 {/* Valores por serviço — só no chamado aprovado */}
                 {isApproved && catLines.map(l => (
                   <div key={l.sub ?? cat} className="bg-white border border-slate-100 rounded-lg p-3 space-y-2">
@@ -769,22 +785,6 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
             )
           })}
         </div>
-
-        {isRodrigues && selectedCategories.length > 0 && (
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Marca do Aparelho</label>
-            <select value={deviceBrand} onChange={e => setDeviceBrand(e.target.value)}
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
-              <option value="">Selecione...</option>
-              {APPLIANCE_BRANDS.map(b => <option key={b} value={b}>{b}</option>)}
-            </select>
-            {deviceBrand === 'Outra' && (
-              <input type="text" value={deviceBrandOther} onChange={e => setDeviceBrandOther(e.target.value)}
-                placeholder="Digite a marca..."
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 mt-2" />
-            )}
-          </div>
-        )}
 
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1.5">Observações</label>
