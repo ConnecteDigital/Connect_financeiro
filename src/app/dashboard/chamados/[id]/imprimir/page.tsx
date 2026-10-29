@@ -106,7 +106,14 @@ function ImprimirContent({ id }: { id: string }) {
   const isMillenium = tenant?.call_form_config?.millenium_custom_os === true
   const isRodrigues = tenant?.call_form_config?.rodrigues_custom === true
   const companyName = tenant?.name ?? 'Empresa'
-  const tenantTagline = 'Atendimento 24h · Domingos e Feriados'
+  const tenantTagline = isRodrigues
+    ? 'Rodrigues Refrigerações Assistência Técnica em Refrigeradores'
+    : 'Atendimento 24h · Domingos e Feriados'
+  const contactLine = [
+    tenant?.cnpj ? `CNPJ ${tenant.cnpj}` : null,
+    tenant?.address || null,
+    tenant?.phone || null,
+  ].filter(Boolean).join(' · ')
   const origin = call.origin as string | null
   const originBranding = origin ? (tenant?.origin_branding?.[origin] ?? null) : null
   const logoUrl = originBranding?.logo_url ?? tenant?.logo_url
@@ -151,11 +158,14 @@ function ImprimirContent({ id }: { id: string }) {
               <p style={{ fontWeight: 900, fontSize: 20, color: brandColor, letterSpacing: '-0.02em', lineHeight: 1.1 }}>{companyName.toUpperCase()}</p>
             )}
             <p style={{ fontSize: 10, color: '#777', marginTop: 4 }}>{tenantTagline}</p>
+            {isRodrigues && contactLine && (
+              <p style={{ fontSize: 8, color: '#999', marginTop: 2 }}>{contactLine}</p>
+            )}
           </div>
           {/* OS Number */}
           <div style={{ width: 160, padding: '14px 16px', textAlign: 'right', flexShrink: 0 }}>
             <p style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#777' }}>Ordem de Serviço</p>
-            <p style={{ fontSize: 42, fontWeight: 900, lineHeight: 1, color: '#000', marginTop: 4 }}>{so.os_number}</p>
+            <p style={{ fontSize: isRodrigues ? 22 : 42, fontWeight: 900, lineHeight: 1, color: '#000', marginTop: 4 }}>{so.os_number}</p>
           </div>
         </div>
 
@@ -166,14 +176,16 @@ function ImprimirContent({ id }: { id: string }) {
 
         {/* Nome | CNPJ/CPF */}
         <div style={{ display: 'flex', border: B, borderTop: 'none' }}>
-          <div style={{ flex: 1, ...cellSt, borderRight: B }}>
+          <div style={{ flex: 1, ...cellSt, borderRight: isRodrigues ? undefined : B }}>
             <span style={labelSt}>Nome</span>
             <span style={valueSt}>{clientName}</span>
           </div>
-          <div style={{ width: 200, ...cellSt }}>
-            <span style={labelSt}>CNPJ / CPF</span>
-            <span style={valueSt}>{client?.cpf_cnpj || call.contact_cpf || ''}</span>
-          </div>
+          {!isRodrigues && (
+            <div style={{ width: 200, ...cellSt }}>
+              <span style={labelSt}>CNPJ / CPF</span>
+              <span style={valueSt}>{client?.cpf_cnpj || call.contact_cpf || ''}</span>
+            </div>
+          )}
         </div>
 
         {/* Endereço | Bairro | CEP */}
@@ -213,16 +225,18 @@ function ImprimirContent({ id }: { id: string }) {
           DADOS DO SERVIÇO
         </div>
 
-        {/* Categoria | Data */}
+        {/* Categoria | Data (Rodrigues: "Defeito Apresentado", sem data duplicada — fica só no rodapé) */}
         <div style={{ display: 'flex', border: B, borderTop: 'none' }}>
-          <div style={{ flex: 1, ...cellSt, borderRight: B }}>
-            <span style={labelSt}>Categoria</span>
+          <div style={{ flex: 1, ...cellSt, borderRight: isRodrigues ? undefined : B }}>
+            <span style={labelSt}>{isRodrigues ? 'Defeito Apresentado' : 'Categoria'}</span>
             <span style={valueSt}>{call.service_category || '—'}</span>
           </div>
-          <div style={{ width: 150, ...cellSt }}>
-            <span style={labelSt}>Data</span>
-            <span style={valueSt}>{osDate}</span>
-          </div>
+          {!isRodrigues && (
+            <div style={{ width: 150, ...cellSt }}>
+              <span style={labelSt}>Data</span>
+              <span style={valueSt}>{osDate}</span>
+            </div>
+          )}
         </div>
 
         {/* Endereço do Serviço */}
@@ -249,7 +263,7 @@ function ImprimirContent({ id }: { id: string }) {
             <tr>
               <th style={{ border: B, borderTop: 'none', padding: '4px 8px', textAlign: 'left', width: 55, fontWeight: 700 }}>Qtd</th>
               <th style={{ border: B, borderTop: 'none', padding: '4px 8px', textAlign: 'left', fontWeight: 700 }}>Descrição</th>
-              <th style={{ border: B, borderTop: 'none', padding: '4px 8px', textAlign: 'right', width: 100, fontWeight: 700 }}>Vlr Unit.</th>
+              {!isRodrigues && <th style={{ border: B, borderTop: 'none', padding: '4px 8px', textAlign: 'right', width: 100, fontWeight: 700 }}>Vlr Unit.</th>}
               <th style={{ border: B, borderTop: 'none', padding: '4px 8px', textAlign: 'right', width: 110, fontWeight: 700 }}>Vlr Total</th>
             </tr>
           </thead>
@@ -265,7 +279,7 @@ function ImprimirContent({ id }: { id: string }) {
                   {it.description}
                   {it.notes && <span style={{ display: 'block', fontSize: 9, color: '#555', marginTop: 2 }}>{it.notes}</span>}
                 </td>
-                <td style={{ border: B, padding: '5px 8px', textAlign: 'right', verticalAlign: 'top' }}>{BRL(it.unit_price)}</td>
+                {!isRodrigues && <td style={{ border: B, padding: '5px 8px', textAlign: 'right', verticalAlign: 'top' }}>{BRL(it.unit_price)}</td>}
                 <td style={{ border: B, padding: '5px 8px', textAlign: 'right', verticalAlign: 'top' }}>{BRL(it.total ?? it.quantity * it.unit_price)}</td>
               </tr>
             ))}
@@ -273,7 +287,7 @@ function ImprimirContent({ id }: { id: string }) {
               <tr key={`e${i}`}>
                 <td style={{ border: B, padding: '5px 8px', height: 24 }}>&nbsp;</td>
                 <td style={{ border: B, padding: '5px 8px' }}>&nbsp;</td>
-                <td style={{ border: B, padding: '5px 8px' }}>&nbsp;</td>
+                {!isRodrigues && <td style={{ border: B, padding: '5px 8px' }}>&nbsp;</td>}
                 <td style={{ border: B, padding: '5px 8px' }}>&nbsp;</td>
               </tr>
             ))}
@@ -305,6 +319,12 @@ function ImprimirContent({ id }: { id: string }) {
 
           if (isRodrigues) {
             if (!garantia) return null
+            const GARANTIA_TEXT: Record<string, string> = {
+              'Garantia 90 dias': 'Garantia de 90 dias sobre mão de obra, conforme Código de Defesa do Consumidor.',
+              'Garantia 6 meses': 'Garantia de 6 meses sobre mão de obra e peças.',
+              'Garantia 1 ano': 'Garantia de 1 ano sobre mão de obra e peças.',
+              'Sem garantia': 'Este serviço não possui garantia.',
+            }
             return (
               <>
                 <div style={{ border: B, borderTop: 'none', background: '#f5f5f5', padding: '3px 8px', textAlign: 'center', fontWeight: 700, fontSize: 11, letterSpacing: '0.04em' }}>
@@ -313,6 +333,11 @@ function ImprimirContent({ id }: { id: string }) {
                 <div style={{ border: B, borderTop: 'none', ...cellSt }}>
                   <span style={labelSt}>Garantia</span>
                   <span style={valueSt}>{garantia}</span>
+                  {GARANTIA_TEXT[garantia] && (
+                    <span style={{ display: 'block', fontSize: 9, color: '#555', marginTop: 4, lineHeight: 1.4, fontWeight: 400 }}>
+                      {GARANTIA_TEXT[garantia]}
+                    </span>
+                  )}
                 </div>
               </>
             )

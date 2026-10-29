@@ -93,6 +93,7 @@ export default function ConfiguracoesPage() {
   const [companyName, setCompanyName] = useState('')
   const [cnpj, setCnpj] = useState('')
   const [phone, setPhone] = useState('')
+  const [companyAddress, setCompanyAddress] = useState('')
   const [savingCompany, setSavingCompany] = useState(false)
   const [companySaved, setCompanySaved] = useState(false)
 
@@ -118,6 +119,7 @@ export default function ConfiguracoesPage() {
     setCompanyName(tenant.name ?? '')
     setCnpj(tenant.cnpj ?? '')
     setPhone(tenant.phone ?? '')
+    setCompanyAddress(tenant.address ?? '')
     setPrimaryColor(tenant.primary_color ?? '#f97316')
     setLogoPreview(tenant.logo_url ?? null)
     if ((tenant as any)?.origin_branding) setOriginBranding((tenant as any).origin_branding)
@@ -201,9 +203,9 @@ export default function ConfiguracoesPage() {
       const supabase = createClient()
       const { data, error } = await supabase
         .from('tenants')
-        .update({ name: companyName.trim(), cnpj: cnpj.trim() || null, phone: phone.trim() || null })
+        .update({ name: companyName.trim(), cnpj: cnpj.trim() || null, phone: phone.trim() || null, address: companyAddress.trim() || null })
         .eq('id', tenant.id)
-        .select('name, cnpj, phone')
+        .select('name, cnpj, phone, address')
         .single()
       if (error || !data) {
         console.error('Falha ao salvar dados da empresa:', error)
@@ -211,7 +213,7 @@ export default function ConfiguracoesPage() {
         return
       }
       setCompanySaved(true)
-      updateTenant({ name: data.name, cnpj: data.cnpj, phone: data.phone })
+      updateTenant({ name: data.name, cnpj: data.cnpj, phone: data.phone, address: data.address })
       setTimeout(() => setCompanySaved(false), 3000)
     } finally {
       setSavingCompany(false)
@@ -762,6 +764,12 @@ export default function ConfiguracoesPage() {
             <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Telefone</label>
             <input type="text" value={phone} onChange={e => { setPhone(e.target.value); setCompanySaved(false) }}
               placeholder="(51) 99999-9999"
+              className="input-field py-2.5 text-sm" />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Endereço</label>
+            <input type="text" value={companyAddress} onChange={e => { setCompanyAddress(e.target.value); setCompanySaved(false) }}
+              placeholder="Rua, número, bairro - Cidade/UF"
               className="input-field py-2.5 text-sm" />
           </div>
         </div>
