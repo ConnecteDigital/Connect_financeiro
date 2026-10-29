@@ -32,6 +32,7 @@ interface Quote {
   client_city: string | null
   service_category: string | null
   service_description: string | null
+  guarantee: string | null
   items: QuoteItem[]
   subtotal: number
   discount: number
@@ -277,6 +278,13 @@ export default function OrcamentoDetailPage() {
           </div>
         </div>
 
+        {quote.service_description && (
+          <div className="rounded-2xl p-5 space-y-2" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Descrição do Serviço</h2>
+            <p className="text-sm whitespace-pre-wrap" style={{ color: 'var(--text-secondary)' }}>{quote.service_description}</p>
+          </div>
+        )}
+
         {/* Items */}
         <div className="rounded-2xl p-5 space-y-3" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <div className="flex items-center justify-between">
@@ -325,6 +333,14 @@ export default function OrcamentoDetailPage() {
             </div>
           )}
         </div>
+
+        {quote.guarantee && (
+          <div className="rounded-2xl p-5 space-y-2"
+            style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.25)' }}>
+            <h2 className="text-sm font-semibold" style={{ color: '#b45309' }}>Garantia</h2>
+            <p className="text-sm whitespace-pre-wrap" style={{ color: '#92400e' }}>{quote.guarantee}</p>
+          </div>
+        )}
 
         {quote.notes && (
           <div className="rounded-2xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
@@ -415,6 +431,13 @@ export default function OrcamentoDetailPage() {
           ))}
         </div>
 
+        {quote.service_description && (
+          <div style={{ margin: '0 20px 8px', padding: '12px 14px', background: '#f8fafc', borderRadius: 14 }}>
+            <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', marginBottom: 4 }}>Descrição do Serviço</p>
+            <p style={{ fontSize: 12.5, color: '#334155', lineHeight: 1.5 }}>{quote.service_description}</p>
+          </div>
+        )}
+
         {/* Items */}
         <div style={{ margin: '8px 20px' }}>
           {/* Header row */}
@@ -457,6 +480,13 @@ export default function OrcamentoDetailPage() {
           <div style={{ margin: '0 20px 20px', height: 8 }} />
         )}
 
+        {quote.guarantee && (
+          <div style={{ margin: '0 20px 14px', padding: '12px 14px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 14 }}>
+            <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#b45309', marginBottom: 4 }}>Garantia</p>
+            <p style={{ fontSize: 12.5, color: '#92400e', lineHeight: 1.5 }}>{quote.guarantee}</p>
+          </div>
+        )}
+
         {/* Footer */}
         <div style={{ margin: '0 20px 20px', background: `rgba(${rgb}, 0.06)`, borderRadius: 12, padding: '10px 14px', textAlign: 'center' }}>
           <p style={{ fontSize: 11, color: `rgba(${rgb}, 0.9)`, fontWeight: 600 }}>
@@ -484,17 +514,29 @@ export default function OrcamentoDetailPage() {
             {quote.valid_until && <p style={{ fontSize: '12px', color: '#666', margin: '2px 0 0' }}>Válido até: {new Date(quote.valid_until + 'T12:00:00').toLocaleDateString('pt-BR')}</p>}
           </div>
         </div>
-        <div style={{ marginBottom: '24px', padding: '16px', background: '#f8f8f8', borderRadius: '8px' }}>
-          <h2 style={{ fontSize: '14px', fontWeight: 'bold', color: brandColor, marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Dados do Cliente</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-            {clientFields.map(([l, v]) => (
-              <div key={l}>
-                <span style={{ fontSize: '11px', color: '#888', textTransform: 'uppercase' }}>{l}</span>
-                <p style={{ fontSize: '13px', fontWeight: '600', margin: '2px 0 0' }}>{v}</p>
-              </div>
-            ))}
+        <div style={{ marginBottom: '20px', border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+          <div style={{ background: `rgba(${rgb}, 0.1)`, padding: '8px 16px' }}>
+            <h2 style={{ fontSize: '12px', fontWeight: 'bold', color: brandColor, margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Dados do Cliente</h2>
           </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <tbody>
+              {clientFields.map(([l, v], i) => (
+                <tr key={l} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                  <td style={{ padding: '8px 16px', fontSize: '11px', color: '#888', textTransform: 'uppercase', width: '140px', borderTop: '1px solid #eee' }}>{l}</td>
+                  <td style={{ padding: '8px 16px', fontSize: '13px', fontWeight: '600', color: '#1a1a1a', borderTop: '1px solid #eee' }}>{v}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
+
+        {quote.service_description && (
+          <div style={{ marginBottom: '20px' }}>
+            <h2 style={{ fontSize: '12px', fontWeight: 'bold', color: brandColor, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Descrição do Serviço</h2>
+            <p style={{ fontSize: '13px', lineHeight: '1.6', color: '#334155', margin: 0 }}>{quote.service_description}</p>
+          </div>
+        )}
+
         <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '16px' }}>
           <thead>
             <tr style={{ background: brandColor }}>
@@ -541,14 +583,32 @@ export default function OrcamentoDetailPage() {
             </div>
           </div>
         )}
+        {quote.guarantee && (
+          <div style={{ marginBottom: '20px', padding: '14px 16px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px' }}>
+            <h3 style={{ fontSize: '12px', fontWeight: 'bold', color: '#b45309', textTransform: 'uppercase', marginBottom: '6px', letterSpacing: '0.05em' }}>Garantia</h3>
+            <p style={{ fontSize: '13px', whiteSpace: 'pre-wrap', lineHeight: '1.6', color: '#92400e', margin: 0 }}>{quote.guarantee}</p>
+          </div>
+        )}
         {quote.notes && (
           <div style={{ marginBottom: '24px', padding: '14px', border: '1px solid #ddd', borderRadius: '6px' }}>
             <h3 style={{ fontSize: '12px', fontWeight: 'bold', color: '#888', textTransform: 'uppercase', marginBottom: '6px' }}>Observações</h3>
             <p style={{ fontSize: '13px', whiteSpace: 'pre-wrap', lineHeight: '1.5' }}>{quote.notes}</p>
           </div>
         )}
-        <div style={{ borderTop: `2px solid ${brandColor}`, paddingTop: '12px', textAlign: 'center', fontSize: '11px', color: '#888' }}>
-          <p>Este orçamento é válido por 30 dias a partir da data de emissão.</p>
+        <p style={{ fontSize: '11px', color: '#888', marginBottom: '48px' }}>
+          Este orçamento é válido {quote.valid_until ? `até ${new Date(quote.valid_until + 'T12:00:00').toLocaleDateString('pt-BR')}` : 'por 30 dias a partir da data de emissão'}.
+        </p>
+        <div style={{ display: 'flex', gap: '32px' }}>
+          <div style={{ flex: 1, textAlign: 'center' }}>
+            <div style={{ borderTop: '1px solid #333', paddingTop: '6px' }}>
+              <p style={{ fontSize: '12px', color: '#333', margin: 0 }}>{siteName ?? tenantData?.name}</p>
+            </div>
+          </div>
+          <div style={{ flex: 1, textAlign: 'center' }}>
+            <div style={{ borderTop: '1px solid #333', paddingTop: '6px' }}>
+              <p style={{ fontSize: '12px', color: '#333', margin: 0 }}>Aceite da Cliente</p>
+            </div>
+          </div>
         </div>
       </div>
 

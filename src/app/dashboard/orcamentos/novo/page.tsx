@@ -38,6 +38,8 @@ function NovoOrcamentoForm() {
 
   // Service fields
   const [items, setItems] = useState<Item[]>([{ description: '', quantity: 1, unit_price: 0 }])
+  const [serviceDescription, setServiceDescription] = useState('')
+  const [guarantee, setGuarantee] = useState('')
   const [discount, setDiscount] = useState('')
   const [taxes, setTaxes] = useState('')
   const [notes, setNotes] = useState('')
@@ -122,6 +124,8 @@ function NovoOrcamentoForm() {
         origin: origin || null,
         valid_until: validUntil || null,
         items: items.filter(it => it.description.trim()),
+        service_description: serviceDescription.trim() || null,
+        guarantee: guarantee.trim() || null,
         subtotal,
         discount: Number(discount || 0),
         taxes: Number(taxes || 0),
@@ -215,7 +219,15 @@ function NovoOrcamentoForm() {
 
       {/* Section 2: Services */}
       <div className="rounded-2xl p-6 space-y-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-        <div className="flex items-center justify-between">
+        <div>
+          <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Descrição do Serviço</label>
+          <textarea value={serviceDescription} onChange={e => setServiceDescription(e.target.value)} rows={3}
+            className="input-field py-2.5 text-sm resize-none"
+            placeholder="Ex: Execução de hidrojateamento da tubulação, utilizando equipamento de alta pressão, com o objetivo de promover a desobstrução e limpeza interna..." />
+          <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>Aparece como texto corrido no orçamento, explicando o que será feito.</p>
+        </div>
+
+        <div className="flex items-center justify-between pt-1">
           <h2 className="font-semibold" style={{ color: 'var(--text-primary)' }}>Serviços / Itens</h2>
           <button onClick={addItem} className="flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-xl transition"
             style={{ background: 'rgba(var(--primary-rgb),0.1)', color: 'var(--primary)' }}>
@@ -285,9 +297,17 @@ function NovoOrcamentoForm() {
         </div>
 
         <div>
+          <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Garantia</label>
+          <textarea value={guarantee} onChange={e => setGuarantee(e.target.value)} rows={2}
+            className="input-field py-2.5 text-sm resize-none"
+            placeholder="Ex: Garantia de 90 dias sobre o serviço executado, referente a problemas relacionados ao serviço realizado..." />
+          <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>Aparece em destaque no orçamento. Deixe em branco pra não mostrar essa seção.</p>
+        </div>
+
+        <div>
           <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Observações</label>
           <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
-            className="input-field py-2.5 text-sm resize-none" placeholder="Condições, prazo de execução, garantias..." />
+            className="input-field py-2.5 text-sm resize-none" placeholder="Condições, prazo de execução..." />
         </div>
       </div>
 
