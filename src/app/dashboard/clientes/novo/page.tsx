@@ -1,21 +1,47 @@
 ﻿'use client'
 
 import { useState } from 'react'
-import { ArrowLeft, Save } from 'lucide-react'
+import { ArrowLeft, Save, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient_ } from '@/lib/db/clients'
+import { lookupCep } from '@/lib/cep'
+import { useTenant } from '@/lib/tenant-context'
 
 export default function NovoClientePage() {
   const router = useRouter()
+  const { tenant } = useTenant()
+  const isRodrigues = tenant?.call_form_config?.rodrigues_custom === true
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [cepLoading, setCepLoading] = useState(false)
+  const [cepError, setCepError] = useState(false)
   const [form, setForm] = useState({
     name: '', cpf_cnpj: '', inscr_est: '', address: '',
     neighborhood: '', city: '', state: '', cep: '', phone: '', email: '',
   })
 
   const set = (field: string, value: string) => setForm(f => ({ ...f, [field]: value }))
+
+  async function handleCepChange(value: string) {
+    set('cep', value)
+    setCepError(false)
+    const digits = value.replace(/\D/g, '')
+    if (!isRodrigues || digits.length !== 8) return
+    setCepLoading(true)
+    try {
+      const result = await lookupCep(digits)
+      if (result) {
+        setForm(f => ({ ...f, address: result.address, neighborhood: result.neighborhood, city: result.city, state: result.state }))
+      } else {
+        setCepError(true)
+      }
+    } catch {
+      setCepError(true)
+    } finally {
+      setCepLoading(false)
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -60,9 +86,23 @@ export default function NovoClientePage() {
             <input type="text" value={form.inscr_est} onChange={e => set('inscr_est', e.target.value)}
               className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
           </div>
+          {isRodrigues && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">CEP</label>
+              <div className="relative">
+                <input type="text" value={form.cep} onChange={e => handleCepChange(e.target.value)}
+                  placeholder="00000-000" maxLength={9}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                {cepLoading && <Loader2 className="w-4 h-4 animate-spin absolute right-3 top-1/2 -translate-y-1/2 text-orange-400" />}
+              </div>
+              {cepError && <p className="text-xs text-red-500 mt-1">CEP não encontrado — preencha o endereço manualmente.</p>}
+              {!cepError && <p className="text-xs text-slate-400 mt-1">Digite o CEP e o endereço é preenchido automaticamente.</p>}
+            </div>
+          )}
           <div className="sm:col-span-2">
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Endereço</label>
             <input type="text" value={form.address} onChange={e => set('address', e.target.value)}
+              placeholder={isRodrigues ? 'Rua, número...' : undefined}
               className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
           </div>
           <div>
@@ -70,11 +110,13 @@ export default function NovoClientePage() {
             <input type="text" value={form.neighborhood} onChange={e => set('neighborhood', e.target.value)}
               className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">CEP</label>
-            <input type="text" value={form.cep} onChange={e => set('cep', e.target.value)}
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
-          </div>
+          {!isRodrigues && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">CEP</label>
+              <input type="text" value={form.cep} onChange={e => set('cep', e.target.value)}
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Cidade</label>
             <input type="text" value={form.city} onChange={e => set('city', e.target.value)}

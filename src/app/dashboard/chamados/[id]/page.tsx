@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { ArrowLeft, Phone, CheckCircle, XCircle, Clock, Edit, DollarSign, User, FileText, Wrench, Paperclip, Upload, Trash2, Download, Printer, ClipboardList } from 'lucide-react'
+import { ArrowLeft, Phone, CheckCircle, XCircle, Clock, Edit, DollarSign, User, FileText, Wrench, Paperclip, Upload, Trash2, Download, Printer, ClipboardList, Navigation } from 'lucide-react'
 import Link from 'next/link'
 import { use } from 'react'
 import { useRouter } from 'next/navigation'
@@ -10,6 +10,8 @@ import { updateCall } from '@/lib/db/calls'
 import { updateExpense } from '@/lib/db/expenses'
 import { createClient } from '@/lib/supabase/client'
 import { getOriginLabel } from '@/lib/use-call-origins'
+import { useTenant } from '@/lib/tenant-context'
+import { mapsUrl } from '@/lib/maps'
 
 const statusConfig: Record<string, { label: string; color: string; bg: string; icon: React.ElementType }> = {
   agendado: { label: 'Agendado', color: 'text-blue-700', bg: 'bg-blue-100', icon: Clock },
@@ -36,6 +38,8 @@ const fmt = (v: number) => `R$ ${Number(v).toLocaleString('pt-BR', { minimumFrac
 export default function ChamadoDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
+  const { tenant } = useTenant()
+  const isRodrigues = tenant?.call_form_config?.rodrigues_custom === true
   const [call, setCall] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [updatingPayment, setUpdatingPayment] = useState(false)
@@ -263,7 +267,17 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
           {call.call_address && (
             <div className="col-span-2">
               <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Endereço do Serviço</p>
-              <p className="text-slate-700 mt-0.5">📍 {call.call_address}</p>
+              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                <p className="text-slate-700">📍 {call.call_address}</p>
+                {isRodrigues && (
+                  <a href={mapsUrl([call.call_address, call.call_neighborhood, call.call_city].filter(Boolean).join(', '))}
+                    target="_blank" rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 transition">
+                    <Navigation className="w-3 h-3" />
+                    Abrir no Maps
+                  </a>
+                )}
+              </div>
             </div>
           )}
           {call.notes && (
