@@ -7,7 +7,7 @@ import {
   LayoutDashboard, PhoneCall, Users,
   BarChart3, Settings, LogOut, Building2,
   Plus, MoreHorizontal, UserCog, Moon, Sun, Sparkles,
-  Wallet, FileText, ShieldCheck, KeyRound,
+  Wallet, FileText, ShieldCheck, KeyRound, Package,
 } from 'lucide-react'
 import { ConnectDigitalLogo } from '@/components/logos'
 import { useTenant } from '@/lib/tenant-context'
@@ -32,12 +32,17 @@ const moreNav = [
 
 const allNav = [...mainNav, ...moreNav]
 
+// Estoque — exclusivo da Rodrigues Refrigeração (loja física + estoque
+// pessoal de cada técnico). Item reaproveitado em vários lugares abaixo.
+const ESTOQUE_NAV_ITEM = { href: '/dashboard/estoque', label: 'Estoque', icon: Package }
+
 // Nav restrita pro login de técnico (Rodrigues Refrigeração) — sem
 // Financeiro, Clientes, Relatórios, Configurações etc. O acesso de
 // verdade é travado no banco (RLS); isso é só a vitrine condizente.
 const tecnicoNav = [
   { href: '/dashboard/chamados', label: 'Chamados', icon: PhoneCall },
   { href: '/dashboard/comissao', label: 'Comissão',  icon: Wallet },
+  ESTOQUE_NAV_ITEM,
 ]
 
 async function handleLogout() {
@@ -196,10 +201,13 @@ function BottomNav({ onMoreClick, moreOpen, visible }: { onMoreClick: () => void
 /* ── "Mais" drawer (slide up) ───────────────────────────────── */
 function MoreDrawer({ open, onClose, isMaster }: { open: boolean; onClose: () => void; isMaster: boolean }) {
   const pathname = usePathname()
+  const { tenant } = useTenant()
+  const isRodrigues = tenant?.call_form_config?.rodrigues_custom === true
 
+  const baseNav = isRodrigues ? [...moreNav, ESTOQUE_NAV_ITEM] : moreNav
   const drawerNav = isMaster
-    ? [...moreNav, { href: '/dashboard/master', label: 'Painel Master', icon: ShieldCheck }]
-    : moreNav
+    ? [...baseNav, { href: '/dashboard/master', label: 'Painel Master', icon: ShieldCheck }]
+    : baseNav
 
   return (
     <>
@@ -255,6 +263,7 @@ function MoreDrawer({ open, onClose, isMaster }: { open: boolean; onClose: () =>
 function Sidebar({ theme, onToggleTheme, isMaster }: { theme: 'light' | 'dark'; onToggleTheme: () => void; isMaster: boolean }) {
   const pathname = usePathname()
   const { tenant, isTecnico } = useTenant()
+  const isRodrigues = tenant?.call_form_config?.rodrigues_custom === true
 
   function isActive(href: string) {
     return href === '/dashboard'
@@ -262,9 +271,10 @@ function Sidebar({ theme, onToggleTheme, isMaster }: { theme: 'light' | 'dark'; 
       : pathname.startsWith(href)
   }
 
+  const baseNav = isRodrigues ? [...allNav, ESTOQUE_NAV_ITEM] : allNav
   const sidebarNav = isTecnico ? tecnicoNav : isMaster
-    ? [...allNav, { href: '/dashboard/master', label: 'Painel Master', icon: ShieldCheck }]
-    : allNav
+    ? [...baseNav, { href: '/dashboard/master', label: 'Painel Master', icon: ShieldCheck }]
+    : baseNav
 
   return (
     <aside className="hidden lg:flex flex-col w-64 flex-shrink-0"
@@ -338,7 +348,7 @@ function MobileHeader({ visible, theme, onToggleTheme }: { visible: boolean; the
   const { tenant, isTecnico } = useTenant()
   const pathname = usePathname()
 
-  const currentPage = [...allNav, ...tecnicoNav].find(n =>
+  const currentPage = [...allNav, ...tecnicoNav, ESTOQUE_NAV_ITEM].find(n =>
     n.href === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(n.href)
   )
 
@@ -410,7 +420,7 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
 
   // Técnico não tem Início/Financeiro/etc. — manda ele direto pros
   // chamados se cair em alguma rota fora da nav restrita dele.
-  const TECNICO_ALLOWED_PREFIXES = ['/dashboard/chamados', '/dashboard/comissao']
+  const TECNICO_ALLOWED_PREFIXES = ['/dashboard/chamados', '/dashboard/comissao', '/dashboard/estoque']
   useEffect(() => {
     if (isTecnico && !TECNICO_ALLOWED_PREFIXES.some(p => pathname.startsWith(p))) {
       router.replace('/dashboard/chamados')

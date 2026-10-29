@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ArrowLeft, Save, Loader2, CalendarDays, Plus, Trash2, Navigation } from 'lucide-react'
+import { ArrowLeft, Save, Loader2, CalendarDays, Plus, Trash2, Navigation, X } from 'lucide-react'
 import Link from 'next/link'
 import { use } from 'react'
 import { useRouter } from 'next/navigation'
@@ -19,6 +19,7 @@ import { getServiceConfig, APPLIANCE_BRANDS, APPLIANCE_TYPES } from '@/lib/servi
 import { mapsUrl } from '@/lib/maps'
 import { lookupCep } from '@/lib/cep'
 import { getRecentVisitFees, addRecentVisitFee } from '@/lib/recent-visit-fees'
+import { getStockItems, getServiceOrderParts, addServiceOrderParts, adjustStockQuantity, restorePreviousServiceOrderParts } from '@/lib/db/stock'
 
 type ServiceType = 'proprio' | 'terceirizado_saida' | 'terceirizado_entrada'
 type PaymentStatus = 'pago' | 'pago_parcial' | 'pendente'
@@ -155,16 +156,21 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const [deviceBrandOther, setDeviceBrandOther] = useState('')
   const [visitFee, setVisitFee] = useState(0)
   const [recentVisitFees, setRecentVisitFees] = useState<number[]>([])
+  const [stockItems, setStockItems] = useState<any[]>([])
+  const [stockLines, setStockLines] = useState<{ stock_item_id: string; item_name: string; quantity: number; unit_value: number; total_value: number }[]>([])
+  const [addingStockId, setAddingStockId] = useState('')
+  const [addingStockQty, setAddingStockQty] = useState(1)
 
   useEffect(() => {
     if (isRodrigues) setRecentVisitFees(getRecentVisitFees())
   }, [isRodrigues])
 
   useEffect(() => {
-    Promise.all([getCall(id), getClients(), getTeams(), getServiceTypes(), getAuxiliaries()]).then(([call, cls, tms, sts, auxs]) => {
+    Promise.all([getCall(id), getClients(), getTeams(), getServiceTypes(), getAuxiliaries(), getStockItems()]).then(([call, cls, tms, sts, auxs, stock]) => {
       setClients(cls)
       setTeams(tms)
       setAuxiliaries(auxs)
+      setStockItems(stock)
       const typeNames: string[] = sts.map((st: any) => st.name)
       setCategoryNames(typeNames)
 
@@ -226,7 +232,18 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         setHasGuarantee6m(so.has_guarantee_6m ?? false)
         setHasGuarantee1y(so.has_guarantee_1y ?? false)
         setHasNoGuarantee(so.has_no_guarantee ?? false)
-        setPartsCost(Number(so.parts_cost ?? 0))
+        getServiceOrderParts(so.id).then((parts: any[]) => {
+          const lines = parts.map(p => ({
+            stock_item_id: p.stock_item_id,
+            item_name: p.item_name,
+            quantity: Number(p.quantity),
+            unit_value: Number(p.unit_value),
+            total_value: Number(p.total_value),
+          }))
+          setStockLines(lines)
+          const stockTotal = lines.reduce((s, l) => s + l.total_value, 0)
+          setPartsCost(Math.max(0, Number(so.parts_cost ?? 0) - stockTotal))
+        }).catch(console.error)
         setTeamId(so.team_id ?? '')
         setTeamName(so.team_name ?? '')
         setDriver(so.driver ?? '')
@@ -312,6 +329,28 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const lineTotal = (l: ServiceLine) => l.flatPrice ? (l.flatValue ?? 0) : l.quantity * l.unitPrice
   const subtotal = serviceLines.reduce((sum, l) => sum + lineTotal(l), 0)
   const bruto = subtotal + equipmentRentalValue - discount + taxes
+
+  const availableStockItems = stockItems.filter(i => (i.auxiliary_id ?? null) === (technicianId || null))
+  const stockPartsTotal = stockLines.reduce((s, l) => s + l.total_value, 0)
+  const partsCostTotal = stockPartsTotal + partsCost
+
+  function addStockLine() {
+    const item = availableStockItems.find(i => i.id === addingStockId)
+    if (!item || addingStockQty <= 0) return
+    setStockLines(prev => [...prev, {
+      stock_item_id: item.id,
+      item_name: item.name,
+      quantity: addingStockQty,
+      unit_value: Number(item.unit_value),
+      total_value: addingStockQty * Number(item.unit_value),
+    }])
+    setAddingStockId('')
+    setAddingStockQty(1)
+  }
+
+  function removeStockLine(idx: number) {
+    setStockLines(prev => prev.filter((_, i) => i !== idx))
+  }
   const isOutsourced = serviceType !== 'proprio'
   const liquidoParceria = isOutsourced ? bruto * partnerPct / 100 : bruto
 
@@ -506,7 +545,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
           equipment_rental_value: equipmentRentalValue,
           subtotal,
           discount,
-          parts_cost: isRodrigues ? partsCost : 0,
+          parts_cost: isRodrigues ? partsCostTotal : 0,
           taxes,
           total_value: bruto,
           outsource_profit_pct: partnerPct,
@@ -557,7 +596,14 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         }
 
         if (isRodrigues && soId) {
-          await upsertPartsExpense(soId, partsCost, callDate, `Peça utilizada — ${contactName || 'chamado'}`)
+          await upsertPartsExpense(soId, partsCostTotal, callDate, `Peça utilizada — ${contactName || 'chamado'}`)
+          // Desfaz as peças registradas antes (devolve ao estoque) e grava a lista atual,
+          // pra edições não descontarem em dobro do estoque
+          await restorePreviousServiceOrderParts(soId)
+          if (stockLines.length > 0) {
+            await addServiceOrderParts(soId, stockLines)
+            await Promise.all(stockLines.map(l => adjustStockQuantity(l.stock_item_id, -l.quantity)))
+          }
         }
 
         // Salvar múltiplos auxiliares (comissões)
@@ -1199,10 +1245,49 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                 className="w-24 px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-orange-400" />
             </div>
             {isRodrigues && (
-              <div className="flex justify-between text-sm items-center">
-                <span className="text-slate-600">Custo de Peças (R$)</span>
-                <input type="number" min="0" step="0.01" value={partsCost || ''} onChange={e => setPartsCost(Number(e.target.value))}
-                  className="w-24 px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              <div className="border border-orange-100 bg-orange-50/40 rounded-xl p-3 space-y-2 my-1">
+                <p className="text-xs font-bold text-orange-600">Peças Utilizadas</p>
+                {stockLines.length > 0 && (
+                  <div className="space-y-1.5">
+                    {stockLines.map((l, idx) => (
+                      <div key={idx} className="flex items-center justify-between bg-white border border-orange-100 rounded-lg px-2.5 py-1.5 text-xs">
+                        <span className="text-slate-700">{l.quantity}x {l.item_name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-slate-700">R$ {l.total_value.toFixed(2)}</span>
+                          <button type="button" onClick={() => removeStockLine(idx)} className="text-red-400 hover:text-red-600">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {availableStockItems.length > 0 ? (
+                  <div className="flex gap-2">
+                    <select value={addingStockId} onChange={e => setAddingStockId(e.target.value)}
+                      className="flex-1 px-2 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-orange-400">
+                      <option value="">Selecione a peça...</option>
+                      {availableStockItems.map(i => (
+                        <option key={i.id} value={i.id}>{i.name} ({i.quantity} em estoque)</option>
+                      ))}
+                    </select>
+                    <input type="number" min="1" value={addingStockQty} onChange={e => setAddingStockQty(Number(e.target.value))}
+                      className="w-16 px-2 py-1.5 border border-slate-200 rounded-lg text-xs text-center focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                    <button type="button" onClick={addStockLine} disabled={!addingStockId}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-orange-500 text-white disabled:opacity-50">
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400">
+                    {technicianId ? 'Esse técnico não tem peças cadastradas no estoque.' : 'A loja não tem peças cadastradas no estoque.'}
+                  </p>
+                )}
+                <div className="flex justify-between text-sm items-center pt-1 border-t border-orange-100">
+                  <span className="text-slate-600">Outro custo de peça não cadastrada (R$)</span>
+                  <input type="number" min="0" step="0.01" value={partsCost || ''} onChange={e => setPartsCost(Number(e.target.value))}
+                    className="w-24 px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                </div>
               </div>
             )}
             <div className="flex justify-between text-sm items-center">
