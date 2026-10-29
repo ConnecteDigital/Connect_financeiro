@@ -15,7 +15,7 @@ interface Stats {
   cancelled_calls: number; no_visit_calls: number; not_approved_calls: number
   gross_revenue: number; net_revenue: number; pending_receivables: number
   total_expenses: number; outsource_costs: number; partner_costs: number; paid_revenue: number
-  parts_cost_total?: number; net_after_parts?: number
+  parts_cost_total?: number; net_after_parts?: number; visit_fee_revenue?: number
 }
 
 const today = new Date()
@@ -212,6 +212,7 @@ export default function DashboardPage() {
             { label: 'Custos terceirizados', value: -(stats?.partner_costs ?? 0), color: '#ef4444' },
             { label: 'Despesas do período', value: -(stats?.total_expenses ?? 0), color: '#ef4444' },
             ...(isRodrigues ? [
+              { label: 'Visitas cobradas (sem aprovação)', value: stats?.visit_fee_revenue ?? 0, color: 'var(--text-primary)' },
               { label: 'Peças utilizadas', value: -(stats?.parts_cost_total ?? 0), color: '#ef4444' },
               { label: 'Líquido após peças', value: stats?.net_after_parts ?? 0, color: '#16a34a' },
             ] : []),
@@ -345,7 +346,10 @@ export default function DashboardPage() {
                 { label: 'Receita bruta', value: stats?.gross_revenue ?? 0, color: 'var(--text-primary)' },
                 { label: 'Custos terceirizados', value: -(stats?.partner_costs ?? 0), color: '#ef4444' },
                 { label: 'Despesas do período', value: -(stats?.total_expenses ?? 0), color: '#ef4444' },
-                ...(isRodrigues ? [{ label: 'Peças utilizadas', value: -(stats?.parts_cost_total ?? 0), color: '#ef4444' }] : []),
+                ...(isRodrigues ? [
+                  { label: 'Visitas cobradas (sem aprovação)', value: stats?.visit_fee_revenue ?? 0, color: 'var(--text-primary)' },
+                  { label: 'Peças utilizadas', value: -(stats?.parts_cost_total ?? 0), color: '#ef4444' },
+                ] : []),
               ].map(r => (
                 <div key={r.label} className="flex items-center justify-between py-2.5 border-b border-slate-100">
                   <span className="text-sm font-medium text-slate-500">{r.label}</span>

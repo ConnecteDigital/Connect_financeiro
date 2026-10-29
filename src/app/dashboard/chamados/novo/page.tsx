@@ -114,6 +114,7 @@ export default function NovoChamadoPage() {
   const [callCep, setCallCep] = useState('')
   const [cepLoading, setCepLoading] = useState(false)
   const [cepError, setCepError] = useState(false)
+  const [visitFee, setVisitFee] = useState(0)
   const [scheduledDriver, setScheduledDriver] = useState('')
   const [deviceBrand, setDeviceBrand] = useState('')
   const [deviceBrandOther, setDeviceBrandOther] = useState('')
@@ -425,6 +426,7 @@ export default function NovoChamadoPage() {
         solicitante: solicitante || null,
         driver: scheduledDriver || null,
         device_brand: isRodrigues ? ((deviceBrand === 'Outra' ? deviceBrandOther : deviceBrand) || null) : null,
+        visit_fee: isRodrigues && isScheduled && visitFee > 0 ? visitFee : null,
       })
 
       if (isApproved) {
@@ -1046,6 +1048,15 @@ export default function NovoChamadoPage() {
                     className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
                 )}
               </div>
+              {isRodrigues && (
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor da Visita (R$)</label>
+                  <input type="number" min="0" step="0.01" value={visitFee || ''} onChange={e => setVisitFee(Number(e.target.value))}
+                    placeholder="0,00"
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
+                  <p className="text-xs text-slate-400 mt-1">Cobrado mesmo que o cliente não aprove o serviço.</p>
+                </div>
+              )}
             </div>
           </div>
         )}

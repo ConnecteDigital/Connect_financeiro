@@ -144,6 +144,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const [partsCost, setPartsCost] = useState(0)
   const [deviceBrand, setDeviceBrand] = useState('')
   const [deviceBrandOther, setDeviceBrandOther] = useState('')
+  const [visitFee, setVisitFee] = useState(0)
 
   useEffect(() => {
     Promise.all([getCall(id), getClients(), getTeams(), getServiceTypes(), getAuxiliaries()]).then(([call, cls, tms, sts, auxs]) => {
@@ -170,6 +171,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         setDeviceBrand(APPLIANCE_BRANDS.includes(call.device_brand) ? call.device_brand : 'Outra')
         if (!APPLIANCE_BRANDS.includes(call.device_brand)) setDeviceBrandOther(call.device_brand)
       }
+      setVisitFee(Number(call.visit_fee ?? 0))
       setIsApproved(call.status === 'aprovado')
       setIsScheduled(call.status === 'agendado')
 
@@ -418,7 +420,10 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         call_address: callAddress || null,
         call_city: callCity || null,
         call_neighborhood: callNeighborhood || null,
-        ...(isRodrigues ? { device_brand: (deviceBrand === 'Outra' ? deviceBrandOther : deviceBrand) || null } : {}),
+        ...(isRodrigues ? {
+          device_brand: (deviceBrand === 'Outra' ? deviceBrandOther : deviceBrand) || null,
+          visit_fee: visitFee > 0 ? visitFee : null,
+        } : {}),
       })
 
       // 2. Se aprovado, criar ou atualizar OS
@@ -636,6 +641,16 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
               className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
           </div>
         </div>
+
+        {isRodrigues && (isScheduled || callStatus === 'pagou_somente_visita') && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor da Visita (R$)</label>
+            <input type="number" min="0" step="0.01" value={visitFee || ''} onChange={e => setVisitFee(Number(e.target.value))}
+              placeholder="0,00"
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+            <p className="text-xs text-slate-400 mt-1">Cobrado mesmo que o cliente não aprove o serviço.</p>
+          </div>
+        )}
 
         {/* Campos de agendamento */}
         {isScheduled && (

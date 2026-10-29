@@ -280,6 +280,12 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
               </div>
             </div>
           )}
+          {isRodrigues && call.visit_fee > 0 && (
+            <div>
+              <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Valor da Visita</p>
+              <p className="text-slate-700 font-semibold mt-0.5">R$ {Number(call.visit_fee).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+            </div>
+          )}
           {call.notes && (
             <div className="col-span-2 sm:col-span-3">
               <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Observações</p>

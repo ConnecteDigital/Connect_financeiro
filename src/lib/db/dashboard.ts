@@ -9,7 +9,7 @@ export async function getDashboardStatsRange(startDate: string, endDate: string)
   const [callsRes, ordersRes, expensesRes] = await Promise.all([
     supabase
       .from('calls')
-      .select('id, status')
+      .select('id, status, visit_fee')
       .gte('date', weekStart)
       .lte('date', weekEnd),
     supabase
@@ -34,7 +34,15 @@ export async function getDashboardStatsRange(startDate: string, endDate: string)
   const cancelled_calls = calls.filter(c => c.status === 'cancelado').length
   const no_visit_calls = calls.filter(c => c.status === 'nao_quis_visita').length
   const not_approved_calls = calls.filter(c => c.status === 'nao_aprovou').length
-  const gross_revenue = orders.reduce((s, o) => s + (o.total_value || 0), 0)
+
+  // Receita de visitas cobradas sem aprovação do serviço (Rodrigues
+  // Refrigeração) — pra outros tenants não existe esse status, então essa
+  // soma é sempre 0 e não altera nada pra eles.
+  const visit_fee_revenue = calls
+    .filter((c: any) => c.status === 'pagou_somente_visita')
+    .reduce((s, c: any) => s + Number(c.visit_fee || 0), 0)
+
+  const gross_revenue = orders.reduce((s, o) => s + (o.total_value || 0), 0) + visit_fee_revenue
 
   function liquidoOS(o: any): number {
     const bruto = Number(o.total_value || 0)
@@ -60,7 +68,7 @@ export async function getDashboardStatsRange(startDate: string, endDate: string)
   }, 0)
 
   const total_costs = operational_costs + partner_costs
-  const liquid_revenue = orders.reduce((s, o) => s + liquidoOS(o), 0)
+  const liquid_revenue = orders.reduce((s, o) => s + liquidoOS(o), 0) + visit_fee_revenue
   const total_expenses = expenses.reduce((s, e) => s + (e.amount || 0), 0)
   const net_revenue = liquid_revenue - operational_costs - total_expenses
 
@@ -91,6 +99,7 @@ export async function getDashboardStatsRange(startDate: string, endDate: string)
     paid_revenue,
     parts_cost_total,
     net_after_parts,
+    visit_fee_revenue,
   }
 }
 
