@@ -14,7 +14,7 @@ export async function getDashboardStatsRange(startDate: string, endDate: string)
       .lte('date', weekEnd),
     supabase
       .from('service_orders')
-      .select('total_value, payment_status, amount_paid, remaining_amount, outsource_fuel_cost, outsource_meal_cost, outsource_truck_cost, outsource_other_cost, service_type, outsource_profit_pct')
+      .select('total_value, payment_status, amount_paid, remaining_amount, outsource_fuel_cost, outsource_meal_cost, outsource_truck_cost, outsource_other_cost, service_type, outsource_profit_pct, parts_cost')
       .gte('date', weekStart)
       .lte('date', weekEnd),
     supabase
@@ -70,6 +70,11 @@ export async function getDashboardStatsRange(startDate: string, endDate: string)
 
   const paid_revenue = gross_revenue - pending_receivables
 
+  // Custo de peças usadas nos serviços (Rodrigues Refrigeração) — pra
+  // outros tenants esse valor é sempre 0, então não altera nada pra eles.
+  const parts_cost_total = orders.reduce((s, o: any) => s + Number(o.parts_cost || 0), 0)
+  const net_after_parts = gross_revenue - parts_cost_total
+
   return {
     total_calls,
     approved_calls,
@@ -84,6 +89,8 @@ export async function getDashboardStatsRange(startDate: string, endDate: string)
     outsource_costs: operational_costs,
     partner_costs,
     paid_revenue,
+    parts_cost_total,
+    net_after_parts,
   }
 }
 

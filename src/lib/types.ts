@@ -1,6 +1,6 @@
 export type UserRole = 'owner' | 'secretary'
 
-export type CallStatus = 'agendado' | 'aprovado' | 'nao_quis_visita' | 'cancelado'
+export type CallStatus = 'agendado' | 'aprovado' | 'nao_quis_visita' | 'cancelado' | 'nao_aprovou' | 'pagou_somente_visita'
 export type ServiceType = 'proprio' | 'terceirizado_saida' | 'terceirizado_entrada'
 export type PaymentStatus = 'pago' | 'pago_parcial' | 'pendente'
 export type ExpenseStatus = 'pago' | 'pendente'
@@ -81,6 +81,7 @@ export interface Call {
   scheduled_time?: string
   scheduled_date?: string
   call_address?: string
+  device_brand?: string
   service_order?: ServiceOrder
   created_at: string
 }
@@ -113,6 +114,9 @@ export interface ServiceOrder {
   has_no_guarantee?: boolean
   has_guarantee_60?: boolean
   has_guarantee_90?: boolean
+  has_guarantee_6m?: boolean
+  has_guarantee_1y?: boolean
+  parts_cost?: number
   items: ServiceOrderItem[]
   equipment_rental_pct?: number
   equipment_rental_value?: number

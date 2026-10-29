@@ -1,13 +1,14 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { Plus, Search, CheckCircle, XCircle, Clock, ChevronRight, ChevronLeft, List, CalendarDays, FileText } from 'lucide-react'
+import { Plus, Search, CheckCircle, XCircle, Clock, ChevronRight, ChevronLeft, List, CalendarDays, FileText, Wallet } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { getCalls, updateCall } from '@/lib/db/calls'
 import { getOriginLabel } from '@/lib/use-call-origins'
+import { useTenant } from '@/lib/tenant-context'
 
-type Status = 'todos' | 'agendado' | 'aprovado' | 'nao_quis_visita' | 'nao_aprovou' | 'cancelado'
+type Status = 'todos' | 'agendado' | 'aprovado' | 'nao_quis_visita' | 'nao_aprovou' | 'cancelado' | 'pagou_somente_visita'
 
 const statusConfig: Record<string, { label: string; color: string; icon: React.ElementType }> = {
   agendado:        { label: 'Agendado',    color: 'bg-blue-50 text-blue-700 border-blue-200',        icon: Clock },
@@ -15,6 +16,7 @@ const statusConfig: Record<string, { label: string; color: string; icon: React.E
   nao_quis_visita: { label: 'Não quis',   color: 'bg-zinc-100 text-zinc-600 border-zinc-200',        icon: XCircle },
   nao_aprovou:     { label: 'Não aprovou', color: 'bg-amber-50 text-amber-700 border-amber-200',      icon: XCircle },
   cancelado:       { label: 'Cancelado',  color: 'bg-red-50 text-red-600 border-red-200',            icon: XCircle },
+  pagou_somente_visita: { label: 'Pagou a visita', color: 'bg-cyan-50 text-cyan-700 border-cyan-200', icon: Wallet },
 }
 
 const paymentConfig: Record<string, { label: string; color: string }> = {
@@ -33,8 +35,24 @@ const filters: { value: Status; label: string }[] = [
   { value: 'cancelado', label: 'Cancelado' },
 ]
 
+const filtersRodrigues: { value: Status; label: string }[] = [
+  { value: 'todos', label: 'Todos' },
+  { value: 'agendado', label: 'Agendado' },
+  { value: 'aprovado', label: 'Aprovado' },
+  { value: 'nao_aprovou', label: 'Não aprovou' },
+  { value: 'pagou_somente_visita', label: 'Pagou a visita' },
+]
+
+function localToday() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 export default function ChamadosPage() {
   const router = useRouter()
+  const { tenant } = useTenant()
+  const isRodrigues = tenant?.call_form_config?.rodrigues_custom === true
+  const [dayFilter, setDayFilter] = useState(localToday)
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<Status>('todos')
@@ -108,9 +126,13 @@ export default function ChamadosPage() {
     return calls.filter(c => {
       if (originFilter !== 'todos' && (c.origin ?? '') !== originFilter) return false
       if (channelFilter !== 'todos' && (c.call_channel ?? '') !== channelFilter) return false
+      if (isRodrigues) {
+        const day = c.scheduled_date ?? c.date
+        if (day !== dayFilter) return false
+      }
       return true
     })
-  }, [calls, originFilter, channelFilter])
+  }, [calls, originFilter, channelFilter, isRodrigues, dayFilter])
 
   useEffect(() => { load() }, [load])
 
@@ -147,18 +169,20 @@ export default function ChamadosPage() {
           <p className="text-zinc-500 text-sm mt-0.5 hidden sm:block">Gerencie chamados e ordens de serviço</p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex bg-white border border-zinc-200 rounded-xl shadow-sm overflow-hidden">
-            <button onClick={() => setView('lista')} title="Lista"
-              className={`p-2.5 transition ${view === 'lista' ? 'text-white' : 'text-zinc-500 hover:bg-zinc-50'}`}
-              style={view === 'lista' ? { background: 'var(--primary)' } : {}}>
-              <List className="w-4 h-4" />
-            </button>
-            <button onClick={() => setView('calendario')} title="Calendário"
-              className={`p-2.5 transition ${view === 'calendario' ? 'text-white' : 'text-zinc-500 hover:bg-zinc-50'}`}
-              style={view === 'calendario' ? { background: 'var(--primary)' } : {}}>
-              <CalendarDays className="w-4 h-4" />
-            </button>
-          </div>
+          {!isRodrigues && (
+            <div className="flex bg-white border border-zinc-200 rounded-xl shadow-sm overflow-hidden">
+              <button onClick={() => setView('lista')} title="Lista"
+                className={`p-2.5 transition ${view === 'lista' ? 'text-white' : 'text-zinc-500 hover:bg-zinc-50'}`}
+                style={view === 'lista' ? { background: 'var(--primary)' } : {}}>
+                <List className="w-4 h-4" />
+              </button>
+              <button onClick={() => setView('calendario')} title="Calendário"
+                className={`p-2.5 transition ${view === 'calendario' ? 'text-white' : 'text-zinc-500 hover:bg-zinc-50'}`}
+                style={view === 'calendario' ? { background: 'var(--primary)' } : {}}>
+                <CalendarDays className="w-4 h-4" />
+              </button>
+            </div>
+          )}
           <button
             onClick={() => {
               const today = new Date()
@@ -180,6 +204,28 @@ export default function ChamadosPage() {
         </div>
       </div>
 
+      {/* Navegação por dia — só Rodrigues */}
+      {isRodrigues && (
+        <div className="flex items-center justify-between bg-white rounded-2xl border border-zinc-100 px-4 py-3 shadow-sm">
+          <button onClick={() => setDayFilter(d => { const nd = new Date(d + 'T12:00:00'); nd.setDate(nd.getDate() - 1); return `${nd.getFullYear()}-${String(nd.getMonth() + 1).padStart(2, '0')}-${String(nd.getDate()).padStart(2, '0')}` })}
+            className="p-1.5 hover:bg-zinc-100 rounded-lg transition text-zinc-500">
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <div className="text-center">
+            <p className="font-semibold text-zinc-800 capitalize text-sm">
+              {new Date(dayFilter + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </p>
+            {dayFilter !== localToday() && (
+              <button onClick={() => setDayFilter(localToday())} className="text-xs font-medium" style={{ color: 'var(--primary)' }}>Voltar para hoje</button>
+            )}
+          </div>
+          <button onClick={() => setDayFilter(d => { const nd = new Date(d + 'T12:00:00'); nd.setDate(nd.getDate() + 1); return `${nd.getFullYear()}-${String(nd.getMonth() + 1).padStart(2, '0')}-${String(nd.getDate()).padStart(2, '0')}` })}
+            className="p-1.5 hover:bg-zinc-100 rounded-lg transition text-zinc-500">
+            <ChevronRight className="w-5 h-5" />
+          </button>
+        </div>
+      )}
+
       {/* Search */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
@@ -190,7 +236,7 @@ export default function ChamadosPage() {
 
       {/* Status filters */}
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
-        {filters.map(f => (
+        {(isRodrigues ? filtersRodrigues : filters).map(f => (
           <button key={f.value} onClick={() => setStatusFilter(f.value)}
             className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-semibold border transition ${
               statusFilter === f.value
@@ -448,10 +494,13 @@ export default function ChamadosPage() {
                 <h2 className="text-lg font-bold text-zinc-900">Chamado Recusado</h2>
                 <div className="space-y-2">
                   <label className="block text-xs font-medium text-zinc-500 mb-1">Motivo</label>
-                  {[
+                  {(isRodrigues ? [
+                    { value: 'nao_aprovou', label: 'Não aprovou' },
+                    { value: 'pagou_somente_visita', label: 'Pagou somente a visita' },
+                  ] : [
                     { value: 'nao_aprovou', label: 'Não aprovou' },
                     { value: 'nao_quis_visita', label: 'Não quis visita' },
-                  ].map(opt => (
+                  ]).map(opt => (
                     <label key={opt.value} className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition hover:bg-zinc-50"
                       style={{ borderColor: actionRefuseReason === opt.value ? '#f97316' : '#e4e4e7' }}>
                       <input type="radio" name="refuseReason" value={opt.value}

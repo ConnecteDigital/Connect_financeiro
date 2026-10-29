@@ -62,6 +62,13 @@ export const GELADEIRA_PRESET_CATEGORIES = [
   'Outros',
 ]
 
+// Marcas de geladeira/eletrodoméstico mais comuns no Brasil — usado no
+// campo "Marca do Aparelho" exclusivo da Rodrigues Refrigeração.
+export const APPLIANCE_BRANDS = [
+  'Consul', 'Brastemp', 'Electrolux', 'Samsung', 'LG', 'Panasonic',
+  'Philco', 'Midea', 'Springer', 'Continental', 'Esmaltec', 'Outra',
+]
+
 const GENERIC_CATEGORY_CONFIG: ServiceCategoryConfig = {
   qtyLabel: 'Quantidade',
   priceLabel: 'Valor (R$)',

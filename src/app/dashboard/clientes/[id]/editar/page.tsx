@@ -107,16 +107,20 @@ export default function EditarClientePage({ params }: { params: Promise<{ id: st
             <input type="text" required value={form.name} onChange={e => set('name', e.target.value)}
               className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">CPF / CNPJ</label>
-            <input type="text" value={form.cpf_cnpj} onChange={e => set('cpf_cnpj', e.target.value)}
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Inscrição Estadual</label>
-            <input type="text" value={form.inscr_est} onChange={e => set('inscr_est', e.target.value)}
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
-          </div>
+          {!isRodrigues && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">CPF / CNPJ</label>
+              <input type="text" value={form.cpf_cnpj} onChange={e => set('cpf_cnpj', e.target.value)}
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+            </div>
+          )}
+          {!isRodrigues && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Inscrição Estadual</label>
+              <input type="text" value={form.inscr_est} onChange={e => set('inscr_est', e.target.value)}
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+            </div>
+          )}
           {isRodrigues && (
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">CEP</label>

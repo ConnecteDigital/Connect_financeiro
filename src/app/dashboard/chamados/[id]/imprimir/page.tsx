@@ -104,6 +104,7 @@ function ImprimirContent({ id }: { id: string }) {
   if (!so) return <div className="flex items-center justify-center h-screen text-slate-500">Este chamado não possui ordem de serviço.</div>
 
   const isMillenium = tenant?.call_form_config?.millenium_custom_os === true
+  const isRodrigues = tenant?.call_form_config?.rodrigues_custom === true
   const companyName = tenant?.name ?? 'Empresa'
   const tenantTagline = 'Atendimento 24h · Domingos e Feriados'
   const origin = call.origin as string | null
@@ -230,6 +231,14 @@ function ImprimirContent({ id }: { id: string }) {
           <span style={valueSt}>{call.call_address ? `${call.call_address}${call.call_city ? ` - ${call.call_city}` : ''}` : (client?.address || '')}</span>
         </div>
 
+        {/* Marca do Aparelho — só Rodrigues */}
+        {isRodrigues && call.device_brand && (
+          <div style={{ border: B, borderTop: 'none', ...cellSt }}>
+            <span style={labelSt}>Marca do Aparelho</span>
+            <span style={valueSt}>{call.device_brand}</span>
+          </div>
+        )}
+
         {/* ── SERVIÇOS / PEÇAS ── */}
         <div style={{ border: B, borderTop: 'none', background: '#f5f5f5', padding: '3px 8px', textAlign: 'center', fontWeight: 700, fontSize: 11, letterSpacing: '0.04em' }}>
           SERVIÇOS / PEÇAS
@@ -290,7 +299,25 @@ function ImprimirContent({ id }: { id: string }) {
           const garantia = so.has_guarantee ? 'Garantia 30 dias'
             : so.has_guarantee_60 ? 'Garantia 60 dias'
             : so.has_guarantee_90 ? 'Garantia 90 dias'
+            : so.has_guarantee_6m ? 'Garantia 6 meses'
+            : so.has_guarantee_1y ? 'Garantia 1 ano'
             : so.has_no_guarantee ? 'Sem garantia' : ''
+
+          if (isRodrigues) {
+            if (!garantia) return null
+            return (
+              <>
+                <div style={{ border: B, borderTop: 'none', background: '#f5f5f5', padding: '3px 8px', textAlign: 'center', fontWeight: 700, fontSize: 11, letterSpacing: '0.04em' }}>
+                  GARANTIA
+                </div>
+                <div style={{ border: B, borderTop: 'none', ...cellSt }}>
+                  <span style={labelSt}>Garantia</span>
+                  <span style={valueSt}>{garantia}</span>
+                </div>
+              </>
+            )
+          }
+
           const plantaBaixa = so.has_floor_plan ? 'Com planta baixa'
             : so.has_no_floor_plan ? 'Sem planta baixa'
             : so.has_no_knowledge ? 'Sem conhecimento' : ''

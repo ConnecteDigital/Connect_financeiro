@@ -1,20 +1,21 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { ArrowLeft, Save, Loader2, CalendarDays, Camera, Paperclip, FileText, X, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeft, Save, Loader2, CalendarDays, Camera, Paperclip, FileText, X, Plus, Trash2, Navigation } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createCall, searchCallContacts } from '@/lib/db/calls'
 import { createServiceOrder, createServiceOrderAuxiliaries } from '@/lib/db/service-orders'
-import { createExpense } from '@/lib/db/expenses'
+import { createExpense, upsertPartsExpense } from '@/lib/db/expenses'
 import { getClients, createClient_ } from '@/lib/db/clients'
 import { getTeams } from '@/lib/db/teams'
 import { getAuxiliaries, createAuxiliary } from '@/lib/db/auxiliaries'
 import { getServiceTypes } from '@/lib/db/service-types'
-import { getServiceConfig } from '@/lib/service-config'
+import { getServiceConfig, APPLIANCE_BRANDS } from '@/lib/service-config'
 import { useCallOrigins } from '@/lib/use-call-origins'
 import { useTenant } from '@/lib/tenant-context'
 import { createClient } from '@/lib/supabase/client'
+import { mapsUrl } from '@/lib/maps'
 
 type ServiceType = 'proprio' | 'terceirizado_saida' | 'terceirizado_entrada'
 type PaymentStatus = 'pago' | 'pago_parcial' | 'pendente'
@@ -44,6 +45,15 @@ const CALL_STATUSES = [
   { value: 'cancelado', label: 'Cancelado' },
 ]
 
+// Rodrigues Refrigeração cobra pela visita — "não quis visita"/"cancelado"
+// saem e entra "pagou somente a visita" no lugar.
+const CALL_STATUSES_RODRIGUES = [
+  { value: 'agendado', label: 'Agendado' },
+  { value: 'aprovado', label: 'Aprovado' },
+  { value: 'nao_aprovou', label: 'Não aprovou' },
+  { value: 'pagou_somente_visita', label: 'Pagou somente a visita' },
+]
+
 const PAYMENT_METHODS = ['Dinheiro', 'Cartão', 'PIX', 'Boleto']
 const AUX_TYPE_LABEL: Record<string, string> = { dono: 'Dono', tecnico: 'Técnico', auxiliar: 'Auxiliar' }
 const AUX_TYPE_STYLE: Record<string, { background: string; color: string }> = {
@@ -62,6 +72,8 @@ export default function NovoChamadoPage() {
   const commissionsEnabled = tenant?.enable_commissions ?? false
   const isSimplified = tenant?.call_form_config?.simplified === true
   const isMillenium = tenant?.call_form_config?.millenium_custom_os === true
+  const isRodrigues = tenant?.call_form_config?.rodrigues_custom === true
+  const callStatusOptions = isRodrigues ? CALL_STATUSES_RODRIGUES : CALL_STATUSES
   const [selectedCategory, setSelectedCategory] = useState('')
   const serviceCategory = selectedCategory
   const [saving, setSaving] = useState(false)
@@ -99,6 +111,9 @@ export default function NovoChamadoPage() {
   const [scheduledTime, setScheduledTime] = useState('')
   const [callAddress, setCallAddress] = useState('')
   const [scheduledDriver, setScheduledDriver] = useState('')
+  const [deviceBrand, setDeviceBrand] = useState('')
+  const [deviceBrandOther, setDeviceBrandOther] = useState('')
+  const [partsCost, setPartsCost] = useState(0)
 
   const isApproved = callStatus === 'aprovado'
   const isScheduled = callStatus === 'agendado'
@@ -132,6 +147,8 @@ export default function NovoChamadoPage() {
   const [hasGuarantee, setHasGuarantee] = useState(false)
   const [hasGuarantee60, setHasGuarantee60] = useState(false)
   const [hasGuarantee90, setHasGuarantee90] = useState(false)
+  const [hasGuarantee6m, setHasGuarantee6m] = useState(false)
+  const [hasGuarantee1y, setHasGuarantee1y] = useState(false)
   const [hasNoGuarantee, setHasNoGuarantee] = useState(false)
   const [teamId, setTeamId] = useState('')
   const [teamName, setTeamName] = useState('')
@@ -257,8 +274,8 @@ export default function NovoChamadoPage() {
       setServiceLines(prev => prev.filter(l => l.category !== name))
     } else {
       setSelectedCategories(prev => [...prev, name])
-      if (!cfg?.subOptions) {
-        setServiceLines(prev => [...prev, { category: name, sub: null, quantity: 0, unitPrice: 0, notes: '' }])
+      if (isRodrigues || !cfg?.subOptions) {
+        setServiceLines(prev => [...prev, { category: name, sub: null, quantity: 0, unitPrice: 0, notes: '', flatPrice: isRodrigues || undefined }])
       }
     }
   }
@@ -268,7 +285,7 @@ export default function NovoChamadoPage() {
       const exists = prev.some(l => l.category === category && l.sub === sub)
       return exists
         ? prev.filter(l => !(l.category === category && l.sub === sub))
-        : [...prev, { category, sub, quantity: 0, unitPrice: 0, notes: '' }]
+        : [...prev, { category, sub, quantity: 0, unitPrice: 0, notes: '', flatPrice: isRodrigues || undefined }]
     })
   }
 
@@ -381,6 +398,7 @@ export default function NovoChamadoPage() {
         contact_cpf: contactCpf || null,
         solicitante: solicitante || null,
         driver: scheduledDriver || null,
+        device_brand: isRodrigues ? ((deviceBrand === 'Outra' ? deviceBrandOther : deviceBrand) || null) : null,
       })
 
       if (isApproved) {
@@ -415,10 +433,13 @@ export default function NovoChamadoPage() {
           has_guarantee: hasGuarantee,
           has_guarantee_60: hasGuarantee60,
           has_guarantee_90: hasGuarantee90,
+          has_guarantee_6m: hasGuarantee6m,
+          has_guarantee_1y: hasGuarantee1y,
           has_no_guarantee: hasNoGuarantee,
           equipment_rental_value: equipmentRentalValue,
           subtotal,
           discount,
+          parts_cost: isRodrigues ? partsCost : 0,
           taxes,
           total_value: bruto,
           outsource_profit_pct: partnerPct,
@@ -446,6 +467,10 @@ export default function NovoChamadoPage() {
           notes: l.notes || null,
         }))
         const order = await createServiceOrder(orderData, validItems)
+
+        if (isRodrigues && partsCost > 0) {
+          await upsertPartsExpense(order.id, partsCost, callDate, `Peça utilizada — ${contactName || selectedClientName || 'chamado'}`)
+        }
 
         // Save multiple auxiliaries when commissions enabled
         if ((commissionsEnabled || isMillenium) && selectedAuxiliaries.length > 0) {
@@ -753,7 +778,7 @@ export default function NovoChamadoPage() {
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">Status *</label>
           <div className="flex flex-wrap gap-2">
-            {CALL_STATUSES.map(s => (
+            {callStatusOptions.map(s => (
               <button key={s.value} type="button" onClick={() => setCallStatus(s.value)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition ${callStatus === s.value ? 'bg-orange-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
                 {s.label}
@@ -764,14 +789,16 @@ export default function NovoChamadoPage() {
 
         {/* Data + horário do chamado */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="col-span-2 sm:col-span-2">
+          <div className={isRodrigues ? 'col-span-4' : 'col-span-2 sm:col-span-2'}>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Data do Chamado *</label>
             <input type="date" required value={callDate} onChange={e => setCallDate(e.target.value)} className={inputCls} />
           </div>
-          <div className="col-span-2 sm:col-span-2">
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Horário do Chamado</label>
-            <input type="time" value={callTime} onChange={e => setCallTime(e.target.value)} className={inputCls} />
-          </div>
+          {!isRodrigues && (
+            <div className="col-span-2 sm:col-span-2">
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Horário do Chamado</label>
+              <input type="time" value={callTime} onChange={e => setCallTime(e.target.value)} className={inputCls} />
+            </div>
+          )}
         </div>
 
         {/* Buscar cliente existente */}
@@ -855,12 +882,14 @@ export default function NovoChamadoPage() {
             <input type="tel" value={contactPhone} onChange={e => setContactPhone(e.target.value)}
               placeholder="(51) 99999-9999" className={inputCls} />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">CPF / CNPJ</label>
-            <input type="text" value={contactCpf}
-              onChange={e => { setContactCpf(e.target.value); if (clientId) setClientId('') }}
-              placeholder="000.000.000-00" className={inputCls} />
-          </div>
+          {!isRodrigues && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">CPF / CNPJ</label>
+              <input type="text" value={contactCpf}
+                onChange={e => { setContactCpf(e.target.value); if (clientId) setClientId('') }}
+                placeholder="000.000.000-00" className={inputCls} />
+            </div>
+          )}
           <div className="sm:col-span-2">
             <label className="block text-sm font-medium text-slate-700 mb-1.5">
               Solicitante
@@ -909,6 +938,14 @@ export default function NovoChamadoPage() {
               <input type="text" value={callAddress} onChange={e => setCallAddress(e.target.value)}
                 placeholder="Rua, número, bairro, cidade"
                 className={inputCls} />
+              {isRodrigues && callAddress && (
+                <a href={mapsUrl([callAddress, callNeighborhood, callCity].filter(Boolean).join(', '))}
+                  target="_blank" rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 mt-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 transition">
+                  <Navigation className="w-3 h-3" />
+                  Abrir no Maps
+                </a>
+              )}
             </div>
           </div>
         )}
@@ -935,12 +972,28 @@ export default function NovoChamadoPage() {
                 <input type="text" value={callAddress} onChange={e => setCallAddress(e.target.value)}
                   placeholder="Rua, número, bairro, cidade"
                   className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
+                {isRodrigues && callAddress && (
+                  <a href={mapsUrl([callAddress, callNeighborhood, callCity].filter(Boolean).join(', '))}
+                    target="_blank" rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 mt-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 transition">
+                    <Navigation className="w-3 h-3" />
+                    Abrir no Maps
+                  </a>
+                )}
               </div>
               <div className="sm:col-span-2">
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Técnico Responsável</label>
-                <input type="text" value={scheduledDriver} onChange={e => setScheduledDriver(e.target.value)}
-                  placeholder="Nome do técnico que vai atender"
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
+                {isRodrigues ? (
+                  <select value={scheduledDriver} onChange={e => setScheduledDriver(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white">
+                    <option value="">Selecione o técnico...</option>
+                    {teams.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+                  </select>
+                ) : (
+                  <input type="text" value={scheduledDriver} onChange={e => setScheduledDriver(e.target.value)}
+                    placeholder="Nome do técnico que vai atender"
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
+                )}
               </div>
             </div>
           </div>
@@ -969,7 +1022,7 @@ export default function NovoChamadoPage() {
             return (
               <div key={cat} className="border border-orange-200 bg-orange-50/40 rounded-xl p-4 mt-3 space-y-3">
                 <p className="text-sm font-bold text-orange-600">{cat}</p>
-                {cfg?.subOptions && (
+                {!isRodrigues && cfg?.subOptions && (
                   <div className="flex flex-wrap gap-2">
                     {cfg.subOptions.map(sub => {
                       const active = catLines.some(l => l.sub === sub)
@@ -987,7 +1040,7 @@ export default function NovoChamadoPage() {
                     {l.sub && <p className="text-xs font-bold text-orange-500 uppercase tracking-wide">{l.sub}</p>}
 
                     {/* Toggle valor fechado / por quantidade */}
-                    {cfg?.allowFlatPrice && (
+                    {!isRodrigues && cfg?.allowFlatPrice && (
                       <div className="flex gap-2">
                         <button type="button"
                           onClick={() => updateLine(l.category, l.sub, { flatPrice: false })}
@@ -1046,6 +1099,20 @@ export default function NovoChamadoPage() {
             )
           })}
         </div>
+
+        {isRodrigues && selectedCategories.length > 0 && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Marca do Aparelho</label>
+            <select value={deviceBrand} onChange={e => setDeviceBrand(e.target.value)} className={inputCls}>
+              <option value="">Selecione...</option>
+              {APPLIANCE_BRANDS.map(b => <option key={b} value={b}>{b}</option>)}
+            </select>
+            {deviceBrand === 'Outra' && (
+              <input type="text" value={deviceBrandOther} onChange={e => setDeviceBrandOther(e.target.value)}
+                placeholder="Digite a marca..." className={`${inputCls} mt-2`} />
+            )}
+          </div>
+        )}
 
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1.5">Observações</label>
@@ -1307,6 +1374,13 @@ export default function NovoChamadoPage() {
               <input type="number" min="0" step="0.01" value={discount || ''} onChange={e => setDiscount(Number(e.target.value))}
                 className="w-24 px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-orange-400" />
             </div>
+            {isRodrigues && (
+              <div className="flex justify-between text-sm items-center">
+                <span className="text-slate-600">Custo de Peças (R$)</span>
+                <input type="number" min="0" step="0.01" value={partsCost || ''} onChange={e => setPartsCost(Number(e.target.value))}
+                  className="w-24 px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              </div>
+            )}
             <div className="flex justify-between text-sm items-center">
               <span className="text-slate-600">Impostos (R$)</span>
               <input type="number" min="0" step="0.01" value={taxes || ''} onChange={e => setTaxes(Number(e.target.value))}
@@ -1360,38 +1434,58 @@ export default function NovoChamadoPage() {
 
           {/* Levantamento */}
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-4">
-            <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3">Levantamento</h2>
-            <div className="space-y-3">
-              {[
-                { title: 'Planta baixa', options: [
-                  { label: 'Com planta baixa', val: hasFloorPlan, set: setHasFloorPlan },
-                  { label: 'Sem planta baixa', val: hasNoFloorPlan, set: setHasNoFloorPlan },
-                  { label: 'Sem conhecimento', val: hasNoKnowledge, set: setHasNoKnowledge },
-                ]},
-                { title: 'Planta hidráulica', options: [
-                  { label: 'Com planta hidráulica', val: hasHydraulicPlan, set: setHasHydraulicPlan },
-                  { label: 'Sem planta hidráulica', val: hasNoHydraulicPlan, set: setHasNoHydraulicPlan },
-                ]},
-                { title: 'Garantia', options: [
-                  { label: 'Garantia 30 dias', val: hasGuarantee, set: setHasGuarantee },
-                  { label: 'Garantia 60 dias', val: hasGuarantee60, set: setHasGuarantee60 },
-                  { label: 'Garantia 90 dias', val: hasGuarantee90, set: setHasGuarantee90 },
+            <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3">{isRodrigues ? 'Garantia' : 'Levantamento'}</h2>
+            {isRodrigues ? (
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { label: '90 dias', val: hasGuarantee90, set: setHasGuarantee90 },
+                  { label: '6 meses', val: hasGuarantee6m, set: setHasGuarantee6m },
+                  { label: '1 ano', val: hasGuarantee1y, set: setHasGuarantee1y },
                   { label: 'Sem garantia', val: hasNoGuarantee, set: setHasNoGuarantee },
-                ]},
-              ].map(group => (
-                <div key={group.title}>
-                  <p className="text-xs text-slate-400 font-medium uppercase tracking-wide mb-1.5">{group.title}</p>
-                  <div className="flex flex-wrap gap-4">
-                    {group.options.map(({ label, val, set }) => (
-                      <label key={label} className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" checked={val} onChange={e => set(e.target.checked)} className="w-4 h-4 rounded text-orange-500" />
-                        <span className="text-sm text-slate-700">{label}</span>
-                      </label>
-                    ))}
+                ].map(opt => (
+                  <button key={opt.label} type="button"
+                    onClick={() => {
+                      setHasGuarantee90(false); setHasGuarantee6m(false); setHasGuarantee1y(false); setHasNoGuarantee(false)
+                      opt.set(true)
+                    }}
+                    className={`px-3 py-2 rounded-xl text-sm font-medium border transition ${opt.val ? 'bg-orange-500 border-orange-500 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-orange-300'}`}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {[
+                  { title: 'Planta baixa', options: [
+                    { label: 'Com planta baixa', val: hasFloorPlan, set: setHasFloorPlan },
+                    { label: 'Sem planta baixa', val: hasNoFloorPlan, set: setHasNoFloorPlan },
+                    { label: 'Sem conhecimento', val: hasNoKnowledge, set: setHasNoKnowledge },
+                  ]},
+                  { title: 'Planta hidráulica', options: [
+                    { label: 'Com planta hidráulica', val: hasHydraulicPlan, set: setHasHydraulicPlan },
+                    { label: 'Sem planta hidráulica', val: hasNoHydraulicPlan, set: setHasNoHydraulicPlan },
+                  ]},
+                  { title: 'Garantia', options: [
+                    { label: 'Garantia 30 dias', val: hasGuarantee, set: setHasGuarantee },
+                    { label: 'Garantia 60 dias', val: hasGuarantee60, set: setHasGuarantee60 },
+                    { label: 'Garantia 90 dias', val: hasGuarantee90, set: setHasGuarantee90 },
+                    { label: 'Sem garantia', val: hasNoGuarantee, set: setHasNoGuarantee },
+                  ]},
+                ].map(group => (
+                  <div key={group.title}>
+                    <p className="text-xs text-slate-400 font-medium uppercase tracking-wide mb-1.5">{group.title}</p>
+                    <div className="flex flex-wrap gap-4">
+                      {group.options.map(({ label, val, set }) => (
+                        <label key={label} className="flex items-center gap-2 cursor-pointer">
+                          <input type="checkbox" checked={val} onChange={e => set(e.target.checked)} className="w-4 h-4 rounded text-orange-500" />
+                          <span className="text-sm text-slate-700">{label}</span>
+                        </label>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Condições de Pagamento</label>
               <input type="text" value={conditions} onChange={e => setConditions(e.target.value)} className={inputCls} />
