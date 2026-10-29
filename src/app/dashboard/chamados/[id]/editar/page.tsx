@@ -15,8 +15,10 @@ import { upsertPartsExpense } from '@/lib/db/expenses'
 import { createClient } from '@/lib/supabase/client'
 import { useCallOrigins } from '@/lib/use-call-origins'
 import { useTenant } from '@/lib/tenant-context'
-import { getServiceConfig, APPLIANCE_BRANDS } from '@/lib/service-config'
+import { getServiceConfig, APPLIANCE_BRANDS, APPLIANCE_TYPES } from '@/lib/service-config'
 import { mapsUrl } from '@/lib/maps'
+import { lookupCep } from '@/lib/cep'
+import { getRecentVisitFees, addRecentVisitFee } from '@/lib/recent-visit-fees'
 
 type ServiceType = 'proprio' | 'terceirizado_saida' | 'terceirizado_entrada'
 type PaymentStatus = 'pago' | 'pago_parcial' | 'pendente'
@@ -91,6 +93,9 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const [callAddress, setCallAddress] = useState('')
   const [callCity, setCallCity] = useState('')
   const [callNeighborhood, setCallNeighborhood] = useState('')
+  const [callCep, setCallCep] = useState('')
+  const [cepLoading, setCepLoading] = useState(false)
+  const [cepError, setCepError] = useState(false)
   const [isApproved, setIsApproved] = useState(false)
   const [isScheduled, setIsScheduled] = useState(false)
   const [existingSoId, setExistingSoId] = useState<string | null>(null)
@@ -130,6 +135,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const [paymentMethodsMulti, setPaymentMethodsMulti] = useState<string[]>([])
   const [cardType, setCardType] = useState('')
   const [cardFeePct, setCardFeePct] = useState(0)
+  const [installments, setInstallments] = useState(1)
   const [partnerName, setPartnerName] = useState('')
   const [amountPaid, setAmountPaid] = useState(0)
   const [remainingAmount, setRemainingAmount] = useState(0)
@@ -142,9 +148,15 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const [ownOtherCost, setOwnOtherCost] = useState(0)
   const [otherServiceValue, setOtherServiceValue] = useState(0)
   const [partsCost, setPartsCost] = useState(0)
+  const [applianceType, setApplianceType] = useState('')
   const [deviceBrand, setDeviceBrand] = useState('')
   const [deviceBrandOther, setDeviceBrandOther] = useState('')
   const [visitFee, setVisitFee] = useState(0)
+  const [recentVisitFees, setRecentVisitFees] = useState<number[]>([])
+
+  useEffect(() => {
+    if (isRodrigues) setRecentVisitFees(getRecentVisitFees())
+  }, [isRodrigues])
 
   useEffect(() => {
     Promise.all([getCall(id), getClients(), getTeams(), getServiceTypes(), getAuxiliaries()]).then(([call, cls, tms, sts, auxs]) => {
@@ -171,6 +183,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         setDeviceBrand(APPLIANCE_BRANDS.includes(call.device_brand) ? call.device_brand : 'Outra')
         if (!APPLIANCE_BRANDS.includes(call.device_brand)) setDeviceBrandOther(call.device_brand)
       }
+      setApplianceType(call.appliance_type ?? '')
       setVisitFee(Number(call.visit_fee ?? 0))
       setIsApproved(call.status === 'aprovado')
       setIsScheduled(call.status === 'agendado')
@@ -220,6 +233,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         setPaymentMethodsMulti(so.payment_method ? String(so.payment_method).split(',').map((s: string) => s.trim()).filter(Boolean) : [])
         setCardType(so.card_type ?? '')
         setCardFeePct(Number(so.card_fee_pct ?? 0))
+        setInstallments(Number(so.installments ?? 1))
         setPartnerName(so.partner_name ?? '')
         setAmountPaid(Number(so.amount_paid ?? 0))
         setRemainingAmount(Number(so.remaining_amount ?? 0))
@@ -399,6 +413,28 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
     setIsScheduled(status === 'agendado')
   }
 
+  async function handleCepChange(value: string) {
+    setCallCep(value)
+    setCepError(false)
+    const digits = value.replace(/\D/g, '')
+    if (!isRodrigues || digits.length !== 8) return
+    setCepLoading(true)
+    try {
+      const result = await lookupCep(digits)
+      if (result) {
+        setCallAddress(result.address)
+        setCallNeighborhood(result.neighborhood)
+        setCallCity(result.city)
+      } else {
+        setCepError(true)
+      }
+    } catch {
+      setCepError(true)
+    } finally {
+      setCepLoading(false)
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
@@ -422,9 +458,11 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         call_neighborhood: callNeighborhood || null,
         ...(isRodrigues ? {
           device_brand: (deviceBrand === 'Outra' ? deviceBrandOther : deviceBrand) || null,
+          appliance_type: applianceType || null,
           visit_fee: visitFee > 0 ? visitFee : null,
         } : {}),
       })
+      if (isRodrigues && visitFee > 0) addRecentVisitFee(visitFee)
 
       // 2. Se aprovado, criar ou atualizar OS
       if (isApproved) {
@@ -473,8 +511,9 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
           payment_method: isMillenium
             ? (paymentMethodsMulti.length > 0 ? paymentMethodsMulti.join(', ') : null)
             : (paymentMethod || null),
-          card_type: isMillenium ? (cardType || null) : null,
+          card_type: (isMillenium || isRodrigues) ? (cardType || null) : null,
           card_fee_pct: isMillenium ? cardFeePct : 0,
+          installments: isRodrigues && cardType === 'credito' ? installments : null,
           partner_name: isMillenium ? (partnerName || null) : null,
           payment_status: paymentStatus,
           amount_paid: amountPaid,
@@ -626,6 +665,20 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
           </select>
         </div>
 
+        {isRodrigues && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">CEP</label>
+            <div className="relative">
+              <input type="text" value={callCep} onChange={e => handleCepChange(e.target.value)}
+                placeholder="00000-000" maxLength={9}
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              {cepLoading && <Loader2 className="w-4 h-4 animate-spin absolute right-3 top-1/2 -translate-y-1/2 text-orange-400" />}
+            </div>
+            {cepError && <p className="text-xs text-red-500 mt-1">CEP não encontrado — preencha o endereço manualmente.</p>}
+            {!cepError && <p className="text-xs text-slate-400 mt-1">Digite o CEP e o endereço é preenchido automaticamente.</p>}
+          </div>
+        )}
+
         {/* Cidade e bairro — sempre disponíveis, mesmo sem aprovação ou visita */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
@@ -648,6 +701,16 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
             <input type="number" min="0" step="0.01" value={visitFee || ''} onChange={e => setVisitFee(Number(e.target.value))}
               placeholder="0,00"
               className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+            {recentVisitFees.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {recentVisitFees.map(v => (
+                  <button key={v} type="button" onClick={() => setVisitFee(v)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${visitFee === v ? 'bg-orange-500 border-orange-500 text-white' : 'bg-white border-slate-200 text-slate-600 hover:border-orange-300'}`}>
+                    R$ {v.toFixed(2)}
+                  </button>
+                ))}
+              </div>
+            )}
             <p className="text-xs text-slate-400 mt-1">Cobrado mesmo que o cliente não aprove o serviço.</p>
           </div>
         )}
@@ -678,9 +741,9 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                 {isRodrigues && callAddress && (
                   <a href={mapsUrl([callAddress, callNeighborhood, callCity].filter(Boolean).join(', '))}
                     target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 mt-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 transition">
-                    <Navigation className="w-3 h-3" />
-                    Abrir no Maps
+                    className="mt-2 flex items-center justify-center gap-2 text-sm font-bold px-4 py-3 rounded-xl bg-blue-600 text-white hover:bg-blue-700 active:scale-[0.98] transition shadow-sm">
+                    <Navigation className="w-4 h-4" />
+                    Abrir no Google Maps
                   </a>
                 )}
               </div>
@@ -721,18 +784,28 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                 )}
 
                 {isRodrigues && (
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Marca do Aparelho</label>
-                    <select value={deviceBrand} onChange={e => setDeviceBrand(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
-                      <option value="">Selecione...</option>
-                      {APPLIANCE_BRANDS.map(b => <option key={b} value={b}>{b}</option>)}
-                    </select>
-                    {deviceBrand === 'Outra' && (
-                      <input type="text" value={deviceBrandOther} onChange={e => setDeviceBrandOther(e.target.value)}
-                        placeholder="Digite a marca..."
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 mt-2" />
-                    )}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Tipo do Aparelho</label>
+                      <select value={applianceType} onChange={e => setApplianceType(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
+                        <option value="">Selecione...</option>
+                        {APPLIANCE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Marca do Aparelho</label>
+                      <select value={deviceBrand} onChange={e => setDeviceBrand(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
+                        <option value="">Selecione...</option>
+                        {APPLIANCE_BRANDS.map(b => <option key={b} value={b}>{b}</option>)}
+                      </select>
+                      {deviceBrand === 'Outra' && (
+                        <input type="text" value={deviceBrandOther} onChange={e => setDeviceBrandOther(e.target.value)}
+                          placeholder="Digite a marca..."
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 mt-2" />
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -982,15 +1055,39 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                   )}
                 </>
               ) : (
-                <div className="flex flex-wrap gap-2">
-                  {PAYMENT_METHODS.map(m => (
-                    <button key={m} type="button" onClick={() => setPaymentMethod(paymentMethod === m ? '' : m)}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition ${paymentMethod === m ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
-                      {m}
-                    </button>
-                  ))}
-                  {paymentMethod && !PAYMENT_METHODS.includes(paymentMethod) && (
-                    <span className="px-4 py-2 rounded-lg text-sm font-medium bg-orange-500 text-white">{paymentMethod}</span>
+                <div>
+                  <div className="flex flex-wrap gap-2">
+                    {PAYMENT_METHODS.map(m => (
+                      <button key={m} type="button" onClick={() => setPaymentMethod(paymentMethod === m ? '' : m)}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition ${paymentMethod === m ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                        {m}
+                      </button>
+                    ))}
+                    {paymentMethod && !PAYMENT_METHODS.includes(paymentMethod) && (
+                      <span className="px-4 py-2 rounded-lg text-sm font-medium bg-orange-500 text-white">{paymentMethod}</span>
+                    )}
+                  </div>
+                  {isRodrigues && paymentMethod === 'Cartão' && (
+                    <div className="mt-3 p-3 rounded-lg border border-orange-100 bg-orange-50/50 space-y-2">
+                      <label className="block text-xs font-semibold text-slate-700">Cartão: débito ou crédito?</label>
+                      <div className="flex gap-2">
+                        {[{ v: 'debito', l: 'Débito' }, { v: 'credito', l: 'Crédito' }].map(opt => (
+                          <button key={opt.v} type="button" onClick={() => setCardType(opt.v)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${cardType === opt.v ? 'text-white border-transparent bg-orange-500' : 'bg-white text-slate-500 border-slate-200'}`}>
+                            {opt.l}
+                          </button>
+                        ))}
+                      </div>
+                      {cardType === 'credito' && (
+                        <div>
+                          <label className="block text-xs font-medium text-slate-600 mb-1">Quantas vezes</label>
+                          <select value={installments} onChange={e => setInstallments(Number(e.target.value))}
+                            className="w-28 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
+                            {Array.from({ length: 12 }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n}x</option>)}
+                          </select>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               )}

@@ -11,12 +11,13 @@ import { getClients, createClient_ } from '@/lib/db/clients'
 import { getTeams } from '@/lib/db/teams'
 import { getAuxiliaries, createAuxiliary } from '@/lib/db/auxiliaries'
 import { getServiceTypes } from '@/lib/db/service-types'
-import { getServiceConfig, APPLIANCE_BRANDS } from '@/lib/service-config'
+import { getServiceConfig, APPLIANCE_BRANDS, APPLIANCE_TYPES } from '@/lib/service-config'
 import { useCallOrigins } from '@/lib/use-call-origins'
 import { useTenant } from '@/lib/tenant-context'
 import { createClient } from '@/lib/supabase/client'
 import { mapsUrl } from '@/lib/maps'
 import { lookupCep } from '@/lib/cep'
+import { getRecentVisitFees, addRecentVisitFee } from '@/lib/recent-visit-fees'
 
 type ServiceType = 'proprio' | 'terceirizado_saida' | 'terceirizado_entrada'
 type PaymentStatus = 'pago' | 'pago_parcial' | 'pendente'
@@ -115,7 +116,13 @@ export default function NovoChamadoPage() {
   const [cepLoading, setCepLoading] = useState(false)
   const [cepError, setCepError] = useState(false)
   const [visitFee, setVisitFee] = useState(0)
+  const [recentVisitFees, setRecentVisitFees] = useState<number[]>([])
+
+  useEffect(() => {
+    if (isRodrigues) setRecentVisitFees(getRecentVisitFees())
+  }, [isRodrigues])
   const [scheduledDriver, setScheduledDriver] = useState('')
+  const [applianceType, setApplianceType] = useState('')
   const [deviceBrand, setDeviceBrand] = useState('')
   const [deviceBrandOther, setDeviceBrandOther] = useState('')
   const [partsCost, setPartsCost] = useState(0)
@@ -163,6 +170,7 @@ export default function NovoChamadoPage() {
   const [dueDate, setDueDate] = useState('')
   const [paymentMethods, setPaymentMethods] = useState<string[]>([])
   const [cardType, setCardType] = useState('')
+  const [installments, setInstallments] = useState(1)
   const [cardFeePct, setCardFeePct] = useState(0)
   const [partnerName, setPartnerName] = useState('')
   const [amountPaid, setAmountPaid] = useState(0)
@@ -426,8 +434,10 @@ export default function NovoChamadoPage() {
         solicitante: solicitante || null,
         driver: scheduledDriver || null,
         device_brand: isRodrigues ? ((deviceBrand === 'Outra' ? deviceBrandOther : deviceBrand) || null) : null,
+        appliance_type: isRodrigues ? (applianceType || null) : null,
         visit_fee: isRodrigues && isScheduled && visitFee > 0 ? visitFee : null,
       })
+      if (isRodrigues && isScheduled && visitFee > 0) addRecentVisitFee(visitFee)
 
       if (isApproved) {
         await uploadPendingFiles(call.id)
@@ -476,8 +486,9 @@ export default function NovoChamadoPage() {
           own_other_cost: ownOtherCost,
           other_service_value: otherServiceValue,
           payment_method: paymentMethods.length > 0 ? paymentMethods.join(', ') : null,
-          card_type: isMillenium ? (cardType || null) : null,
+          card_type: (isMillenium || isRodrigues) ? (cardType || null) : null,
           card_fee_pct: isMillenium ? cardFeePct : 0,
+          installments: isRodrigues && cardType === 'credito' ? installments : null,
           partner_name: isMillenium ? (partnerName || null) : null,
           payment_status: paymentStatus,
           amount_paid: amountPaid,
@@ -981,9 +992,9 @@ export default function NovoChamadoPage() {
               {isRodrigues && callAddress && (
                 <a href={mapsUrl([callAddress, callNeighborhood, callCity].filter(Boolean).join(', '))}
                   target="_blank" rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 mt-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 transition">
-                  <Navigation className="w-3 h-3" />
-                  Abrir no Maps
+                  className="mt-2 flex items-center justify-center gap-2 text-sm font-bold px-4 py-3 rounded-xl bg-blue-600 text-white hover:bg-blue-700 active:scale-[0.98] transition shadow-sm">
+                  <Navigation className="w-4 h-4" />
+                  Abrir no Google Maps
                 </a>
               )}
             </div>
@@ -1020,6 +1031,22 @@ export default function NovoChamadoPage() {
                   {!cepError && <p className="text-xs text-slate-400 mt-1">Digite o CEP e o endereço é preenchido automaticamente.</p>}
                 </div>
               )}
+              {isRodrigues && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">Bairro</label>
+                    <input type="text" value={callNeighborhood} onChange={e => setCallNeighborhood(e.target.value)}
+                      placeholder="Preenchido pelo CEP"
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">Cidade</label>
+                    <input type="text" value={callCity} onChange={e => setCallCity(e.target.value)}
+                      placeholder="Preenchido pelo CEP"
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
+                  </div>
+                </>
+              )}
               <div className="sm:col-span-2">
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Endereço do Serviço</label>
                 <input type="text" value={callAddress} onChange={e => setCallAddress(e.target.value)}
@@ -1028,9 +1055,9 @@ export default function NovoChamadoPage() {
                 {isRodrigues && callAddress && (
                   <a href={mapsUrl([callAddress, callNeighborhood, callCity].filter(Boolean).join(', '))}
                     target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 mt-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 transition">
-                    <Navigation className="w-3 h-3" />
-                    Abrir no Maps
+                    className="mt-2 flex items-center justify-center gap-2 text-sm font-bold px-4 py-3 rounded-xl bg-blue-600 text-white hover:bg-blue-700 active:scale-[0.98] transition shadow-sm">
+                    <Navigation className="w-4 h-4" />
+                    Abrir no Google Maps
                   </a>
                 )}
               </div>
@@ -1054,6 +1081,16 @@ export default function NovoChamadoPage() {
                   <input type="number" min="0" step="0.01" value={visitFee || ''} onChange={e => setVisitFee(Number(e.target.value))}
                     placeholder="0,00"
                     className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
+                  {recentVisitFees.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {recentVisitFees.map(v => (
+                        <button key={v} type="button" onClick={() => setVisitFee(v)}
+                          className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${visitFee === v ? 'bg-orange-500 border-orange-500 text-white' : 'bg-white border-slate-200 text-slate-600 hover:border-orange-300'}`}>
+                          R$ {v.toFixed(2)}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <p className="text-xs text-slate-400 mt-1">Cobrado mesmo que o cliente não aprove o serviço.</p>
                 </div>
               )}
@@ -1098,16 +1135,25 @@ export default function NovoChamadoPage() {
                   </div>
                 )}
                 {isRodrigues && (
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Marca do Aparelho</label>
-                    <select value={deviceBrand} onChange={e => setDeviceBrand(e.target.value)} className={inputCls}>
-                      <option value="">Selecione...</option>
-                      {APPLIANCE_BRANDS.map(b => <option key={b} value={b}>{b}</option>)}
-                    </select>
-                    {deviceBrand === 'Outra' && (
-                      <input type="text" value={deviceBrandOther} onChange={e => setDeviceBrandOther(e.target.value)}
-                        placeholder="Digite a marca..." className={`${inputCls} mt-2`} />
-                    )}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Tipo do Aparelho</label>
+                      <select value={applianceType} onChange={e => setApplianceType(e.target.value)} className={inputCls}>
+                        <option value="">Selecione...</option>
+                        {APPLIANCE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Marca do Aparelho</label>
+                      <select value={deviceBrand} onChange={e => setDeviceBrand(e.target.value)} className={inputCls}>
+                        <option value="">Selecione...</option>
+                        {APPLIANCE_BRANDS.map(b => <option key={b} value={b}>{b}</option>)}
+                      </select>
+                      {deviceBrand === 'Outra' && (
+                        <input type="text" value={deviceBrandOther} onChange={e => setDeviceBrandOther(e.target.value)}
+                          placeholder="Digite a marca..." className={`${inputCls} mt-2`} />
+                      )}
+                    </div>
                   </div>
                 )}
                 {/* Pra Rodrigues, valor/descrição do serviço só aparece quando o chamado é aprovado — enquanto só agendado, não tem o que cobrar ainda */}
@@ -1342,6 +1388,28 @@ export default function NovoChamadoPage() {
                       <input type="number" min="0" max="100" step="0.01" value={cardFeePct || ''}
                         onChange={e => setCardFeePct(Number(e.target.value))}
                         className="w-28 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                    </div>
+                  )}
+                </div>
+              )}
+              {isRodrigues && paymentMethods.includes('Cartão') && (
+                <div className="mt-3 p-3 rounded-lg border border-orange-100 bg-orange-50/50 space-y-2">
+                  <label className="block text-xs font-semibold text-slate-700">Cartão: débito ou crédito?</label>
+                  <div className="flex gap-2">
+                    {[{ v: 'debito', l: 'Débito' }, { v: 'credito', l: 'Crédito' }].map(opt => (
+                      <button key={opt.v} type="button" onClick={() => setCardType(opt.v)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${cardType === opt.v ? 'text-white border-transparent bg-orange-500' : 'bg-white text-slate-500 border-slate-200'}`}>
+                        {opt.l}
+                      </button>
+                    ))}
+                  </div>
+                  {cardType === 'credito' && (
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Quantas vezes</label>
+                      <select value={installments} onChange={e => setInstallments(Number(e.target.value))}
+                        className="w-28 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
+                        {Array.from({ length: 12 }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n}x</option>)}
+                      </select>
                     </div>
                   )}
                 </div>

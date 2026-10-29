@@ -69,6 +69,11 @@ export const APPLIANCE_BRANDS = [
   'Philco', 'Midea', 'Springer', 'Continental', 'Esmaltec', 'Outra',
 ]
 
+export const APPLIANCE_TYPES = [
+  'Geladeira', 'Freezer', 'Máquina de Lavar', 'Bebedouro', 'Ar-Condicionado',
+  'Câmara Fria', 'Cooler', 'Outro',
+]
+
 const GENERIC_CATEGORY_CONFIG: ServiceCategoryConfig = {
   qtyLabel: 'Quantidade',
   priceLabel: 'Valor (R$)',

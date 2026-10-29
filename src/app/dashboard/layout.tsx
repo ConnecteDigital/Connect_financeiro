@@ -468,7 +468,7 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
 
         <main
           ref={mainRef}
-          className="flex-1 overflow-y-auto pt-[calc(64px_+_env(safe-area-inset-top,0px))] lg:pt-0"
+          className="flex-1 overflow-y-auto overflow-x-hidden pt-[calc(64px_+_env(safe-area-inset-top,0px))] lg:pt-0"
           style={{
             paddingBottom: 'calc(var(--bottom-nav-height) + var(--safe-bottom) + 16px)',
           }}>

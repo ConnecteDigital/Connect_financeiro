@@ -245,11 +245,17 @@ function ImprimirContent({ id }: { id: string }) {
           <span style={valueSt}>{call.call_address ? `${call.call_address}${call.call_city ? ` - ${call.call_city}` : ''}` : (client?.address || '')}</span>
         </div>
 
-        {/* Marca do Aparelho — só Rodrigues */}
-        {isRodrigues && call.device_brand && (
-          <div style={{ border: B, borderTop: 'none', ...cellSt }}>
-            <span style={labelSt}>Marca do Aparelho</span>
-            <span style={valueSt}>{call.device_brand}</span>
+        {/* Tipo/Marca do Aparelho — só Rodrigues */}
+        {isRodrigues && (call.appliance_type || call.device_brand) && (
+          <div style={{ display: 'flex', border: B, borderTop: 'none' }}>
+            <div style={{ flex: 1, ...cellSt, borderRight: B }}>
+              <span style={labelSt}>Tipo do Aparelho</span>
+              <span style={valueSt}>{call.appliance_type || '—'}</span>
+            </div>
+            <div style={{ flex: 1, ...cellSt }}>
+              <span style={labelSt}>Marca</span>
+              <span style={valueSt}>{call.device_brand || '—'}</span>
+            </div>
           </div>
         )}
 

@@ -252,6 +252,12 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
               <p className="text-slate-700 font-medium mt-0.5">{call.service_category}</p>
             </div>
           )}
+          {isRodrigues && (call.appliance_type || call.device_brand) && (
+            <div>
+              <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Aparelho</p>
+              <p className="text-slate-700 font-medium mt-0.5">{[call.appliance_type, call.device_brand].filter(Boolean).join(' · ')}</p>
+            </div>
+          )}
           {call.scheduled_time && (
             <div>
               <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Horário Agendado</p>
@@ -267,17 +273,15 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
           {call.call_address && (
             <div className="col-span-2">
               <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Endereço do Serviço</p>
-              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                <p className="text-slate-700">📍 {call.call_address}</p>
-                {isRodrigues && (
-                  <a href={mapsUrl([call.call_address, call.call_neighborhood, call.call_city].filter(Boolean).join(', '))}
-                    target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 transition">
-                    <Navigation className="w-3 h-3" />
-                    Abrir no Maps
-                  </a>
-                )}
-              </div>
+              <p className="text-slate-700 mt-0.5">📍 {call.call_address}</p>
+              {isRodrigues && (
+                <a href={mapsUrl([call.call_address, call.call_neighborhood, call.call_city].filter(Boolean).join(', '))}
+                  target="_blank" rel="noopener noreferrer"
+                  className="mt-2 flex items-center justify-center gap-2 text-sm font-bold px-4 py-3 rounded-xl bg-blue-600 text-white hover:bg-blue-700 active:scale-[0.98] transition shadow-sm max-w-xs">
+                  <Navigation className="w-4 h-4" />
+                  Abrir no Google Maps
+                </a>
+              )}
             </div>
           )}
           {isRodrigues && call.visit_fee > 0 && (
@@ -358,7 +362,7 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
                 <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Forma de Pag.</p>
                 <p className="text-slate-700 mt-0.5">
                   {so.payment_method}
-                  {so.card_type && ` (${so.card_type === 'credito' ? 'Crédito' : 'Débito'}${so.card_type === 'credito' && so.card_fee_pct ? ` — taxa ${so.card_fee_pct}%` : ''})`}
+                  {so.card_type && ` (${so.card_type === 'credito' ? 'Crédito' : 'Débito'}${so.card_type === 'credito' && so.card_fee_pct ? ` — taxa ${so.card_fee_pct}%` : ''}${so.card_type === 'credito' && so.installments > 1 ? ` — ${so.installments}x` : ''})`}
                 </p>
               </div>}
               {so.partner_name && <div>
