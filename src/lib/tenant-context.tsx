@@ -3,6 +3,13 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
+export interface BusinessHours {
+  weekday_start?: string | null
+  weekday_end?: string | null
+  saturday_start?: string | null
+  saturday_end?: string | null
+}
+
 export interface Tenant {
   id: string
   slug: string
@@ -15,7 +22,10 @@ export interface Tenant {
   phone: string | null
   address: string | null
   origin_branding: Record<string, { color?: string; logo_url?: string }> | null
-  call_form_config: { simplified?: boolean; millenium_custom_os?: boolean; vertical?: string; rodrigues_custom?: boolean } | null
+  call_form_config: {
+    simplified?: boolean; millenium_custom_os?: boolean; vertical?: string; rodrigues_custom?: boolean
+    business_hours?: BusinessHours
+  } | null
 }
 
 interface TenantContextValue {

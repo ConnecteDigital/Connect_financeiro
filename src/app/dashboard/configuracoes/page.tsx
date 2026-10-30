@@ -7,6 +7,7 @@ import { getAllServiceTypes, createServiceType, toggleServiceType, deleteService
 import { getAuxiliaries, createAuxiliary, updateAuxiliary, deleteAuxiliary } from '@/lib/db/auxiliaries'
 import { createClient } from '@/lib/supabase/client'
 import { useTenant } from '@/lib/tenant-context'
+import RodriguesCommissionSettings from '@/components/RodriguesCommissionSettings'
 
 const ORIGIN_PRESETS = [
   'Indicação', 'WhatsApp', 'Site', 'Instagram',
@@ -781,6 +782,8 @@ export default function ConfiguracoesPage() {
           </button>
         </div>
       </div>
+
+      {tenant?.call_form_config?.rodrigues_custom === true && <RodriguesCommissionSettings />}
 
       {/* Identidade por Origem */}
       <div className="rounded-xl border p-6 space-y-4"

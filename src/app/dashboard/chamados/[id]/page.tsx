@@ -14,6 +14,7 @@ import { useTenant } from '@/lib/tenant-context'
 import { mapsUrl } from '@/lib/maps'
 import { formatAddress, navigationAddress } from '@/lib/address'
 import { serviceWithoutAppliance } from '@/lib/service-config'
+import ServiceTimer from '@/components/ServiceTimer'
 
 const statusConfig: Record<string, { label: string; color: string; bg: string; icon: React.ElementType }> = {
   agendado: { label: 'Agendado', color: 'text-blue-700', bg: 'bg-blue-100', icon: Clock },
@@ -296,6 +297,9 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
 
       {isRodrigues ? (
         <>
+          <ServiceTimer callId={id} status={call.status}
+            onChanged={() => getCall(id).then(setCall).catch(console.error)} />
+
           {call.status === 'retorno' && (
             <div className="bg-violet-50 rounded-xl border border-violet-100 p-4 text-sm space-y-1">
               <p className="text-violet-800 font-semibold flex items-center gap-2">

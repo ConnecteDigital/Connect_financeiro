@@ -7,7 +7,7 @@ import {
   LayoutDashboard, PhoneCall, Users,
   BarChart3, Settings, LogOut, Building2,
   Plus, MoreHorizontal, UserCog, Moon, Sun, Sparkles,
-  Wallet, FileText, ShieldCheck, KeyRound, Package,
+  Wallet, FileText, ShieldCheck, KeyRound, Package, Timer,
 } from 'lucide-react'
 import { ConnectDigitalLogo } from '@/components/logos'
 import { useTenant } from '@/lib/tenant-context'
@@ -35,6 +35,8 @@ const allNav = [...mainNav, ...moreNav]
 // Estoque — exclusivo da Rodrigues Refrigeração (loja física + estoque
 // pessoal de cada técnico). Item reaproveitado em vários lugares abaixo.
 const ESTOQUE_NAV_ITEM = { href: '/dashboard/estoque', label: 'Estoque', icon: Package }
+// Relatório de tempo de serviço (visitas iniciar/encerrar) — só o dono da Rodrigues.
+const TEMPO_NAV_ITEM = { href: '/dashboard/tempo-servico', label: 'Tempo de Serviço', icon: Timer }
 
 // Nav restrita pro login de técnico (Rodrigues Refrigeração) — sem
 // Financeiro, Clientes, Relatórios, Configurações etc. O acesso de
@@ -205,7 +207,7 @@ function MoreDrawer({ open, onClose, isMaster }: { open: boolean; onClose: () =>
   const { tenant } = useTenant()
   const isRodrigues = tenant?.call_form_config?.rodrigues_custom === true
 
-  const baseNav = isRodrigues ? [...moreNav, ESTOQUE_NAV_ITEM] : moreNav
+  const baseNav = isRodrigues ? [...moreNav, ESTOQUE_NAV_ITEM, TEMPO_NAV_ITEM] : moreNav
   const drawerNav = isMaster
     ? [...baseNav, { href: '/dashboard/master', label: 'Painel Master', icon: ShieldCheck }]
     : baseNav
@@ -272,7 +274,7 @@ function Sidebar({ theme, onToggleTheme, isMaster }: { theme: 'light' | 'dark'; 
       : pathname.startsWith(href)
   }
 
-  const baseNav = isRodrigues ? [...allNav, ESTOQUE_NAV_ITEM] : allNav
+  const baseNav = isRodrigues ? [...allNav, ESTOQUE_NAV_ITEM, TEMPO_NAV_ITEM] : allNav
   const sidebarNav = isTecnico ? tecnicoNav : isMaster
     ? [...baseNav, { href: '/dashboard/master', label: 'Painel Master', icon: ShieldCheck }]
     : baseNav
@@ -349,7 +351,7 @@ function MobileHeader({ visible, theme, onToggleTheme }: { visible: boolean; the
   const { tenant, isTecnico } = useTenant()
   const pathname = usePathname()
 
-  const currentPage = [...allNav, ...tecnicoNav, ESTOQUE_NAV_ITEM].find(n =>
+  const currentPage = [...allNav, ...tecnicoNav, ESTOQUE_NAV_ITEM, TEMPO_NAV_ITEM].find(n =>
     n.href === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(n.href)
   )
 

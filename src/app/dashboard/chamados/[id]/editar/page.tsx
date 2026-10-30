@@ -24,6 +24,9 @@ import { navigationAddress } from '@/lib/address'
 import StockPartPicker from '@/components/StockPartPicker'
 import AddressExtraFields from '@/components/AddressExtraFields'
 import RodriguesCardFields from '@/components/RodriguesCardFields'
+import AfterHoursToggle, { commissionPctFor } from '@/components/AfterHoursToggle'
+import { isAfterHours, localDateTime } from '@/lib/business-hours'
+import { getCallVisits } from '@/lib/db/service-visits'
 
 type ServiceType = 'proprio' | 'terceirizado_saida' | 'terceirizado_entrada'
 type PaymentStatus = 'pago' | 'pago_parcial' | 'pendente'
@@ -219,6 +222,10 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         setAuxiliaryId(so.auxiliary_id ?? (isRodrigues ? call.technician_id ?? '' : ''))
         setOsNumber(so.os_number ?? '')
         setCardNetValue(so.card_net_value ?? null)
+        if (isRodrigues) {
+          setAfterHours(so.after_hours === true)
+          setAfterHoursTouched(true)
+        }
         const soAuxs = (so.service_order_auxiliaries ?? []) as any[]
         if (soAuxs.length > 0) {
           setSelectedAuxiliaries(soAuxs.map(a => ({
@@ -363,6 +370,34 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const subtotal = serviceLines.reduce((sum, l) => sum + lineTotal(l), 0)
   const bruto = subtotal + equipmentRentalValue - discount + taxes
 
+  // Rodrigues: "fora do horário comercial". OS já salva → vale o que está
+  // nela; senão é sugerido pelo início real do serviço (última visita),
+  // ou data/hora agendada, ou agora. Pro técnico é só informativo.
+  const [afterHours, setAfterHours] = useState(false)
+  const [afterHoursTouched, setAfterHoursTouched] = useState(false)
+  const [lastVisitStart, setLastVisitStart] = useState<string | null>(null)
+  useEffect(() => {
+    if (!isRodrigues) return
+    getCallVisits(id)
+      .then(v => setLastVisitStart(v.length ? v[v.length - 1].started_at : null))
+      .catch(() => setLastVisitStart(null))
+  }, [isRodrigues, id])
+  useEffect(() => {
+    if (!isRodrigues || afterHoursTouched || !callDate) return
+    let date = callDate
+    let time: string | null = null
+    if (lastVisitStart) {
+      ({ date, time } = localDateTime(lastVisitStart))
+    } else if (scheduledDate) {
+      date = scheduledDate
+      time = scheduledTime || null
+    } else {
+      const now = localDateTime(new Date().toISOString())
+      if (now.date === callDate) time = now.time
+    }
+    setAfterHours(isAfterHours(date, time, tenant?.call_form_config?.business_hours))
+  }, [isRodrigues, afterHoursTouched, lastVisitStart, scheduledDate, scheduledTime, callDate, tenant])
+
   const osTecnicoId = isTecnico ? technicianId : (auxiliaryId || technicianId)
   const availableStockItems = stockItems.filter(i => (i.auxiliary_id ?? null) === (osTecnicoId || null))
   const stockPartsTotal = stockLines.reduce((s, l) => s + l.total_value, 0)
@@ -389,7 +424,8 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
 
   // Single aux (commissions disabled)
   const selectedAux = auxiliaries.find(a => a.id === auxiliaryId)
-  const auxValue = selectedAux ? bruto * Number(selectedAux.percentage) / 100 : 0
+  const auxPct = isRodrigues ? (commissionPctFor(selectedAux, afterHours) ?? 0) : Number(selectedAux?.percentage ?? 0)
+  const auxValue = selectedAux ? bruto * auxPct / 100 : 0
 
   // Multi aux (commissions enabled)
   const totalAuxValue = selectedAuxiliaries.reduce((s, a) => s + bruto * a.percentage / 100, 0)
@@ -576,7 +612,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
           : isTecnico ? (technicianId || null) : (auxiliaryId || null)
         const primaryAuxValue = useMultiAux
           ? (selectedAuxiliaries[0] ? bruto * selectedAuxiliaries[0].percentage / 100 : 0)
-          : isTecnico ? (tecnicoAux ? bruto * Number(tecnicoAux.percentage) / 100 : 0) : auxValue
+          : isTecnico ? (tecnicoAux ? bruto * (commissionPctFor(tecnicoAux, afterHours) ?? 0) / 100 : 0) : auxValue
 
         const orderData = {
           call_id: id,
@@ -620,6 +656,8 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
           card_fee_pct: isMillenium ? cardFeePct : 0,
           installments: isRodrigues && cardType === 'credito' ? installments : null,
           ...(isRodrigues ? { card_net_value: paymentMethod === 'Cartão' ? cardNetValue : null } : {}),
+          // Técnico não envia: o banco recalcula "fora do horário" ao sincronizar
+          ...(isRodrigues && !isTecnico ? { after_hours: afterHours } : {}),
           partner_name: isMillenium ? (partnerName || null) : null,
           payment_status: paymentStatus,
           amount_paid: amountPaid,
@@ -1031,6 +1069,9 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                     ))}
                   </select>
                 )}
+                <AfterHoursToggle checked={afterHours} readOnly={isTecnico}
+                  tecnico={isTecnico ? auxiliaries.find(a => a.id === technicianId) : selectedAux}
+                  onChange={v => { setAfterHours(v); setAfterHoursTouched(true) }} />
                 {!existingSoId && <p className="text-xs text-slate-400 mt-1">O número da OS é gerado automaticamente ao salvar.</p>}
               </div>
             ) : (

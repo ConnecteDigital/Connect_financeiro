@@ -24,6 +24,8 @@ import { navigationAddress } from '@/lib/address'
 import StockPartPicker from '@/components/StockPartPicker'
 import AddressExtraFields from '@/components/AddressExtraFields'
 import RodriguesCardFields from '@/components/RodriguesCardFields'
+import AfterHoursToggle, { commissionPctFor } from '@/components/AfterHoursToggle'
+import { isAfterHours } from '@/lib/business-hours'
 
 type ServiceType = 'proprio' | 'terceirizado_saida' | 'terceirizado_entrada'
 type PaymentStatus = 'pago' | 'pago_parcial' | 'pendente'
@@ -184,6 +186,19 @@ export default function NovoChamadoPage() {
     if (isRodrigues && technicianId) setAuxiliaryId(technicianId)
   }, [isRodrigues, technicianId])
 
+  // Rodrigues: "fora do horário comercial" sugerido pela data/hora do
+  // serviço (agendada, ou agora se o chamado é de hoje); o dono pode mudar.
+  const [afterHours, setAfterHours] = useState(false)
+  const [afterHoursTouched, setAfterHoursTouched] = useState(false)
+  useEffect(() => {
+    if (!isRodrigues || afterHoursTouched) return
+    const now = new Date()
+    const nowTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+    const date = isScheduled ? scheduledDate : callDate
+    const time = isScheduled ? (scheduledTime || null) : (callDate === localToday() ? nowTime : null)
+    setAfterHours(isAfterHours(date, time, tenant?.call_form_config?.business_hours))
+  }, [isRodrigues, afterHoursTouched, isScheduled, scheduledDate, scheduledTime, callDate, tenant])
+
   // Multiple auxiliaries (commissions enabled)
   const [selectedAuxiliaries, setSelectedAuxiliaries] = useState<SelectedAuxiliary[]>([])
   const [addingAuxId, setAddingAuxId] = useState('')
@@ -258,7 +273,8 @@ export default function NovoChamadoPage() {
 
   // Single aux (commissions disabled)
   const selectedAux = auxiliaries.find(a => a.id === auxiliaryId)
-  const auxValue = selectedAux ? bruto * Number(selectedAux.percentage) / 100 : 0
+  const auxPct = isRodrigues ? (commissionPctFor(selectedAux, afterHours) ?? 0) : Number(selectedAux?.percentage ?? 0)
+  const auxValue = selectedAux ? bruto * auxPct / 100 : 0
 
   // Multi aux (commissions enabled)
   const totalAuxValue = selectedAuxiliaries.reduce((s, a) => s + bruto * a.percentage / 100, 0)
@@ -567,7 +583,7 @@ export default function NovoChamadoPage() {
           card_type: (isMillenium || isRodrigues) ? (cardType || null) : null,
           card_fee_pct: isMillenium ? cardFeePct : 0,
           installments: isRodrigues && cardType === 'credito' ? installments : null,
-          ...(isRodrigues ? { card_net_value: paymentMethods.includes('Cartão') ? cardNetValue : null } : {}),
+          ...(isRodrigues ? { card_net_value: paymentMethods.includes('Cartão') ? cardNetValue : null, after_hours: afterHours } : {}),
           partner_name: isMillenium ? (partnerName || null) : null,
           payment_status: paymentStatus,
           amount_paid: amountPaid,
@@ -1337,6 +1353,8 @@ export default function NovoChamadoPage() {
                     <option key={a.id} value={a.id}>{a.name} ({Number(a.percentage)}% de comissão)</option>
                   ))}
                 </select>
+                <AfterHoursToggle checked={afterHours} tecnico={selectedAux}
+                  onChange={v => { setAfterHours(v); setAfterHoursTouched(true) }} />
                 <p className="text-xs text-slate-400 mt-1">O número da OS é gerado automaticamente ao salvar.</p>
               </div>
             ) : (

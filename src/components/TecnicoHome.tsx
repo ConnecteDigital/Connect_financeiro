@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { PhoneCall, CheckCircle, XCircle, Clock, Wallet, ChevronRight, CalendarDays } from 'lucide-react'
+import { PhoneCall, CheckCircle, XCircle, Clock, Wallet, ChevronRight, CalendarDays, Timer } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useTenant } from '@/lib/tenant-context'
+import { getOpenVisit } from '@/lib/db/service-visits'
+import { formatDuration } from '@/lib/business-hours'
 
 const fmt = (v: number) => `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
 
@@ -28,6 +30,18 @@ interface Summary {
 export default function TecnicoHome() {
   const { tenant } = useTenant()
   const [data, setData] = useState<Summary | null>(null)
+  const [openVisit, setOpenVisit] = useState<any>(null)
+  const [now, setNow] = useState(() => Date.now())
+
+  // Serviço em andamento: o tempo vem da hora de início gravada no banco
+  useEffect(() => {
+    getOpenVisit().then(setOpenVisit).catch(() => setOpenVisit(null))
+  }, [])
+  useEffect(() => {
+    if (!openVisit) return
+    const t = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [openVisit])
 
   useEffect(() => {
     const supabase = createClient()
@@ -79,6 +93,22 @@ export default function TecnicoHome() {
         <p className="text-sm text-zinc-500">{tenant?.name}</p>
         <h1 className="text-2xl font-bold text-zinc-900">Olá! Resumo de {monthLabel}</h1>
       </div>
+
+      {openVisit && (
+        <Link href={`/dashboard/chamados/${openVisit.call_id}`}
+          className="flex items-center gap-3 rounded-2xl px-4 py-3 bg-emerald-50 border border-emerald-200">
+          <Timer className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">Serviço em andamento</p>
+            <p className="text-sm font-medium text-zinc-800 truncate">
+              {openVisit.call?.client?.name ?? openVisit.call?.contact_name ?? 'Chamado'}
+            </p>
+          </div>
+          <span className="text-lg font-bold tabular-nums text-emerald-700">
+            {formatDuration(now - new Date(openVisit.started_at).getTime())}
+          </span>
+        </Link>
+      )}
 
       {/* Comissão */}
       <Link href="/dashboard/comissao"
