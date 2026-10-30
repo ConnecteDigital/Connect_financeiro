@@ -9,6 +9,7 @@ import { getDashboardStatsRange, getNotifications, getPendingReceivables } from 
 import DateRangePicker, { DateRange } from '@/components/DateRangePicker'
 import Link from 'next/link'
 import { useTenant } from '@/lib/tenant-context'
+import TecnicoHome from '@/components/TecnicoHome'
 
 interface Stats {
   total_calls: number; approved_calls: number; scheduled_calls: number
@@ -63,6 +64,11 @@ function SkeletonCard() {
 }
 
 export default function DashboardPage() {
+  const { isTecnico } = useTenant()
+  return isTecnico ? <TecnicoHome /> : <OwnerDashboard />
+}
+
+function OwnerDashboard() {
   const [range, setRange] = useState<DateRange>(defaultRange)
   const [stats, setStats] = useState<Stats | null>(null)
   const [notifications, setNotifications] = useState<any>(null)

@@ -40,6 +40,7 @@ const ESTOQUE_NAV_ITEM = { href: '/dashboard/estoque', label: 'Estoque', icon: P
 // Financeiro, Clientes, Relatórios, Configurações etc. O acesso de
 // verdade é travado no banco (RLS); isso é só a vitrine condizente.
 const tecnicoNav = [
+  { href: '/dashboard',          label: 'Início',   icon: LayoutDashboard },
   { href: '/dashboard/chamados', label: 'Chamados', icon: PhoneCall },
   { href: '/dashboard/comissao', label: 'Comissão',  icon: Wallet },
   ESTOQUE_NAV_ITEM,
@@ -418,12 +419,12 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
   const lastScrollY = useRef(0)
   const scrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Técnico não tem Início/Financeiro/etc. — manda ele direto pros
-  // chamados se cair em alguma rota fora da nav restrita dele.
+  // Técnico não tem Financeiro/Clientes/etc. — manda ele pro Início se
+  // cair em alguma rota fora da nav restrita dele.
   const TECNICO_ALLOWED_PREFIXES = ['/dashboard/chamados', '/dashboard/comissao', '/dashboard/estoque']
   useEffect(() => {
-    if (isTecnico && !TECNICO_ALLOWED_PREFIXES.some(p => pathname.startsWith(p))) {
-      router.replace('/dashboard/chamados')
+    if (isTecnico && pathname !== '/dashboard' && !TECNICO_ALLOWED_PREFIXES.some(p => pathname.startsWith(p))) {
+      router.replace('/dashboard')
     }
   }, [isTecnico, pathname, router])
 
