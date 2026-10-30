@@ -107,3 +107,18 @@ export function getServiceConfig(cat: string, milleniumCustomOS: boolean): Servi
   }
   return base
 }
+
+// Rodrigues: texto do chamado = "Geladeira Brastemp — Recarga de Gás"
+export function rodriguesServiceLabel(appliance: string, brand: string, service: string): string {
+  const head = [appliance, brand].map(s => s.trim()).filter(Boolean).join(' ')
+  return [head, service.trim()].filter(Boolean).join(' — ')
+}
+
+// Tira "Geladeira Brastemp — " do começo do service_category, pra não
+// mostrar o aparelho duas vezes onde ele já aparece separado.
+export function serviceWithoutAppliance(serviceCategory: string | null | undefined, appliance?: string | null, brand?: string | null): string {
+  const sc = (serviceCategory ?? '').trim()
+  const head = [appliance, brand].map(s => (s ?? '').trim()).filter(Boolean).join(' ')
+  if (!head || !sc.startsWith(head)) return sc
+  return sc.slice(head.length).replace(/^\s*—\s*/, '').trim()
+}

@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { getCall } from '@/lib/db/calls'
 import { useTenant } from '@/lib/tenant-context'
 import { formatAddress } from '@/lib/address'
+import { serviceWithoutAppliance } from '@/lib/service-config'
 import { ArrowLeft, Share2, Loader2, FileImage, FileText } from 'lucide-react'
 
 const BRL = (v: number | string) =>
@@ -236,7 +237,7 @@ function ImprimirContent({ id }: { id: string }) {
         <div style={{ display: 'flex', border: B, borderTop: 'none' }}>
           <div style={{ flex: 1, ...cellSt, borderRight: isRodrigues ? undefined : B }}>
             <span style={labelSt}>{isRodrigues ? 'Defeito Apresentado' : 'Categoria'}</span>
-            <span style={valueSt}>{call.service_category || '—'}</span>
+            <span style={valueSt}>{(isRodrigues ? serviceWithoutAppliance(call.service_category, call.appliance_type, call.device_brand) : call.service_category) || '—'}</span>
           </div>
           {!isRodrigues && (
             <div style={{ width: 150, ...cellSt }}>

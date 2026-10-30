@@ -11,7 +11,8 @@ import { getClients, createClient_ } from '@/lib/db/clients'
 import { getTeams } from '@/lib/db/teams'
 import { getAuxiliaries, createAuxiliary } from '@/lib/db/auxiliaries'
 import { getServiceTypes } from '@/lib/db/service-types'
-import { getServiceConfig, APPLIANCE_BRANDS, APPLIANCE_TYPES } from '@/lib/service-config'
+import { getServiceConfig, rodriguesServiceLabel } from '@/lib/service-config'
+import RodriguesApplianceSection from '@/components/RodriguesApplianceSection'
 import { useCallOrigins } from '@/lib/use-call-origins'
 import { useTenant } from '@/lib/tenant-context'
 import { createClient } from '@/lib/supabase/client'
@@ -348,10 +349,31 @@ export default function NovoChamadoPage() {
   const updateLine = (category: string, sub: string | null, patch: Partial<ServiceLine>) =>
     setServiceLines(prev => prev.map(l => l.category === category && l.sub === sub ? { ...l, ...patch } : l))
 
-  const serviceCategoryText = selectedCategories.map(cat => {
-    const subs = serviceLines.filter(l => l.category === cat && l.sub).map(l => l.sub)
-    return subs.length ? `${cat} (${subs.join(', ')})` : cat
-  }).join(', ')
+  // Rodrigues: um aparelho por chamado, com serviço opcional — por baixo,
+  // uma única linha de serviço (categoria = serviço, ou o próprio aparelho)
+  const [rodService, setRodService] = useState('')
+
+  function setRodriguesSelection(appliance: string, service: string) {
+    setApplianceType(appliance)
+    setRodService(service)
+    if (!appliance) {
+      setSelectedCategories([])
+      setServiceLines([])
+      return
+    }
+    setSelectedCategories([appliance])
+    setServiceLines(prev => [{
+      ...(prev[0] ?? { quantity: 0, unitPrice: 0, notes: '' }),
+      category: service || appliance, sub: null, flatPrice: true,
+    }])
+  }
+
+  const serviceCategoryText = isRodrigues
+    ? rodriguesServiceLabel(applianceType, deviceBrand === 'Outra' ? deviceBrandOther : deviceBrand, rodService)
+    : selectedCategories.map(cat => {
+        const subs = serviceLines.filter(l => l.category === cat && l.sub).map(l => l.sub)
+        return subs.length ? `${cat} (${subs.join(', ')})` : cat
+      }).join(', ')
 
   const [clientSearch, setClientSearch] = useState('')
   const [clientSuggestions, setClientSuggestions] = useState<any[]>([])
@@ -1177,6 +1199,20 @@ export default function NovoChamadoPage() {
         )}
 
         {/* Tipo(s) de serviço */}
+        {isRodrigues ? (
+          <RodriguesApplianceSection
+            appliance={applianceType}
+            onApplianceChange={a => setRodriguesSelection(a, a ? rodService : '')}
+            brand={deviceBrand} setBrand={setDeviceBrand}
+            brandOther={deviceBrandOther} setBrandOther={setDeviceBrandOther}
+            serviceNames={categoryNames}
+            service={rodService}
+            onServiceChange={sv => setRodriguesSelection(applianceType, sv)}
+            line={serviceLines[0]}
+            onLineChange={patch => setServiceLines(prev => prev.map((l, i) => i === 0 ? { ...l, ...patch } : l))}
+            showValues={isApproved}
+            inputCls={inputCls} />
+        ) : (
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">Tipo(s) de Serviço</label>
           <div className="flex flex-wrap gap-2 mb-2">
@@ -1210,28 +1246,6 @@ export default function NovoChamadoPage() {
                         </button>
                       )
                     })}
-                  </div>
-                )}
-                {isRodrigues && (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">Tipo do Aparelho</label>
-                      <select value={applianceType} onChange={e => setApplianceType(e.target.value)} className={inputCls}>
-                        <option value="">Selecione...</option>
-                        {APPLIANCE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">Marca do Aparelho</label>
-                      <select value={deviceBrand} onChange={e => setDeviceBrand(e.target.value)} className={inputCls}>
-                        <option value="">Selecione...</option>
-                        {APPLIANCE_BRANDS.map(b => <option key={b} value={b}>{b}</option>)}
-                      </select>
-                      {deviceBrand === 'Outra' && (
-                        <input type="text" value={deviceBrandOther} onChange={e => setDeviceBrandOther(e.target.value)}
-                          placeholder="Digite a marca..." className={`${inputCls} mt-2`} />
-                      )}
-                    </div>
                   </div>
                 )}
                 {/* Pra Rodrigues, valor/descrição do serviço só aparece quando o chamado é aprovado — enquanto só agendado, não tem o que cobrar ainda */}
@@ -1299,6 +1313,7 @@ export default function NovoChamadoPage() {
             )
           })}
         </div>
+        )}
 
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1.5">Observações</label>

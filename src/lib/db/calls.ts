@@ -86,3 +86,58 @@ export async function deleteCall(id: string) {
   const { error } = await supabase.from('calls').delete().eq('id', id)
   if (error) throw error
 }
+
+// Retorno (Rodrigues): busca chamados APROVADOS por nome (contato ou
+// cliente), telefone ou endereço — direto no banco, sem trazer tudo.
+export async function searchApprovedCalls(search: string) {
+  const supabase = createClient()
+  const term = search.replace(/[%,()]/g, ' ').trim()
+  if (term.length < 2) return []
+  const select = '*, client:clients(id, name, phone), service_orders(id, auxiliary_id)'
+
+  const { data: clients } = await supabase
+    .from('clients')
+    .select('id')
+    .or(`name.ilike.%${term}%,phone.ilike.%${term}%`)
+    .limit(30)
+  const clientIds = (clients ?? []).map(c => c.id)
+
+  const filters = [
+    `contact_name.ilike.%${term}%`,
+    `contact_phone.ilike.%${term}%`,
+    `call_address.ilike.%${term}%`,
+  ]
+  if (clientIds.length) filters.push(`client_id.in.(${clientIds.join(',')})`)
+
+  const { data, error } = await supabase
+    .from('calls')
+    .select(select)
+    .eq('status', 'aprovado')
+    .or(filters.join(','))
+    .order('date', { ascending: false })
+    .limit(20)
+  if (error) throw error
+  return data ?? []
+}
+
+export async function getReturnCalls(originalCallId: string) {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('calls')
+    .select('id, date, scheduled_date, call_number, return_parts_paid')
+    .eq('return_of_call_id', originalCallId)
+    .order('date', { ascending: false })
+  if (error) throw error
+  return data ?? []
+}
+
+export async function getCallSummary(id: string) {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('calls')
+    .select('id, call_number, contact_name, date, client:clients(name)')
+    .eq('id', id)
+    .maybeSingle()
+  if (error) throw error
+  return data
+}

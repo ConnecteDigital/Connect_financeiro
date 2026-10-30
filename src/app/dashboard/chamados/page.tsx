@@ -1,14 +1,15 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { Plus, Search, CheckCircle, XCircle, Clock, ChevronRight, ChevronLeft, List, CalendarDays, FileText, Wallet, SlidersHorizontal } from 'lucide-react'
+import { Plus, Search, CheckCircle, XCircle, Clock, ChevronRight, ChevronLeft, List, CalendarDays, FileText, Wallet, SlidersHorizontal, RotateCcw } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { getCalls, updateCall } from '@/lib/db/calls'
 import { getOriginLabel } from '@/lib/use-call-origins'
 import { useTenant } from '@/lib/tenant-context'
+import RetornoModal from '@/components/RetornoModal'
 
-type Status = 'todos' | 'agendado' | 'aprovado' | 'nao_quis_visita' | 'nao_aprovou' | 'cancelado' | 'pagou_somente_visita'
+type Status = 'todos' | 'agendado' | 'aprovado' | 'nao_quis_visita' | 'nao_aprovou' | 'cancelado' | 'pagou_somente_visita' | 'retorno'
 
 const statusConfig: Record<string, { label: string; color: string; icon: React.ElementType }> = {
   agendado:        { label: 'Agendado',    color: 'bg-blue-50 text-blue-700 border-blue-200',        icon: Clock },
@@ -17,6 +18,7 @@ const statusConfig: Record<string, { label: string; color: string; icon: React.E
   nao_aprovou:     { label: 'Não aprovou', color: 'bg-amber-50 text-amber-700 border-amber-200',      icon: XCircle },
   cancelado:       { label: 'Cancelado',  color: 'bg-red-50 text-red-600 border-red-200',            icon: XCircle },
   pagou_somente_visita: { label: 'Pagou a visita', color: 'bg-cyan-50 text-cyan-700 border-cyan-200', icon: Wallet },
+  retorno:         { label: 'Retorno',     color: 'bg-violet-50 text-violet-700 border-violet-200',  icon: RotateCcw },
 }
 
 const paymentConfig: Record<string, { label: string; color: string }> = {
@@ -41,6 +43,7 @@ const filtersRodrigues: { value: Status; label: string }[] = [
   { value: 'aprovado', label: 'Aprovado' },
   { value: 'nao_aprovou', label: 'Não aprovou' },
   { value: 'pagou_somente_visita', label: 'Pagou a visita' },
+  { value: 'retorno', label: 'Retorno' },
 ]
 
 function localToday() {
@@ -54,6 +57,7 @@ export default function ChamadosPage() {
   const isRodrigues = tenant?.call_form_config?.rodrigues_custom === true
   const [dayFilter, setDayFilter] = useState(localToday)
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [retornoOpen, setRetornoOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<Status>('todos')
@@ -198,6 +202,13 @@ export default function ChamadosPage() {
                 <FileText className="w-4 h-4" />
                 <span className="hidden sm:inline">Resumo do Dia</span>
               </button>
+              {isRodrigues && (
+                <button onClick={() => setRetornoOpen(true)}
+                  className="flex items-center gap-2 text-sm px-4 py-2.5 rounded-xl border font-semibold transition text-violet-700 border-violet-200 bg-violet-50 hover:bg-violet-100">
+                  <RotateCcw className="w-4 h-4" />
+                  <span className="hidden sm:inline">Retorno</span>
+                </button>
+              )}
               <Link href="/dashboard/chamados/novo"
                 className="flex items-center gap-2 btn-primary text-sm px-4 py-2.5 rounded-xl">
                 <Plus className="w-4 h-4" />
@@ -483,8 +494,8 @@ export default function ChamadosPage() {
             const cfg = statusConfig[c.status]
             const StatusIcon = cfg?.icon || Clock
             const pay = so ? paymentConfig[so.payment_status] : null
-            const iconBg = c.status === 'aprovado' ? 'bg-emerald-50' : c.status === 'agendado' ? 'bg-blue-50' : c.status === 'cancelado' ? 'bg-red-50' : 'bg-zinc-50'
-            const iconColor = c.status === 'aprovado' ? 'text-emerald-500' : c.status === 'agendado' ? 'text-blue-500' : c.status === 'cancelado' ? 'text-red-500' : 'text-zinc-400'
+            const iconBg = c.status === 'aprovado' ? 'bg-emerald-50' : c.status === 'agendado' ? 'bg-blue-50' : c.status === 'cancelado' ? 'bg-red-50' : c.status === 'retorno' ? 'bg-violet-50' : 'bg-zinc-50'
+            const iconColor = c.status === 'aprovado' ? 'text-emerald-500' : c.status === 'agendado' ? 'text-blue-500' : c.status === 'cancelado' ? 'text-red-500' : c.status === 'retorno' ? 'text-violet-500' : 'text-zinc-400'
 
             return (
               <div key={c.id} className="bg-white rounded-2xl border border-zinc-100 hover:shadow-sm transition" style={{ ['--tw-border-opacity' as any]: 1 }} onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(var(--primary-rgb),0.35)')} onMouseLeave={e => (e.currentTarget.style.borderColor = '')}>
@@ -611,6 +622,7 @@ export default function ChamadosPage() {
           </div>
         </div>
       )}
+      {retornoOpen && <RetornoModal onClose={() => setRetornoOpen(false)} />}
     </div>
   )
 }

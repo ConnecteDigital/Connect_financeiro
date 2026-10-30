@@ -14,7 +14,8 @@ import { getAuxiliaries, createAuxiliary } from '@/lib/db/auxiliaries'
 import { createClient } from '@/lib/supabase/client'
 import { useCallOrigins } from '@/lib/use-call-origins'
 import { useTenant } from '@/lib/tenant-context'
-import { getServiceConfig, APPLIANCE_BRANDS, APPLIANCE_TYPES } from '@/lib/service-config'
+import { getServiceConfig, APPLIANCE_BRANDS, APPLIANCE_TYPES, rodriguesServiceLabel } from '@/lib/service-config'
+import RodriguesApplianceSection from '@/components/RodriguesApplianceSection'
 import { mapsUrl } from '@/lib/maps'
 import { lookupCep } from '@/lib/cep'
 import { getRecentVisitFees, addRecentVisitFee } from '@/lib/recent-visit-fees'
@@ -78,7 +79,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const [auxiliaries, setAuxiliaries] = useState<any[]>([])
   const [categoryNames, setCategoryNames] = useState<string[]>([])
   const { origins: callOrigins } = useCallOrigins()
-  const { tenant } = useTenant()
+  const { tenant, isTecnico } = useTenant()
   const commissionsEnabled = tenant?.enable_commissions ?? false
   const isMillenium = tenant?.call_form_config?.millenium_custom_os === true
   const isRodrigues = tenant?.call_form_config?.rodrigues_custom === true
@@ -156,6 +157,8 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const [otherServiceValue, setOtherServiceValue] = useState(0)
   const [partsCost, setPartsCost] = useState(0)
   const [applianceType, setApplianceType] = useState('')
+  const [rodService, setRodService] = useState('')
+  const [originalServiceCategory, setOriginalServiceCategory] = useState('')
   const [deviceBrand, setDeviceBrand] = useState('')
   const [technicianId, setTechnicianId] = useState('')
   const [callDriverName, setCallDriverName] = useState('')
@@ -330,8 +333,28 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         }
       }
 
-      setSelectedCategories(selected)
-      setServiceLines(lines)
+      setOriginalServiceCategory(call.service_category ?? '')
+      if (isRodrigues) {
+        // Rodrigues: aparelho vem de appliance_type; o serviço é a categoria
+        // da linha quando ela for um serviço cadastrado (e não o aparelho)
+        const appliance = call.appliance_type ?? ''
+        const first = lines[0]
+        const svc = first && typeNames.includes(first.category) && !APPLIANCE_TYPES.includes(first.category) ? first.category : ''
+        setRodService(svc)
+        if (appliance || svc) {
+          setSelectedCategories([appliance || svc])
+          setServiceLines([{
+            ...(first ?? { quantity: 0, unitPrice: 0, notes: '' }),
+            category: svc || appliance, sub: null, flatPrice: true,
+          }])
+        } else {
+          setSelectedCategories(selected)
+          setServiceLines(lines)
+        }
+      } else {
+        setSelectedCategories(selected)
+        setServiceLines(lines)
+      }
     }).catch(console.error).finally(() => setLoading(false))
   }, [id, commissionsEnabled, isRodrigues])
 
@@ -340,7 +363,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const subtotal = serviceLines.reduce((sum, l) => sum + lineTotal(l), 0)
   const bruto = subtotal + equipmentRentalValue - discount + taxes
 
-  const osTecnicoId = auxiliaryId || technicianId
+  const osTecnicoId = isTecnico ? technicianId : (auxiliaryId || technicianId)
   const availableStockItems = stockItems.filter(i => (i.auxiliary_id ?? null) === (osTecnicoId || null))
   const stockPartsTotal = stockLines.reduce((s, l) => s + l.total_value, 0)
   const partsCostTotal = stockPartsTotal + partsCost
@@ -455,7 +478,26 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const updateLine = (category: string, sub: string | null, patch: Partial<ServiceLine>) =>
     setServiceLines(prev => prev.map(l => l.category === category && l.sub === sub ? { ...l, ...patch } : l))
 
-  const serviceCategoryText = selectedCategories.map(cat => {
+  function setRodriguesSelection(appliance: string, service: string) {
+    setApplianceType(appliance)
+    setRodService(service)
+    if (!appliance) {
+      setSelectedCategories([])
+      setServiceLines([])
+      return
+    }
+    setSelectedCategories([appliance])
+    setServiceLines(prev => [{
+      ...(prev[0] ?? { quantity: 0, unitPrice: 0, notes: '' }),
+      category: service || appliance, sub: null, flatPrice: true,
+    }])
+  }
+
+  const rodriguesText = rodriguesServiceLabel(applianceType, deviceBrand === 'Outra' ? deviceBrandOther : deviceBrand, rodService)
+  const serviceCategoryText = isRodrigues
+    // chamado antigo sem aparelho nem serviço reconhecido: mantém o texto que já tinha
+    ? ((applianceType || rodService) ? rodriguesText : originalServiceCategory)
+    : selectedCategories.map(cat => {
     const subs = serviceLines.filter(l => l.category === cat && l.sub).map(l => l.sub)
     return subs.length ? `${cat} (${subs.join(', ')})` : cat
   }).join(', ')
@@ -513,8 +555,11 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
           device_brand: (deviceBrand === 'Outra' ? deviceBrandOther : deviceBrand) || null,
           appliance_type: applianceType || null,
           visit_fee: visitFee > 0 ? visitFee : null,
-          technician_id: technicianId || auxiliaryId || null,
-          driver: callDriverName || null,
+          // Técnico não troca o responsável do chamado (só o dono)
+          ...(isTecnico ? {} : {
+            technician_id: technicianId || auxiliaryId || null,
+            driver: callDriverName || null,
+          }),
           address_number: addressExtra.number || null,
           address_complement: addressExtra.complement || null,
           address_reference: addressExtra.reference || null,
@@ -524,12 +569,14 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
 
       // 2. Se aprovado, criar ou atualizar OS
       if (isApproved) {
+        // Login de técnico: a OS fica sempre no nome dele (o técnico do chamado)
+        const tecnicoAux = isTecnico ? auxiliaries.find(a => a.id === technicianId) : null
         const primaryAuxId = useMultiAux
           ? (selectedAuxiliaries[0]?.auxiliary_id ?? null)
-          : (auxiliaryId || null)
+          : isTecnico ? (technicianId || null) : (auxiliaryId || null)
         const primaryAuxValue = useMultiAux
           ? (selectedAuxiliaries[0] ? bruto * selectedAuxiliaries[0].percentage / 100 : 0)
-          : auxValue
+          : isTecnico ? (tecnicoAux ? bruto * Number(tecnicoAux.percentage) / 100 : 0) : auxValue
 
         const orderData = {
           call_id: id,
@@ -822,6 +869,9 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
               {isRodrigues && (
                 <div className="sm:col-span-2">
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Técnico Responsável</label>
+                  {isTecnico ? (
+                    <p className="px-3 py-2.5 rounded-lg bg-white border border-slate-100 text-sm text-slate-700">{callDriverName || '—'}</p>
+                  ) : (
                   <select value={technicianId} onChange={e => {
                     const aux = auxiliaries.find(a => a.id === e.target.value)
                     setTechnicianId(e.target.value)
@@ -831,6 +881,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                     <option value="">Selecione o técnico...</option>
                     {auxiliaries.filter(a => a.type === 'tecnico').map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                   </select>
+                  )}
                 </div>
               )}
             </div>
@@ -838,6 +889,20 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         )}
 
         {/* Tipo(s) de serviço — seção única */}
+        {isRodrigues ? (
+          <RodriguesApplianceSection
+            appliance={applianceType}
+            onApplianceChange={a => setRodriguesSelection(a, a ? rodService : '')}
+            brand={deviceBrand} setBrand={setDeviceBrand}
+            brandOther={deviceBrandOther} setBrandOther={setDeviceBrandOther}
+            serviceNames={categoryNames}
+            service={rodService}
+            onServiceChange={sv => setRodriguesSelection(applianceType, sv)}
+            line={serviceLines[0]}
+            onLineChange={patch => setServiceLines(prev => prev.map((l, i) => i === 0 ? { ...l, ...patch } : l))}
+            showValues={isApproved}
+            inputCls="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+        ) : (
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">Tipo(s) de Serviço</label>
           <div className="flex flex-wrap gap-2 mb-2">
@@ -866,32 +931,6 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                         </button>
                       )
                     })}
-                  </div>
-                )}
-
-                {isRodrigues && (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">Tipo do Aparelho</label>
-                      <select value={applianceType} onChange={e => setApplianceType(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
-                        <option value="">Selecione...</option>
-                        {APPLIANCE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">Marca do Aparelho</label>
-                      <select value={deviceBrand} onChange={e => setDeviceBrand(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
-                        <option value="">Selecione...</option>
-                        {APPLIANCE_BRANDS.map(b => <option key={b} value={b}>{b}</option>)}
-                      </select>
-                      {deviceBrand === 'Outra' && (
-                        <input type="text" value={deviceBrandOther} onChange={e => setDeviceBrandOther(e.target.value)}
-                          placeholder="Digite a marca..."
-                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 mt-2" />
-                      )}
-                    </div>
                   </div>
                 )}
 
@@ -959,6 +998,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
             )
           })}
         </div>
+        )}
 
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1.5">Observações</label>
@@ -978,13 +1018,19 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
             {isRodrigues ? (
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Técnico</label>
-                <select value={auxiliaryId} onChange={e => setAuxiliaryId(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
-                  <option value="">Selecione o técnico...</option>
-                  {auxiliaries.filter(a => a.type === 'tecnico').map(a => (
-                    <option key={a.id} value={a.id}>{a.name} ({Number(a.percentage)}% de comissão)</option>
-                  ))}
-                </select>
+                {isTecnico ? (
+                  <p className="px-3 py-2.5 rounded-lg bg-slate-50 border border-slate-100 text-sm text-slate-700">
+                    {auxiliaries.find(a => a.id === technicianId)?.name ?? callDriverName ?? '—'}
+                  </p>
+                ) : (
+                  <select value={auxiliaryId} onChange={e => setAuxiliaryId(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
+                    <option value="">Selecione o técnico...</option>
+                    {auxiliaries.filter(a => a.type === 'tecnico').map(a => (
+                      <option key={a.id} value={a.id}>{a.name} ({Number(a.percentage)}% de comissão)</option>
+                    ))}
+                  </select>
+                )}
                 {!existingSoId && <p className="text-xs text-slate-400 mt-1">O número da OS é gerado automaticamente ao salvar.</p>}
               </div>
             ) : (

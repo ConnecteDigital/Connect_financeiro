@@ -1,11 +1,11 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { ArrowLeft, Phone, CheckCircle, XCircle, Clock, Edit, DollarSign, User, FileText, Wrench, Paperclip, Upload, Trash2, Download, Printer, ClipboardList, Navigation, Copy, Check, MoreVertical, CalendarClock } from 'lucide-react'
+import { ArrowLeft, Phone, CheckCircle, XCircle, Clock, Edit, DollarSign, User, FileText, Wrench, Paperclip, Upload, Trash2, Download, Printer, ClipboardList, Navigation, Copy, Check, MoreVertical, CalendarClock, Wallet, RotateCcw } from 'lucide-react'
 import Link from 'next/link'
 import { use } from 'react'
 import { useRouter } from 'next/navigation'
-import { getCall, deleteCall } from '@/lib/db/calls'
+import { getCall, deleteCall, getReturnCalls, getCallSummary } from '@/lib/db/calls'
 import { updateCall } from '@/lib/db/calls'
 import { updateExpense } from '@/lib/db/expenses'
 import { createClient } from '@/lib/supabase/client'
@@ -13,6 +13,7 @@ import { getOriginLabel } from '@/lib/use-call-origins'
 import { useTenant } from '@/lib/tenant-context'
 import { mapsUrl } from '@/lib/maps'
 import { formatAddress, navigationAddress } from '@/lib/address'
+import { serviceWithoutAppliance } from '@/lib/service-config'
 
 const statusConfig: Record<string, { label: string; color: string; bg: string; icon: React.ElementType }> = {
   agendado: { label: 'Agendado', color: 'text-blue-700', bg: 'bg-blue-100', icon: Clock },
@@ -20,6 +21,8 @@ const statusConfig: Record<string, { label: string; color: string; bg: string; i
   nao_aprovou: { label: 'Não aprovou', color: 'text-amber-700', bg: 'bg-amber-100', icon: XCircle },
   nao_quis_visita: { label: 'Não quis visita', color: 'text-slate-600', bg: 'bg-slate-100', icon: XCircle },
   cancelado: { label: 'Cancelado', color: 'text-red-600', bg: 'bg-red-100', icon: XCircle },
+  pagou_somente_visita: { label: 'Pagou a visita', color: 'text-cyan-700', bg: 'bg-cyan-100', icon: Wallet },
+  retorno: { label: 'Retorno', color: 'text-violet-700', bg: 'bg-violet-100', icon: RotateCcw },
 }
 
 const paymentBadge: Record<string, { label: string; color: string }> = {
@@ -50,6 +53,8 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
   const [attachError, setAttachError] = useState('')
   const [moreOpen, setMoreOpen] = useState(false)
   const [addressCopied, setAddressCopied] = useState(false)
+  const [returnCalls, setReturnCalls] = useState<any[]>([])
+  const [originalCall, setOriginalCall] = useState<any>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   async function copyAddress(text: string) {
@@ -63,6 +68,16 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
   useEffect(() => {
     getCall(id).then(setCall).catch(console.error).finally(() => setLoading(false))
   }, [id])
+
+  // Retorno (Rodrigues): o chamado original de um retorno, e os retornos de um chamado
+  useEffect(() => {
+    if (!isRodrigues || !call) return
+    if (call.return_of_call_id) {
+      getCallSummary(call.return_of_call_id).then(setOriginalCall).catch(console.error)
+    } else {
+      getReturnCalls(call.id).then(setReturnCalls).catch(console.error)
+    }
+  }, [isRodrigues, call])
 
   useEffect(() => {
     if (!id) return
@@ -281,6 +296,23 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
 
       {isRodrigues ? (
         <>
+          {call.status === 'retorno' && (
+            <div className="bg-violet-50 rounded-xl border border-violet-100 p-4 text-sm space-y-1">
+              <p className="text-violet-800 font-semibold flex items-center gap-2">
+                <RotateCcw className="w-4 h-4" />
+                Retorno do chamado{' '}
+                {originalCall ? (
+                  <Link href={`/dashboard/chamados/${originalCall.id}`} className="underline">
+                    {originalCall.call_number ?? originalCall.client?.name ?? originalCall.contact_name ?? 'original'}
+                  </Link>
+                ) : '…'}
+              </p>
+              {call.return_parts_paid != null && (
+                <p className="text-violet-700">Cliente pagou a peça: <span className="font-semibold">{call.return_parts_paid ? 'Sim' : 'Não'}</span></p>
+              )}
+            </div>
+          )}
+
           {/* Serviço Previsto */}
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
             <h2 className="font-semibold text-slate-800 mb-3 flex items-center gap-2 text-sm">
@@ -290,8 +322,8 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
             <p className="text-lg font-bold text-slate-800">
               {[call.appliance_type, call.device_brand].filter(Boolean).join(' ') || call.service_category || '—'}
             </p>
-            {call.service_category && (call.appliance_type || call.device_brand) && (
-              <p className="text-sm text-slate-500 mt-0.5">{call.service_category}</p>
+            {(call.appliance_type || call.device_brand) && serviceWithoutAppliance(call.service_category, call.appliance_type, call.device_brand) && (
+              <p className="text-sm text-slate-500 mt-0.5">{serviceWithoutAppliance(call.service_category, call.appliance_type, call.device_brand)}</p>
             )}
           </div>
 
@@ -346,6 +378,28 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
                   Abrir no Waze
                 </a>
               )}
+            </div>
+          )}
+          {returnCalls.length > 0 && (
+            <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
+              <h2 className="font-semibold text-slate-800 mb-3 flex items-center gap-2 text-sm">
+                <RotateCcw className="w-4 h-4 text-violet-600" />
+                Retornos
+              </h2>
+              <div className="divide-y divide-slate-50">
+                {returnCalls.map(r => (
+                  <Link key={r.id} href={`/dashboard/chamados/${r.id}`}
+                    className="flex items-center justify-between py-2 text-sm hover:bg-slate-50 rounded-lg px-1">
+                    <span className="text-slate-700">
+                      {new Date((r.scheduled_date ?? r.date) + 'T12:00:00').toLocaleDateString('pt-BR')}
+                      {r.call_number && <span className="text-slate-400"> · {r.call_number}</span>}
+                    </span>
+                    <span className="text-xs text-slate-400">
+                      {r.return_parts_paid == null ? 'sem peça' : r.return_parts_paid ? 'peça paga' : 'peça não paga'}
+                    </span>
+                  </Link>
+                ))}
+              </div>
             </div>
           )}
         </>

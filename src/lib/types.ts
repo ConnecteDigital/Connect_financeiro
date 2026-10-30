@@ -1,6 +1,6 @@
 export type UserRole = 'owner' | 'secretary'
 
-export type CallStatus = 'agendado' | 'aprovado' | 'nao_quis_visita' | 'cancelado' | 'nao_aprovou' | 'pagou_somente_visita'
+export type CallStatus = 'agendado' | 'aprovado' | 'nao_quis_visita' | 'cancelado' | 'nao_aprovou' | 'pagou_somente_visita' | 'retorno'
 export type ServiceType = 'proprio' | 'terceirizado_saida' | 'terceirizado_entrada'
 export type PaymentStatus = 'pago' | 'pago_parcial' | 'pendente'
 export type ExpenseStatus = 'pago' | 'pendente'
