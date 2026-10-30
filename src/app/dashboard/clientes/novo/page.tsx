@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import { createClient_ } from '@/lib/db/clients'
 import { lookupCep } from '@/lib/cep'
 import { useTenant } from '@/lib/tenant-context'
+import AddressExtraFields from '@/components/AddressExtraFields'
 
 export default function NovoClientePage() {
   const router = useRouter()
@@ -16,6 +17,7 @@ export default function NovoClientePage() {
   const [error, setError] = useState('')
   const [cepLoading, setCepLoading] = useState(false)
   const [cepError, setCepError] = useState(false)
+  const [addressExtra, setAddressExtra] = useState({ number: '', complement: '', reference: '' })
   const [form, setForm] = useState({
     name: '', cpf_cnpj: '', inscr_est: '', address: '',
     neighborhood: '', city: '', state: '', cep: '', phone: '', email: '',
@@ -48,7 +50,7 @@ export default function NovoClientePage() {
     setLoading(true)
     setError('')
     try {
-      const client = await createClient_(form)
+      const client = await createClient_({ ...form, ...(isRodrigues ? { address_number: addressExtra.number || null, address_complement: addressExtra.complement || null, address_reference: addressExtra.reference || null } : {}) })
       router.push(`/dashboard/clientes/${client.id}`)
     } catch (err: any) {
       setError('Erro ao salvar cliente. Tente novamente.')
@@ -106,9 +108,15 @@ export default function NovoClientePage() {
           <div className="sm:col-span-2">
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Endereço</label>
             <input type="text" value={form.address} onChange={e => set('address', e.target.value)}
-              placeholder={isRodrigues ? 'Rua, número...' : undefined}
+              placeholder={isRodrigues ? 'Rua' : undefined}
               className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
           </div>
+          {isRodrigues && (
+            <div className="sm:col-span-2">
+              <AddressExtraFields {...addressExtra} inputClassName="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                onChange={(f, v) => setAddressExtra(p => ({ ...p, [f]: v }))} />
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Bairro</label>
             <input type="text" value={form.neighborhood} onChange={e => set('neighborhood', e.target.value)}

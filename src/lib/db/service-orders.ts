@@ -65,3 +65,11 @@ export async function updateServiceOrder(id: string, values: Record<string, unkn
   if (error) throw error
   return data
 }
+
+// Recalcula no banco as saídas automáticas da OS (peças, taxa da
+// maquininha, comissão do técnico) — ver migration_v23.sql.
+export async function syncOsAutoExpenses(serviceOrderId: string) {
+  const supabase = createClient()
+  const { error } = await supabase.rpc('sync_os_auto_expenses', { p_service_order_id: serviceOrderId })
+  if (error) throw error
+}

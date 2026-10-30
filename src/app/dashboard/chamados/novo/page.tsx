@@ -5,8 +5,8 @@ import { ArrowLeft, Save, Loader2, CalendarDays, Camera, Paperclip, FileText, X,
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createCall, searchCallContacts } from '@/lib/db/calls'
-import { createServiceOrder, createServiceOrderAuxiliaries } from '@/lib/db/service-orders'
-import { createExpense, upsertPartsExpense } from '@/lib/db/expenses'
+import { createServiceOrder, createServiceOrderAuxiliaries, syncOsAutoExpenses } from '@/lib/db/service-orders'
+import { createExpense } from '@/lib/db/expenses'
 import { getClients, createClient_ } from '@/lib/db/clients'
 import { getTeams } from '@/lib/db/teams'
 import { getAuxiliaries, createAuxiliary } from '@/lib/db/auxiliaries'
@@ -19,6 +19,10 @@ import { mapsUrl } from '@/lib/maps'
 import { lookupCep } from '@/lib/cep'
 import { getRecentVisitFees, addRecentVisitFee } from '@/lib/recent-visit-fees'
 import { getStockItems, addServiceOrderParts, adjustStockQuantity } from '@/lib/db/stock'
+import { navigationAddress } from '@/lib/address'
+import StockPartPicker from '@/components/StockPartPicker'
+import AddressExtraFields from '@/components/AddressExtraFields'
+import RodriguesCardFields from '@/components/RodriguesCardFields'
 
 type ServiceType = 'proprio' | 'terceirizado_saida' | 'terceirizado_entrada'
 type PaymentStatus = 'pago' | 'pago_parcial' | 'pendente'
@@ -113,6 +117,7 @@ export default function NovoChamadoPage() {
   const [scheduledDate, setScheduledDate] = useState(localToday)
   const [scheduledTime, setScheduledTime] = useState('')
   const [callAddress, setCallAddress] = useState('')
+  const [addressExtra, setAddressExtra] = useState({ number: '', complement: '', reference: '' })
   const [callCep, setCallCep] = useState('')
   const [cepLoading, setCepLoading] = useState(false)
   const [cepError, setCepError] = useState(false)
@@ -130,29 +135,20 @@ export default function NovoChamadoPage() {
   const [partsCost, setPartsCost] = useState(0)
   const [stockItems, setStockItems] = useState<any[]>([])
   const [stockLines, setStockLines] = useState<{ stock_item_id: string; item_name: string; quantity: number; unit_value: number; total_value: number }[]>([])
-  const [addingStockId, setAddingStockId] = useState('')
-  const [addingStockQty, setAddingStockQty] = useState(1)
 
   useEffect(() => {
     if (isRodrigues) getStockItems().then(setStockItems).catch(console.error)
   }, [isRodrigues])
 
-  const availableStockItems = stockItems.filter(i => (i.auxiliary_id ?? null) === (technicianId || null))
-  const stockPartsTotal = stockLines.reduce((s, l) => s + l.total_value, 0)
-  const partsCostTotal = stockPartsTotal + partsCost
 
-  function addStockLine() {
-    const item = availableStockItems.find(i => i.id === addingStockId)
-    if (!item || addingStockQty <= 0) return
+  function addStockLine(item: { id: string; name: string; unit_value: number | string }, quantity: number) {
     setStockLines(prev => [...prev, {
       stock_item_id: item.id,
       item_name: item.name,
-      quantity: addingStockQty,
+      quantity,
       unit_value: Number(item.unit_value),
-      total_value: addingStockQty * Number(item.unit_value),
+      total_value: quantity * Number(item.unit_value),
     }])
-    setAddingStockId('')
-    setAddingStockQty(1)
   }
 
   function removeStockLine(idx: number) {
@@ -175,6 +171,17 @@ export default function NovoChamadoPage() {
 
   // Single auxiliary (commissions disabled)
   const [auxiliaryId, setAuxiliaryId] = useState('')
+
+  // Rodrigues: o técnico da OS é escolhido em "Técnico" (auxiliaryId); vem
+  // pré-preenchido com o técnico responsável do agendamento.
+  const osTecnicoId = auxiliaryId || technicianId
+  const availableStockItems = stockItems.filter(i => (i.auxiliary_id ?? null) === (osTecnicoId || null))
+  const stockPartsTotal = stockLines.reduce((s, l) => s + l.total_value, 0)
+  const partsCostTotal = stockPartsTotal + partsCost
+
+  useEffect(() => {
+    if (isRodrigues && technicianId) setAuxiliaryId(technicianId)
+  }, [isRodrigues, technicianId])
 
   // Multiple auxiliaries (commissions enabled)
   const [selectedAuxiliaries, setSelectedAuxiliaries] = useState<SelectedAuxiliary[]>([])
@@ -203,6 +210,7 @@ export default function NovoChamadoPage() {
   const [paymentMethods, setPaymentMethods] = useState<string[]>([])
   const [cardType, setCardType] = useState('')
   const [installments, setInstallments] = useState(1)
+  const [cardNetValue, setCardNetValue] = useState<number | null>(null)
   const [cardFeePct, setCardFeePct] = useState(0)
   const [partnerName, setPartnerName] = useState('')
   const [amountPaid, setAmountPaid] = useState(0)
@@ -244,6 +252,9 @@ export default function NovoChamadoPage() {
   const isOutsourced = serviceType !== 'proprio'
   const liquidoParceria = isOutsourced ? bruto * partnerPct / 100 : bruto
 
+  // Rodrigues sempre usa um técnico só por OS (comissão calculada no banco)
+  const useMultiAux = !isRodrigues && (commissionsEnabled || isMillenium)
+
   // Single aux (commissions disabled)
   const selectedAux = auxiliaries.find(a => a.id === auxiliaryId)
   const auxValue = selectedAux ? bruto * Number(selectedAux.percentage) / 100 : 0
@@ -251,7 +262,7 @@ export default function NovoChamadoPage() {
   // Multi aux (commissions enabled)
   const totalAuxValue = selectedAuxiliaries.reduce((s, a) => s + bruto * a.percentage / 100, 0)
 
-  const liquidoFinal = (commissionsEnabled || isMillenium)
+  const liquidoFinal = useMultiAux
     ? liquidoParceria - totalAuxValue
     : liquidoParceria - auxValue
 
@@ -405,6 +416,7 @@ export default function NovoChamadoPage() {
         setCallAddress(result.address)
         setCallNeighborhood(result.neighborhood)
         setCallCity(result.city)
+        setNewClient(p => ({ ...p, state: result.state }))
       } else {
         setCepError(true)
       }
@@ -439,6 +451,12 @@ export default function NovoChamadoPage() {
             neighborhood: callNeighborhood || null,
             city: callCity || null,
             state: newClient.state || null,
+            ...(isRodrigues ? {
+              cep: callCep || null,
+              address_number: addressExtra.number || null,
+              address_complement: addressExtra.complement || null,
+              address_reference: addressExtra.reference || null,
+            } : {}),
           })
           finalClientId = created.id
         } catch (clientErr) {
@@ -468,7 +486,12 @@ export default function NovoChamadoPage() {
         device_brand: isRodrigues ? ((deviceBrand === 'Outra' ? deviceBrandOther : deviceBrand) || null) : null,
         appliance_type: isRodrigues ? (applianceType || null) : null,
         visit_fee: isRodrigues && isScheduled && visitFee > 0 ? visitFee : null,
-        technician_id: isRodrigues ? (technicianId || null) : null,
+        technician_id: isRodrigues ? (technicianId || auxiliaryId || null) : null,
+        ...(isRodrigues ? {
+          address_number: addressExtra.number || null,
+          address_complement: addressExtra.complement || null,
+          address_reference: addressExtra.reference || null,
+        } : {}),
       })
       if (isRodrigues && isScheduled && visitFee > 0) addRecentVisitFee(visitFee)
 
@@ -476,10 +499,10 @@ export default function NovoChamadoPage() {
         await uploadPendingFiles(call.id)
 
         // Determine auxiliary_id / auxiliary_value for legacy column
-        const primaryAuxId = (commissionsEnabled || isMillenium)
+        const primaryAuxId = useMultiAux
           ? (selectedAuxiliaries[0]?.auxiliary_id ?? null)
           : (auxiliaryId || null)
-        const primaryAuxValue = (commissionsEnabled || isMillenium)
+        const primaryAuxValue = useMultiAux
           ? (selectedAuxiliaries[0] ? bruto * selectedAuxiliaries[0].percentage / 100 : 0)
           : auxValue
 
@@ -522,6 +545,7 @@ export default function NovoChamadoPage() {
           card_type: (isMillenium || isRodrigues) ? (cardType || null) : null,
           card_fee_pct: isMillenium ? cardFeePct : 0,
           installments: isRodrigues && cardType === 'credito' ? installments : null,
+          ...(isRodrigues ? { card_net_value: paymentMethods.includes('Cartão') ? cardNetValue : null } : {}),
           partner_name: isMillenium ? (partnerName || null) : null,
           payment_status: paymentStatus,
           amount_paid: amountPaid,
@@ -540,16 +564,14 @@ export default function NovoChamadoPage() {
         }))
         const order = await createServiceOrder(orderData, validItems)
 
-        if (isRodrigues && partsCostTotal > 0) {
-          await upsertPartsExpense(order.id, partsCostTotal, callDate, `Peça utilizada — ${contactName || selectedClientName || 'chamado'}`)
-        }
         if (isRodrigues && stockLines.length > 0) {
           await addServiceOrderParts(order.id, stockLines)
           await Promise.all(stockLines.map(l => adjustStockQuantity(l.stock_item_id, -l.quantity)))
         }
+        if (isRodrigues) await syncOsAutoExpenses(order.id)
 
         // Save multiple auxiliaries when commissions enabled
-        if ((commissionsEnabled || isMillenium) && selectedAuxiliaries.length > 0) {
+        if (useMultiAux && selectedAuxiliaries.length > 0) {
           await createServiceOrderAuxiliaries(
             order.id,
             selectedAuxiliaries.map(a => ({
@@ -561,7 +583,7 @@ export default function NovoChamadoPage() {
         }
 
         // Auto-generate expenses when commissions enabled
-        if (commissionsEnabled || isMillenium) {
+        if (useMultiAux) {
           const expenseDate = callDate
 
           // Commission expense for each auxiliary (tecnico + dono)
@@ -900,6 +922,8 @@ export default function NovoChamadoPage() {
                     if (c.city) setCallCity(c.city)
                     if (c.neighborhood) setCallNeighborhood(c.neighborhood)
                     if (c.address) setCallAddress(c.address)
+                    if (c.state) setNewClient(p => ({ ...p, state: c.state }))
+                    setAddressExtra({ number: c.address_number ?? '', complement: c.address_complement ?? '', reference: c.address_reference ?? '' })
                     setClientSearch('')
                   }}
                   className="w-full text-left px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 border-b border-slate-50 last:border-0 transition">
@@ -977,7 +1001,7 @@ export default function NovoChamadoPage() {
           </div>
         </div>
 
-        {!clientId && contactName.trim().length >= 2 && clientSuggestions.length === 0 && (
+        {!isRodrigues && !clientId && contactName.trim().length >= 2 && clientSuggestions.length === 0 && (
           <div className="border border-orange-100 bg-orange-50/50 rounded-lg p-4 space-y-3">
             <p className="text-xs font-semibold text-orange-600">Cliente novo — será cadastrado automaticamente:</p>
             <div className="grid grid-cols-2 gap-3">
@@ -1024,10 +1048,16 @@ export default function NovoChamadoPage() {
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Endereço do Serviço</label>
               <input type="text" value={callAddress} onChange={e => setCallAddress(e.target.value)}
-                placeholder="Rua, número, bairro, cidade"
+                placeholder={isRodrigues ? 'Rua' : 'Rua, número, bairro, cidade'}
                 className={inputCls} />
+              {isRodrigues && (
+                <div className="mt-3">
+                  <AddressExtraFields {...addressExtra} inputClassName={inputCls}
+                    onChange={(f, v) => setAddressExtra(p => ({ ...p, [f]: v }))} />
+                </div>
+              )}
               {isRodrigues && callAddress && (
-                <a href={mapsUrl([callAddress, callNeighborhood, callCity].filter(Boolean).join(', '))}
+                <a href={mapsUrl(navigationAddress({ address: callAddress, number: addressExtra.number, neighborhood: callNeighborhood, city: callCity }))}
                   target="_blank" rel="noopener noreferrer"
                   className="mt-2 flex items-center justify-center gap-2 text-sm font-bold px-4 py-3 rounded-xl bg-blue-600 text-white hover:bg-blue-700 active:scale-[0.98] transition shadow-sm">
                   <Navigation className="w-4 h-4" />
@@ -1087,10 +1117,17 @@ export default function NovoChamadoPage() {
               <div className="sm:col-span-2">
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Endereço do Serviço</label>
                 <input type="text" value={callAddress} onChange={e => setCallAddress(e.target.value)}
-                  placeholder={isRodrigues ? 'Rua, número...' : 'Rua, número, bairro, cidade'}
+                  placeholder={isRodrigues ? 'Rua' : 'Rua, número, bairro, cidade'}
                   className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
+                {isRodrigues && (
+                  <div className="mt-3">
+                    <AddressExtraFields {...addressExtra}
+                      inputClassName="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white"
+                      onChange={(f, v) => setAddressExtra(p => ({ ...p, [f]: v }))} />
+                  </div>
+                )}
                 {isRodrigues && callAddress && (
-                  <a href={mapsUrl([callAddress, callNeighborhood, callCity].filter(Boolean).join(', '))}
+                  <a href={mapsUrl(navigationAddress({ address: callAddress, number: addressExtra.number, neighborhood: callNeighborhood, city: callCity }))}
                     target="_blank" rel="noopener noreferrer"
                     className="mt-2 flex items-center justify-center gap-2 text-sm font-bold px-4 py-3 rounded-xl bg-blue-600 text-white hover:bg-blue-700 active:scale-[0.98] transition shadow-sm">
                     <Navigation className="w-4 h-4" />
@@ -1276,6 +1313,18 @@ export default function NovoChamadoPage() {
         <>
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-4">
             <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3">Ordem de Serviço</h2>
+            {isRodrigues ? (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Técnico</label>
+                <select value={auxiliaryId} onChange={e => setAuxiliaryId(e.target.value)} className={inputCls}>
+                  <option value="">Selecione o técnico...</option>
+                  {auxiliaries.filter(a => a.type === 'tecnico').map(a => (
+                    <option key={a.id} value={a.id}>{a.name} ({Number(a.percentage)}% de comissão)</option>
+                  ))}
+                </select>
+                <p className="text-xs text-slate-400 mt-1">O número da OS é gerado automaticamente ao salvar.</p>
+              </div>
+            ) : (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Equipe</label>
@@ -1291,7 +1340,7 @@ export default function NovoChamadoPage() {
               </div>
 
               {/* Single auxiliary (commissions disabled, não-Millenium) */}
-              {!commissionsEnabled && !isMillenium && (
+              {!useMultiAux && (
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Auxiliar</label>
                   <select value={auxiliaryId} onChange={e => setAuxiliaryId(e.target.value)} className={inputCls}>
@@ -1318,9 +1367,10 @@ export default function NovoChamadoPage() {
                 <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className={inputCls} />
               </div>
             </div>
+            )}
 
             {/* Multiple auxiliaries (commissions enabled, ou Millenium) */}
-            {(commissionsEnabled || isMillenium) && (
+            {useMultiAux && (
               <div className="space-y-3">
                 <label className="block text-sm font-medium text-slate-700">Auxiliares / Comissões</label>
 
@@ -1434,26 +1484,9 @@ export default function NovoChamadoPage() {
                 </div>
               )}
               {isRodrigues && paymentMethods.includes('Cartão') && (
-                <div className="mt-3 p-3 rounded-lg border border-orange-100 bg-orange-50/50 space-y-2">
-                  <label className="block text-xs font-semibold text-slate-700">Cartão: débito ou crédito?</label>
-                  <div className="flex gap-2">
-                    {[{ v: 'debito', l: 'Débito' }, { v: 'credito', l: 'Crédito' }].map(opt => (
-                      <button key={opt.v} type="button" onClick={() => setCardType(opt.v)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${cardType === opt.v ? 'text-white border-transparent bg-orange-500' : 'bg-white text-slate-500 border-slate-200'}`}>
-                        {opt.l}
-                      </button>
-                    ))}
-                  </div>
-                  {cardType === 'credito' && (
-                    <div>
-                      <label className="block text-xs font-medium text-slate-600 mb-1">Quantas vezes</label>
-                      <select value={installments} onChange={e => setInstallments(Number(e.target.value))}
-                        className="w-28 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400">
-                        {Array.from({ length: 12 }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n}x</option>)}
-                      </select>
-                    </div>
-                  )}
-                </div>
+                <RodriguesCardFields cardType={cardType} setCardType={setCardType}
+                  installments={installments} setInstallments={setInstallments}
+                  netValue={cardNetValue} setNetValue={setCardNetValue} bruto={bruto} />
               )}
             </div>
           </div>
@@ -1482,7 +1515,20 @@ export default function NovoChamadoPage() {
                   placeholder="Ex: Alan..." className={inputCls} />
               </div>
             )}
-            {serviceType === 'proprio' ? (
+            {serviceType === 'proprio' && isRodrigues ? (
+              <>
+                <div className="sm:max-w-xs">
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Material (R$)</label>
+                  <input type="number" min="0" step="0.01" value={materialCost || ''} onChange={e => setMaterialCost(Number(e.target.value))} className={inputCls} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Descrição do serviço</label>
+                  <textarea rows={3} value={observations} onChange={e => setObservations(e.target.value)}
+                    placeholder="O que foi feito no aparelho... (aparece na OS)"
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none" />
+                </div>
+              </>
+            ) : serviceType === 'proprio' ? (
               <>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   {[
@@ -1522,7 +1568,7 @@ export default function NovoChamadoPage() {
                     {' → '}líquido ({partnerPct}%): <span className="font-bold text-emerald-600">R$ {liquidoParceria.toFixed(2)}</span>
                   </p>
                 </div>
-                {(commissionsEnabled || isMillenium) && serviceType === 'terceirizado_saida' && (
+                {useMultiAux && serviceType === 'terceirizado_saida' && (
                   <p className="text-xs text-orange-600 mt-2">
                     Uma saída de R$ {(bruto * (100 - partnerPct) / 100).toFixed(2)} será gerada automaticamente para o custo do parceiro.
                   </p>
@@ -1564,24 +1610,10 @@ export default function NovoChamadoPage() {
                   </div>
                 )}
                 {availableStockItems.length > 0 ? (
-                  <div className="flex gap-2">
-                    <select value={addingStockId} onChange={e => setAddingStockId(e.target.value)}
-                      className="flex-1 px-2 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-orange-400">
-                      <option value="">Selecione a peça...</option>
-                      {availableStockItems.map(i => (
-                        <option key={i.id} value={i.id}>{i.name} ({i.quantity} em estoque)</option>
-                      ))}
-                    </select>
-                    <input type="number" min="1" value={addingStockQty} onChange={e => setAddingStockQty(Number(e.target.value))}
-                      className="w-16 px-2 py-1.5 border border-slate-200 rounded-lg text-xs text-center focus:outline-none focus:ring-2 focus:ring-orange-400" />
-                    <button type="button" onClick={addStockLine} disabled={!addingStockId}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-orange-500 text-white disabled:opacity-50">
-                      <Plus className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                  <StockPartPicker items={availableStockItems} onAdd={addStockLine} />
                 ) : (
                   <p className="text-xs text-slate-400">
-                    {technicianId ? 'Esse técnico não tem peças cadastradas no estoque.' : 'A loja não tem peças cadastradas no estoque.'}
+                    {osTecnicoId ? 'Esse técnico não tem peças cadastradas no estoque.' : 'A loja não tem peças cadastradas no estoque.'}
                   </p>
                 )}
                 <div className="flex justify-between text-sm items-center pt-1 border-t border-orange-100">
@@ -1608,7 +1640,7 @@ export default function NovoChamadoPage() {
             )}
 
             {/* Single aux (commissions disabled, não-Millenium) */}
-            {!commissionsEnabled && !isMillenium && selectedAux && (
+            {!useMultiAux && selectedAux && (
               <div className="flex justify-between text-sm">
                 <span className="text-slate-600">Auxiliar {selectedAux.name} ({Number(selectedAux.percentage)}%)</span>
                 <span className="font-semibold text-red-500">− R$ {auxValue.toFixed(2)}</span>
@@ -1616,7 +1648,7 @@ export default function NovoChamadoPage() {
             )}
 
             {/* Multi aux (commissions enabled, ou Millenium) */}
-            {(commissionsEnabled || isMillenium) && selectedAuxiliaries.map(a => {
+            {useMultiAux && selectedAuxiliaries.map(a => {
               const amt = bruto * a.percentage / 100
               return (
                 <div key={a.auxiliary_id} className="flex justify-between text-sm">
@@ -1628,14 +1660,14 @@ export default function NovoChamadoPage() {
               )
             })}
 
-            {(isOutsourced || ((commissionsEnabled || isMillenium) ? selectedAuxiliaries.length > 0 : selectedAux)) && (
+            {(isOutsourced || (useMultiAux ? selectedAuxiliaries.length > 0 : selectedAux)) && (
               <div className="flex justify-between text-base font-bold border-t border-slate-100 pt-2">
                 <span className="text-slate-800">Valor Líquido</span>
                 <span className="text-emerald-600">R$ {liquidoFinal.toFixed(2)}</span>
               </div>
             )}
 
-            {(commissionsEnabled || isMillenium) && selectedAuxiliaries.length > 0 && (
+            {useMultiAux && selectedAuxiliaries.length > 0 && (
               <p className="text-xs text-orange-500 mt-1">
                 {selectedAuxiliaries.length} saída{selectedAuxiliaries.length > 1 ? 's' : ''} de comissão serão geradas automaticamente.
               </p>
@@ -1700,11 +1732,13 @@ export default function NovoChamadoPage() {
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Condições de Pagamento</label>
               <input type="text" value={conditions} onChange={e => setConditions(e.target.value)} className={inputCls} />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Observações da OS</label>
-              <textarea rows={2} value={observations} onChange={e => setObservations(e.target.value)}
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none" />
-            </div>
+            {!isRodrigues && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Observações da OS</label>
+                <textarea rows={2} value={observations} onChange={e => setObservations(e.target.value)}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none" />
+              </div>
+            )}
           </div>
 
           {/* Pagamento */}

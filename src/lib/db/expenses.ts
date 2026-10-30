@@ -40,29 +40,3 @@ export async function deleteExpense(id: string) {
   const { error } = await supabase.from('expenses').delete().eq('id', id)
   if (error) throw error
 }
-
-// Cria/atualiza/remove a saída automática de "custo de peça" vinculada a
-// uma OS — usado pela Rodrigues Refrigeração pra refletir no financeiro
-// o valor gasto com peças em cada serviço aprovado.
-export async function upsertPartsExpense(serviceOrderId: string, amount: number, dueDate: string, description: string) {
-  const supabase = createClient()
-  const { data: existing } = await supabase
-    .from('expenses')
-    .select('id')
-    .eq('source_service_order_id', serviceOrderId)
-    .eq('category', 'Peças')
-    .maybeSingle()
-
-  if (amount <= 0) {
-    if (existing) await deleteExpense(existing.id)
-    return
-  }
-  if (existing) {
-    await updateExpense(existing.id, { amount, description, due_date: dueDate })
-  } else {
-    await createExpense({
-      description, category: 'Peças', amount, type: 'avulso', status: 'pendente',
-      due_date: dueDate, source_service_order_id: serviceOrderId,
-    })
-  }
-}

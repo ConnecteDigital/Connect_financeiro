@@ -12,6 +12,7 @@ import { createClient } from '@/lib/supabase/client'
 import { getOriginLabel } from '@/lib/use-call-origins'
 import { useTenant } from '@/lib/tenant-context'
 import { mapsUrl } from '@/lib/maps'
+import { formatAddress, navigationAddress } from '@/lib/address'
 
 const statusConfig: Record<string, { label: string; color: string; bg: string; icon: React.ElementType }> = {
   agendado: { label: 'Agendado', color: 'text-blue-700', bg: 'bg-blue-100', icon: Clock },
@@ -158,7 +159,11 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
   }
 
   const so = call.service_orders?.[0]
-  const fullAddress = [call.call_address, call.call_neighborhood, call.call_city].filter(Boolean).join(', ')
+  const addressParts = {
+    address: call.call_address, number: call.address_number, complement: call.address_complement,
+    neighborhood: call.call_neighborhood, city: call.call_city,
+  }
+  const fullAddress = formatAddress(addressParts)
   const StatusIcon = statusConfig[call.status]?.icon || Phone
   const cfg = statusConfig[call.status]
 
@@ -324,7 +329,10 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
               {call.contact_phone && <p className="text-sm text-slate-500 mt-0.5">{call.contact_phone}</p>}
               {fullAddress && (
                 <div className="flex items-start justify-between gap-2 mt-2 pt-2 border-t border-slate-50">
-                  <p className="text-sm text-slate-600 flex-1">📍 {fullAddress}</p>
+                  <div className="flex-1">
+                    <p className="text-sm text-slate-600">📍 {fullAddress}</p>
+                    {call.address_reference && <p className="text-xs text-slate-400 mt-0.5">Referência: {call.address_reference}</p>}
+                  </div>
                   <button onClick={() => copyAddress(fullAddress)}
                     className="flex-shrink-0 p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition">
                     {addressCopied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
@@ -332,7 +340,7 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
                 </div>
               )}
               {fullAddress && (
-                <a href={mapsUrl(fullAddress)} target="_blank" rel="noopener noreferrer"
+                <a href={mapsUrl(navigationAddress(addressParts))} target="_blank" rel="noopener noreferrer"
                   className="mt-3 flex items-center justify-center gap-2 text-sm font-bold px-4 py-3 rounded-xl bg-blue-600 text-white hover:bg-blue-700 active:scale-[0.98] transition shadow-sm">
                   <Navigation className="w-4 h-4" />
                   Abrir no Waze

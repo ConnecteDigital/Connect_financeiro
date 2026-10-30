@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { use } from 'react'
 import { useRouter } from 'next/navigation'
 import { getClient, deleteClient } from '@/lib/db/clients'
+import { formatAddress } from '@/lib/address'
 
 const fmt = (v: number) => `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
 
@@ -144,7 +145,7 @@ export default function ClienteDetailPage({ params }: { params: Promise<{ id: st
               <MapPin className="w-3 h-3" /> Endereço
             </p>
             <p className="text-slate-700 mt-0.5">
-              {client.address}{client.neighborhood ? `, ${client.neighborhood}` : ''} — {client.city}{client.state ? `/${client.state}` : ''} {client.cep ? `· CEP ${client.cep}` : ''}
+              {formatAddress({ address: client.address, number: client.address_number, complement: client.address_complement })}{client.neighborhood ? `, ${client.neighborhood}` : ''} — {client.city}{client.state ? `/${client.state}` : ''} {client.cep ? `· CEP ${client.cep}` : ''}
             </p>
           </div>}
         </div>

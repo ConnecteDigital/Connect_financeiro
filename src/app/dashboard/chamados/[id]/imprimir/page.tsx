@@ -5,6 +5,7 @@ import { use } from 'react'
 import Link from 'next/link'
 import { getCall } from '@/lib/db/calls'
 import { useTenant } from '@/lib/tenant-context'
+import { formatAddress } from '@/lib/address'
 import { ArrowLeft, Share2, Loader2, FileImage, FileText } from 'lucide-react'
 
 const BRL = (v: number | string) =>
@@ -192,7 +193,13 @@ function ImprimirContent({ id }: { id: string }) {
         <div style={{ display: 'flex', border: B, borderTop: 'none' }}>
           <div style={{ flex: 2, ...cellSt, borderRight: B }}>
             <span style={labelSt}>Endereço</span>
-            <span style={valueSt}>{client?.address || call.call_address || ''}</span>
+            <span style={valueSt}>
+              {isRodrigues
+                ? (client?.address
+                    ? formatAddress({ address: client.address, number: client.address_number, complement: client.address_complement })
+                    : formatAddress({ address: call.call_address, number: call.address_number, complement: call.address_complement }))
+                : (client?.address || call.call_address || '')}
+            </span>
           </div>
           <div style={{ flex: 1, ...cellSt, borderRight: B }}>
             <span style={labelSt}>Bairro</span>
@@ -242,7 +249,14 @@ function ImprimirContent({ id }: { id: string }) {
         {/* Endereço do Serviço */}
         <div style={{ border: B, borderTop: 'none', ...cellSt }}>
           <span style={labelSt}>Endereço do Serviço</span>
-          <span style={valueSt}>{call.call_address ? `${call.call_address}${call.call_city ? ` - ${call.call_city}` : ''}` : (client?.address || '')}</span>
+          <span style={valueSt}>
+            {isRodrigues
+              ? formatAddress({ address: call.call_address, number: call.address_number, complement: call.address_complement, neighborhood: call.call_neighborhood, city: call.call_city })
+              : (call.call_address ? `${call.call_address}${call.call_city ? ` - ${call.call_city}` : ''}` : (client?.address || ''))}
+          </span>
+          {isRodrigues && call.address_reference && (
+            <span style={{ display: 'block', fontSize: 9, color: '#555', marginTop: 2 }}>Referência: {call.address_reference}</span>
+          )}
         </div>
 
         {/* Tipo/Marca do Aparelho — só Rodrigues */}
@@ -307,6 +321,18 @@ function ImprimirContent({ id }: { id: string }) {
             <span style={{ fontWeight: 900, fontSize: 14 }}>{BRL(valorTotal)}</span>
           </div>
         </div>
+
+        {/* ── Descrição do serviço (Rodrigues) ── */}
+        {isRodrigues && so.observations && (
+          <>
+            <div style={{ border: B, borderTop: 'none', background: '#f5f5f5', padding: '3px 8px', textAlign: 'center', fontWeight: 700, fontSize: 11, letterSpacing: '0.04em' }}>
+              DESCRIÇÃO DO SERVIÇO
+            </div>
+            <div style={{ border: B, borderTop: 'none', ...cellSt, fontSize: 11, whiteSpace: 'pre-wrap' }}>
+              {so.observations}
+            </div>
+          </>
+        )}
 
         {/* ── Forma de Pagamento ── */}
         <div style={{ border: B, borderTop: 'none', ...cellSt }}>
