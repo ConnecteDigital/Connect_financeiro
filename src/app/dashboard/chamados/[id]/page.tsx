@@ -335,7 +335,7 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
                 <a href={mapsUrl(fullAddress)} target="_blank" rel="noopener noreferrer"
                   className="mt-3 flex items-center justify-center gap-2 text-sm font-bold px-4 py-3 rounded-xl bg-blue-600 text-white hover:bg-blue-700 active:scale-[0.98] transition shadow-sm">
                   <Navigation className="w-4 h-4" />
-                  Abrir no Google Maps
+                  Abrir no Waze
                 </a>
               )}
             </div>

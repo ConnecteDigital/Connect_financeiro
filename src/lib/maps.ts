@@ -1,5 +1,5 @@
-// Link universal do Google Maps: abre o app nativo (Android/iOS) quando
-// instalado, ou o Google Maps no navegador como alternativa.
+// Link universal do Waze: abre o app (Android/iOS) já navegando até o
+// endereço quando instalado, ou o Waze no navegador como alternativa.
 export function mapsUrl(address: string): string {
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`
+  return `https://waze.com/ul?q=${encodeURIComponent(address)}&navigate=yes`
 }
