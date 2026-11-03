@@ -6,8 +6,6 @@ import Link from 'next/link'
 import { use } from 'react'
 import { useRouter } from 'next/navigation'
 import { getCall, deleteCall, getReturnCalls, getCallSummary } from '@/lib/db/calls'
-import { updateCall } from '@/lib/db/calls'
-import { updateExpense } from '@/lib/db/expenses'
 import { createClient } from '@/lib/supabase/client'
 import { getOriginLabel } from '@/lib/use-call-origins'
 import { useTenant } from '@/lib/tenant-context'
@@ -15,6 +13,8 @@ import { mapsUrl } from '@/lib/maps'
 import { formatAddress, navigationAddress } from '@/lib/address'
 import { serviceWithoutAppliance } from '@/lib/service-config'
 import ServiceTimer from '@/components/ServiceTimer'
+import TecnicoCallView from '@/components/TecnicoCallView'
+import { useTecnicoQueue } from '@/lib/tecnico-queue'
 
 const statusConfig: Record<string, { label: string; color: string; bg: string; icon: React.ElementType }> = {
   agendado: { label: 'Agendado', color: 'text-blue-700', bg: 'bg-blue-100', icon: Clock },
@@ -57,6 +57,7 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
   const [returnCalls, setReturnCalls] = useState<any[]>([])
   const [originalCall, setOriginalCall] = useState<any>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const queue = useTecnicoQueue(isTecnico)
 
   async function copyAddress(text: string) {
     try {
@@ -171,6 +172,16 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
         <p className="text-slate-500">Chamado não encontrado.</p>
         <Link href="/dashboard/chamados" className="text-blue-600 text-sm mt-2 inline-block hover:underline">← Voltar</Link>
       </div>
+    )
+  }
+
+  if (isTecnico) {
+    if (!queue.loaded) {
+      return <div className="max-w-2xl mx-auto h-40 bg-slate-50 rounded-xl animate-pulse" />
+    }
+    return (
+      <TecnicoCallView call={call} lock={queue.lockOf(call)}
+        onChanged={() => { getCall(id).then(setCall).catch(console.error); queue.reload().catch(console.error) }} />
     )
   }
 

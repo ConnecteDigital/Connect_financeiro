@@ -7,6 +7,7 @@ import {
   getCallVisits, startServiceVisit, finishServiceVisit, VISIT_OUTCOME_LABEL, type VisitOutcome,
 } from '@/lib/db/service-visits'
 import { formatDuration } from '@/lib/business-hours'
+import { useTenant } from '@/lib/tenant-context'
 
 const END_REASONS: { value: VisitOutcome; label: string; date: 'required' | 'optional' | 'none'; notes: boolean }[] = [
   { value: 'remarcado', label: 'Faltou peça / remarcar', date: 'required', notes: false },
@@ -29,6 +30,7 @@ export default function ServiceTimer({ callId, status, onChanged }: {
   onChanged: () => void
 }) {
   const router = useRouter()
+  const { isTecnico } = useTenant()
   const [visits, setVisits] = useState<any[]>([])
   const [loaded, setLoaded] = useState(false)
   const [now, setNow] = useState(() => Date.now())
@@ -72,7 +74,8 @@ export default function ServiceTimer({ callId, status, onChanged }: {
     setBusy(true); setError('')
     try {
       await finishServiceVisit(callId, 'aprovado')
-      router.push(`/dashboard/chamados/${callId}/editar`)
+      // Técnico completa a OS numa tela própria (não edita o chamado do dono)
+      router.push(`/dashboard/chamados/${callId}/${isTecnico ? 'finalizar' : 'editar'}`)
     } catch (e: any) {
       setError(e?.message ?? 'Não foi possível encerrar o serviço.')
       setBusy(false)

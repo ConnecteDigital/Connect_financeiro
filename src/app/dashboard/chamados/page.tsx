@@ -1,13 +1,15 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { Plus, Search, CheckCircle, XCircle, Clock, ChevronRight, ChevronLeft, List, CalendarDays, FileText, Wallet, SlidersHorizontal, RotateCcw } from 'lucide-react'
+import { Plus, Search, CheckCircle, XCircle, Clock, ChevronRight, ChevronLeft, List, CalendarDays, FileText, Wallet, SlidersHorizontal, RotateCcw, Lock } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { getCalls, updateCall } from '@/lib/db/calls'
 import { getOriginLabel } from '@/lib/use-call-origins'
 import { useTenant } from '@/lib/tenant-context'
 import RetornoModal from '@/components/RetornoModal'
+import { useTecnicoQueue, compareQueue } from '@/lib/tecnico-queue'
+import { formatAddress } from '@/lib/address'
 
 type Status = 'todos' | 'agendado' | 'aprovado' | 'nao_quis_visita' | 'nao_aprovou' | 'cancelado' | 'pagou_somente_visita' | 'retorno'
 
@@ -74,6 +76,7 @@ export default function ChamadosPage() {
   const [actionRefuseReason, setActionRefuseReason] = useState('nao_aprovou')
   const [actionRefuseNotes, setActionRefuseNotes] = useState('')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const { lockOf, reload: reloadQueue } = useTecnicoQueue(isTecnico)
 
   // Agrupa os chamados por dia do serviço (usa a data agendada; sem ela, a data do chamado)
   const callsByDay = useMemo(() => {
@@ -128,7 +131,7 @@ export default function ChamadosPage() {
 
   // Filtro de origem + canal aplicado client-side
   const filteredCalls = useMemo(() => {
-    return calls.filter(c => {
+    const list = calls.filter(c => {
       if (originFilter !== 'todos' && (c.origin ?? '') !== originFilter) return false
       if (channelFilter !== 'todos' && (c.call_channel ?? '') !== channelFilter) return false
       if (isRodrigues) {
@@ -137,9 +140,12 @@ export default function ChamadosPage() {
       }
       return true
     })
-  }, [calls, originFilter, channelFilter, isRodrigues, dayFilter])
+    // Técnico: na ordem do agendamento (horário), que é a ordem da fila dele
+    return isTecnico ? list.sort(compareQueue) : list
+  }, [calls, originFilter, channelFilter, isRodrigues, isTecnico, dayFilter])
 
   useEffect(() => { load() }, [load])
+  useEffect(() => { if (isTecnico) reloadQueue().catch(console.error) }, [isTecnico, calls, reloadQueue])
 
   async function handleQuickApprove(callId: string, notes?: string) {
     setUpdatingId(callId)
@@ -252,18 +258,22 @@ export default function ChamadosPage() {
                 value={search} onChange={e => handleSearchChange(e.target.value)}
                 className="w-full pl-9 pr-4 py-2.5 bg-white border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] shadow-sm" />
             </div>
-            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as Status)}
-              className="flex-shrink-0 px-3 py-2.5 bg-white border border-zinc-200 rounded-xl text-xs font-semibold text-zinc-600 shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]">
-              {filtersRodrigues.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
-            </select>
-            <button onClick={() => setFiltersOpen(o => !o)}
-              className={`flex-shrink-0 p-2.5 rounded-xl border shadow-sm transition ${filtersOpen ? 'text-white border-transparent' : 'bg-white text-zinc-500 border-zinc-200'}`}
-              style={filtersOpen ? { background: 'var(--primary)' } : {}}>
-              <SlidersHorizontal className="w-4 h-4" />
-            </button>
+            {!isTecnico && (
+              <>
+                <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as Status)}
+                  className="flex-shrink-0 px-3 py-2.5 bg-white border border-zinc-200 rounded-xl text-xs font-semibold text-zinc-600 shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]">
+                  {filtersRodrigues.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                </select>
+                <button onClick={() => setFiltersOpen(o => !o)}
+                  className={`flex-shrink-0 p-2.5 rounded-xl border shadow-sm transition ${filtersOpen ? 'text-white border-transparent' : 'bg-white text-zinc-500 border-zinc-200'}`}
+                  style={filtersOpen ? { background: 'var(--primary)' } : {}}>
+                  <SlidersHorizontal className="w-4 h-4" />
+                </button>
+              </>
+            )}
           </div>
 
-          {filtersOpen && (
+          {filtersOpen && !isTecnico && (
             <div className="space-y-2">
               {presentOrigins.length > 0 && (
                 <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
@@ -483,13 +493,57 @@ export default function ChamadosPage() {
       ) : filteredCalls.length === 0 ? (
         <div className="bg-white rounded-2xl border border-zinc-100 p-12 text-center">
           <p className="text-zinc-400 text-sm">Nenhum chamado encontrado</p>
-          <Link href="/dashboard/chamados/novo" className="text-sm font-medium mt-2 inline-block" style={{ color: 'var(--primary)' }}>
-            Registrar novo chamado
-          </Link>
+          {!isTecnico && (
+            <Link href="/dashboard/chamados/novo" className="text-sm font-medium mt-2 inline-block" style={{ color: 'var(--primary)' }}>
+              Registrar novo chamado
+            </Link>
+          )}
         </div>
       ) : (
         <div className="space-y-2.5">
           {filteredCalls.map(c => {
+            if (isTecnico) {
+              const lock = lockOf(c)
+              const time = c.scheduled_time ? String(c.scheduled_time).slice(0, 5) : null
+              const name = c.client?.name ?? c.contact_name ?? 'Sem identificação'
+              if (lock.locked) {
+                return (
+                  <div key={c.id} className="bg-zinc-50 rounded-2xl border border-zinc-100 p-4 flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-zinc-100">
+                      <Lock className="w-5 h-5 text-zinc-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-zinc-700 text-sm truncate">
+                        {time && <span className="text-zinc-500">{time} · </span>}{name}
+                      </p>
+                      {c.service_category && <p className="text-xs text-zinc-500 mt-0.5">{c.service_category}</p>}
+                      <p className="text-xs text-zinc-400 mt-1.5">{lock.message}</p>
+                    </div>
+                  </div>
+                )
+              }
+              const address = formatAddress({
+                address: c.call_address, number: c.address_number, complement: c.address_complement,
+                neighborhood: c.call_neighborhood, city: c.call_city,
+              })
+              const cfg = statusConfig[c.status]
+              return (
+                <Link key={c.id} href={`/dashboard/chamados/${c.id}`}
+                  className="block bg-white rounded-2xl border border-zinc-100 p-4 hover:shadow-sm transition active:scale-[0.99]">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-semibold text-zinc-900 text-sm truncate">
+                      {time && <span style={{ color: 'var(--primary)' }}>{time} · </span>}{name}
+                    </p>
+                    <ChevronRight className="w-4 h-4 text-zinc-300 flex-shrink-0" />
+                  </div>
+                  {c.service_category && <p className="text-xs text-zinc-500 mt-0.5">{c.service_category}</p>}
+                  {address && <p className="text-xs text-zinc-500 mt-1">📍 {address}</p>}
+                  {c.status !== 'agendado' && cfg && (
+                    <span className={`inline-block mt-2 px-2 py-0.5 rounded-full text-xs font-medium border ${cfg.color}`}>{cfg.label}</span>
+                  )}
+                </Link>
+              )
+            }
             const so = c.service_orders?.[0]
             const cfg = statusConfig[c.status]
             const StatusIcon = cfg?.icon || Clock

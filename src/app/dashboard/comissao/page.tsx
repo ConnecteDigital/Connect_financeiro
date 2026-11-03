@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Wallet, CheckCircle2, Clock } from 'lucide-react'
+import { Wallet, CheckCircle2, Clock, ChevronLeft, ChevronRight } from 'lucide-react'
 import { getExpenses } from '@/lib/db/expenses'
 
 const fmt = (v: number) => `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
@@ -22,18 +22,38 @@ export default function ComissaoPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  const cutoff = (() => { const d = new Date(); d.setDate(d.getDate() - 30); return localDate(d) })()
-  const last30 = entries.filter(e => e.due_date >= cutoff)
+  // Comissão é sempre de UM mês (pela data de vencimento): virou o mês,
+  // começa do zero. Os meses anteriores ficam na seta ‹; não passa do atual.
+  const [monthOffset, setMonthOffset] = useState(0)
+  const now = new Date()
+  const first = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1)
+  const start = localDate(first)
+  const end = localDate(new Date(now.getFullYear(), now.getMonth() + monthOffset + 1, 0))
+  const monthLabel = first.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+  const monthEntries = entries
+    .filter(e => e.due_date >= start && e.due_date <= end)
+    .sort((a, b) => String(b.due_date).localeCompare(String(a.due_date)))
 
-  const total = last30.reduce((s, e) => s + Number(e.amount || 0), 0)
-  const paid = last30.filter(e => e.status === 'pago').reduce((s, e) => s + Number(e.amount || 0), 0)
-  const pending = total - paid
+  const sum = (list: any[]) => list.reduce((s, e) => s + Number(e.amount || 0), 0)
+  const total = sum(monthEntries)
+  const paid = sum(monthEntries.filter(e => e.status === 'pago'))
+  const pending = sum(monthEntries.filter(e => e.status === 'pendente'))
 
   return (
     <div className="max-w-2xl mx-auto space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-zinc-900">Minha Comissão</h1>
-        <p className="text-zinc-500 text-sm mt-0.5">Últimos 30 dias</p>
+      </div>
+
+      <div className="flex items-center justify-between bg-white rounded-2xl border border-zinc-100 px-4 py-2.5 shadow-sm">
+        <button onClick={() => setMonthOffset(o => o - 1)} className="p-1.5 hover:bg-zinc-100 rounded-lg text-zinc-500">
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+        <p className="font-semibold text-zinc-800 capitalize text-sm">{monthLabel}</p>
+        <button onClick={() => setMonthOffset(o => Math.min(0, o + 1))} disabled={monthOffset === 0}
+          className="p-1.5 hover:bg-zinc-100 rounded-lg text-zinc-500 disabled:opacity-30">
+          <ChevronRight className="w-5 h-5" />
+        </button>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
@@ -60,11 +80,11 @@ export default function ComissaoPage() {
           <div className="p-6 space-y-3">
             {[...Array(3)].map((_, i) => <div key={i} className="h-12 bg-zinc-50 rounded-lg animate-pulse" />)}
           </div>
-        ) : last30.length === 0 ? (
-          <p className="px-4 py-10 text-center text-sm text-zinc-400">Nenhuma comissão nos últimos 30 dias</p>
+        ) : monthEntries.length === 0 ? (
+          <p className="px-4 py-10 text-center text-sm text-zinc-400">Nenhuma comissão neste mês</p>
         ) : (
           <div className="divide-y divide-zinc-50">
-            {last30.map(e => (
+            {monthEntries.map(e => (
               <div key={e.id} className="flex items-center justify-between px-4 py-3">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-zinc-800 truncate">{e.description}</p>

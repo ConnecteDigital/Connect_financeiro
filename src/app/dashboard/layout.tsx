@@ -425,9 +425,19 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
   // cair em alguma rota fora da nav restrita dele.
   const TECNICO_ALLOWED_PREFIXES = ['/dashboard/chamados', '/dashboard/comissao', '/dashboard/estoque']
   useEffect(() => {
-    if (isTecnico && pathname !== '/dashboard' && !TECNICO_ALLOWED_PREFIXES.some(p => pathname.startsWith(p))) {
+    if (!isTecnico) return
+    if (pathname !== '/dashboard' && !TECNICO_ALLOWED_PREFIXES.some(p => pathname.startsWith(p))) {
       router.replace('/dashboard')
+      return
     }
+    // Técnico não cria nem edita chamado (só o dono). Editar/romaneio do
+    // chamado voltam pro detalhe; "novo" volta pra lista.
+    if (pathname === '/dashboard/chamados/novo') {
+      router.replace('/dashboard/chamados')
+      return
+    }
+    const m = pathname.match(/^\/dashboard\/chamados\/([^/]+)\/(editar|romaneio|nova-os)/)
+    if (m) router.replace(`/dashboard/chamados/${m[1]}`)
   }, [isTecnico, pathname, router])
 
   const isPrintPage = pathname.includes('/imprimir')
