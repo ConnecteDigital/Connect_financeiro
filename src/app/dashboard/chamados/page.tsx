@@ -8,10 +8,10 @@ import { getCalls, updateCall } from '@/lib/db/calls'
 import { getOriginLabel } from '@/lib/use-call-origins'
 import { useTenant } from '@/lib/tenant-context'
 import RetornoModal from '@/components/RetornoModal'
-import { useTecnicoQueue, compareQueue } from '@/lib/tecnico-queue'
+import { useTecnicoQueue, compareQueue, callDay, callKind, finishedDay, CALL_KIND_STYLE, FINISHED_TABS } from '@/lib/tecnico-queue'
 import { formatAddress } from '@/lib/address'
 
-type Status = 'todos' | 'agendado' | 'aprovado' | 'nao_quis_visita' | 'nao_aprovou' | 'cancelado' | 'pagou_somente_visita' | 'retorno'
+type Status = 'todos' | 'agendado' | 'aprovado' | 'nao_quis_visita' | 'nao_aprovou' | 'cancelado' | 'pagou_somente_visita' | 'retorno' | 'orcamento'
 
 const statusConfig: Record<string, { label: string; color: string; icon: React.ElementType }> = {
   agendado:        { label: 'Agendado',    color: 'bg-blue-50 text-blue-700 border-blue-200',        icon: Clock },
@@ -21,6 +21,7 @@ const statusConfig: Record<string, { label: string; color: string; icon: React.E
   cancelado:       { label: 'Cancelado',  color: 'bg-red-50 text-red-600 border-red-200',            icon: XCircle },
   pagou_somente_visita: { label: 'Pagou a visita', color: 'bg-cyan-50 text-cyan-700 border-cyan-200', icon: Wallet },
   retorno:         { label: 'Retorno',     color: 'bg-violet-50 text-violet-700 border-violet-200',  icon: RotateCcw },
+  orcamento:       { label: 'Orçamento',   color: 'bg-sky-50 text-sky-700 border-sky-200',           icon: FileText },
 }
 
 const paymentConfig: Record<string, { label: string; color: string }> = {
@@ -43,6 +44,7 @@ const filtersRodrigues: { value: Status; label: string }[] = [
   { value: 'todos', label: 'Todos' },
   { value: 'agendado', label: 'Agendado' },
   { value: 'aprovado', label: 'Aprovado' },
+  { value: 'orcamento', label: 'Orçamento' },
   { value: 'nao_aprovou', label: 'Não aprovou' },
   { value: 'pagou_somente_visita', label: 'Pagou a visita' },
   { value: 'retorno', label: 'Retorno' },
@@ -76,7 +78,8 @@ export default function ChamadosPage() {
   const [actionRefuseReason, setActionRefuseReason] = useState('nao_aprovou')
   const [actionRefuseNotes, setActionRefuseNotes] = useState('')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const { lockOf, reload: reloadQueue } = useTecnicoQueue(isTecnico)
+  const { lockOf, visitsOf, reload: reloadQueue } = useTecnicoQueue(isTecnico)
+  const [finishedTab, setFinishedTab] = useState(FINISHED_TABS[0].key)
 
   // Agrupa os chamados por dia do serviço (usa a data agendada; sem ela, a data do chamado)
   const callsByDay = useMemo(() => {
@@ -143,6 +146,22 @@ export default function ChamadosPage() {
     // Técnico: na ordem do agendamento (horário), que é a ordem da fila dele
     return isTecnico ? list.sort(compareQueue) : list
   }, [calls, originFilter, channelFilter, isRodrigues, isTecnico, dayFilter])
+
+  // Técnico: a fila tem só os agendados do dia; os concluídos vão pras abas
+  // (pelo dia em que a última visita terminou)
+  const tecnicoQueue = useMemo(
+    () => isTecnico ? calls.filter(c => c.status === 'agendado' && callDay(c) === dayFilter).sort(compareQueue) : [],
+    [calls, isTecnico, dayFilter])
+  const tecnicoFinished = useMemo(() => {
+    const out: Record<string, any[]> = {}
+    for (const t of FINISHED_TABS) out[t.key] = []
+    if (!isTecnico) return out
+    for (const c of calls) {
+      const tab = FINISHED_TABS.find(t => t.statuses.includes(c.status))
+      if (tab && finishedDay(c, visitsOf(c.id)) === dayFilter) out[tab.key].push(c)
+    }
+    return out
+  }, [calls, isTecnico, dayFilter, visitsOf])
 
   useEffect(() => { load() }, [load])
   useEffect(() => { if (isTecnico) reloadQueue().catch(console.error) }, [isTecnico, calls, reloadQueue])
@@ -490,6 +509,93 @@ export default function ChamadosPage() {
             </div>
           )}
         </div>
+      ) : isTecnico ? (
+        <div className="space-y-4">
+          {tecnicoQueue.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-zinc-100 p-10 text-center">
+              <p className="text-zinc-400 text-sm">Nenhum chamado agendado neste dia</p>
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {tecnicoQueue.map(c => {
+                const lock = lockOf(c)
+                const time = c.scheduled_time ? String(c.scheduled_time).slice(0, 5) : null
+                const name = c.client?.name ?? c.contact_name ?? 'Sem identificação'
+                const kind = callKind(c, visitsOf(c.id))
+                const head = (
+                  <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                    <p className={`font-semibold text-sm truncate ${lock.locked ? 'text-zinc-700' : 'text-zinc-900'}`}>
+                      {time && <span style={lock.locked ? undefined : { color: 'var(--primary)' }} className={lock.locked ? 'text-zinc-500' : ''}>{time} · </span>}{name}
+                    </p>
+                    <span className={`px-1.5 py-0.5 rounded-md text-[11px] font-semibold border ${CALL_KIND_STYLE[kind]}`}>{kind}</span>
+                    {c.call_neighborhood && <span className="text-xs text-zinc-500">{c.call_neighborhood}</span>}
+                  </div>
+                )
+                if (lock.locked) {
+                  return (
+                    <div key={c.id} className="bg-zinc-50 rounded-2xl border border-zinc-100 p-4 flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-zinc-100">
+                        <Lock className="w-5 h-5 text-zinc-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        {head}
+                        {c.service_category && <p className="text-xs text-zinc-500 mt-0.5">{c.service_category}</p>}
+                        <p className="text-xs text-zinc-400 mt-1.5">{lock.message}</p>
+                      </div>
+                    </div>
+                  )
+                }
+                const address = formatAddress({
+                  address: c.call_address, number: c.address_number, complement: c.address_complement,
+                  neighborhood: c.call_neighborhood, city: c.call_city,
+                })
+                return (
+                  <Link key={c.id} href={`/dashboard/chamados/${c.id}`}
+                    className="block bg-white rounded-2xl border border-zinc-100 p-4 hover:shadow-sm transition active:scale-[0.99]">
+                    <div className="flex items-start justify-between gap-2">
+                      {head}
+                      <ChevronRight className="w-4 h-4 text-zinc-300 flex-shrink-0" />
+                    </div>
+                    {c.service_category && <p className="text-xs text-zinc-500 mt-0.5">{c.service_category}</p>}
+                    {address && <p className="text-xs text-zinc-500 mt-1">📍 {address}</p>}
+                  </Link>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Concluídos do dia */}
+          <div className="bg-white rounded-2xl border border-zinc-100 shadow-sm overflow-hidden">
+            <div className="flex border-b border-zinc-100">
+              {FINISHED_TABS.map(t => (
+                <button key={t.key} onClick={() => setFinishedTab(t.key)}
+                  className={`flex-1 px-2 py-2.5 text-xs sm:text-sm font-semibold transition border-b-2 ${finishedTab === t.key ? 'text-zinc-900' : 'text-zinc-400 border-transparent'}`}
+                  style={finishedTab === t.key ? { borderColor: 'var(--primary)' } : {}}>
+                  {t.label} ({tecnicoFinished[t.key].length})
+                </button>
+              ))}
+            </div>
+            {tecnicoFinished[finishedTab].length === 0 ? (
+              <p className="px-4 py-6 text-center text-sm text-zinc-400">Nada por aqui neste dia</p>
+            ) : (
+              <div className="divide-y divide-zinc-50">
+                {tecnicoFinished[finishedTab].map(c => {
+                  const cfg = statusConfig[c.status]
+                  return (
+                    <Link key={c.id} href={`/dashboard/chamados/${c.id}`}
+                      className="flex items-center justify-between gap-2 px-4 py-3 hover:bg-zinc-50 transition">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-zinc-800 truncate">{c.client?.name ?? c.contact_name ?? 'Sem identificação'}</p>
+                        <p className="text-xs text-zinc-500 truncate mt-0.5">{[c.service_category, c.call_neighborhood].filter(Boolean).join(' · ')}</p>
+                      </div>
+                      {cfg && <span className={`flex-shrink-0 px-2 py-0.5 rounded-full text-xs font-medium border ${cfg.color}`}>{cfg.label}</span>}
+                    </Link>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
       ) : filteredCalls.length === 0 ? (
         <div className="bg-white rounded-2xl border border-zinc-100 p-12 text-center">
           <p className="text-zinc-400 text-sm">Nenhum chamado encontrado</p>
@@ -502,54 +608,12 @@ export default function ChamadosPage() {
       ) : (
         <div className="space-y-2.5">
           {filteredCalls.map(c => {
-            if (isTecnico) {
-              const lock = lockOf(c)
-              const time = c.scheduled_time ? String(c.scheduled_time).slice(0, 5) : null
-              const name = c.client?.name ?? c.contact_name ?? 'Sem identificação'
-              if (lock.locked) {
-                return (
-                  <div key={c.id} className="bg-zinc-50 rounded-2xl border border-zinc-100 p-4 flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-zinc-100">
-                      <Lock className="w-5 h-5 text-zinc-400" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-zinc-700 text-sm truncate">
-                        {time && <span className="text-zinc-500">{time} · </span>}{name}
-                      </p>
-                      {c.service_category && <p className="text-xs text-zinc-500 mt-0.5">{c.service_category}</p>}
-                      <p className="text-xs text-zinc-400 mt-1.5">{lock.message}</p>
-                    </div>
-                  </div>
-                )
-              }
-              const address = formatAddress({
-                address: c.call_address, number: c.address_number, complement: c.address_complement,
-                neighborhood: c.call_neighborhood, city: c.call_city,
-              })
-              const cfg = statusConfig[c.status]
-              return (
-                <Link key={c.id} href={`/dashboard/chamados/${c.id}`}
-                  className="block bg-white rounded-2xl border border-zinc-100 p-4 hover:shadow-sm transition active:scale-[0.99]">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="font-semibold text-zinc-900 text-sm truncate">
-                      {time && <span style={{ color: 'var(--primary)' }}>{time} · </span>}{name}
-                    </p>
-                    <ChevronRight className="w-4 h-4 text-zinc-300 flex-shrink-0" />
-                  </div>
-                  {c.service_category && <p className="text-xs text-zinc-500 mt-0.5">{c.service_category}</p>}
-                  {address && <p className="text-xs text-zinc-500 mt-1">📍 {address}</p>}
-                  {c.status !== 'agendado' && cfg && (
-                    <span className={`inline-block mt-2 px-2 py-0.5 rounded-full text-xs font-medium border ${cfg.color}`}>{cfg.label}</span>
-                  )}
-                </Link>
-              )
-            }
             const so = c.service_orders?.[0]
             const cfg = statusConfig[c.status]
             const StatusIcon = cfg?.icon || Clock
             const pay = so ? paymentConfig[so.payment_status] : null
-            const iconBg = c.status === 'aprovado' ? 'bg-emerald-50' : c.status === 'agendado' ? 'bg-blue-50' : c.status === 'cancelado' ? 'bg-red-50' : c.status === 'retorno' ? 'bg-violet-50' : 'bg-zinc-50'
-            const iconColor = c.status === 'aprovado' ? 'text-emerald-500' : c.status === 'agendado' ? 'text-blue-500' : c.status === 'cancelado' ? 'text-red-500' : c.status === 'retorno' ? 'text-violet-500' : 'text-zinc-400'
+            const iconBg = c.status === 'aprovado' ? 'bg-emerald-50' : c.status === 'agendado' ? 'bg-blue-50' : c.status === 'cancelado' ? 'bg-red-50' : c.status === 'retorno' ? 'bg-violet-50' : c.status === 'orcamento' ? 'bg-sky-50' : 'bg-zinc-50'
+            const iconColor = c.status === 'aprovado' ? 'text-emerald-500' : c.status === 'agendado' ? 'text-blue-500' : c.status === 'cancelado' ? 'text-red-500' : c.status === 'retorno' ? 'text-violet-500' : c.status === 'orcamento' ? 'text-sky-500' : 'text-zinc-400'
 
             return (
               <div key={c.id} className="bg-white rounded-2xl border border-zinc-100 hover:shadow-sm transition" style={{ ['--tw-border-opacity' as any]: 1 }} onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(var(--primary-rgb),0.35)')} onMouseLeave={e => (e.currentTarget.style.borderColor = '')}>

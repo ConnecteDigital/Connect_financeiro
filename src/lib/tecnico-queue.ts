@@ -39,6 +39,37 @@ export function compareQueue(a: QueueCall, b: QueueCall) {
 
 export interface LockInfo { locked: boolean; message: string }
 
+export interface VisitInfo { call_id: string; started_at: string; finished_at: string | null; outcome: string | null }
+
+// Tipo do chamado mostrado no selo da fila do técnico
+export type CallKind = 'Retorno' | 'Serviço' | 'Orçamento'
+export function callKind(call: { return_of_call_id?: string | null }, visits: VisitInfo[]): CallKind {
+  if (call.return_of_call_id) return 'Retorno'
+  // Já teve uma visita que terminou em orçamento: agora é a execução
+  if (visits.some(v => v.finished_at && v.outcome === 'orcamento')) return 'Serviço'
+  return 'Orçamento'
+}
+
+export const CALL_KIND_STYLE: Record<CallKind, string> = {
+  Retorno: 'bg-violet-50 text-violet-700 border-violet-200',
+  Serviço: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  Orçamento: 'bg-amber-50 text-amber-700 border-amber-200',
+}
+
+// Dia em que o chamado foi concluído: o fim da última visita; sem visita,
+// o dia agendado
+export function finishedDay(call: { date: string; scheduled_date?: string | null }, visits: VisitInfo[]): string {
+  const last = visits.filter(v => v.finished_at).sort((a, b) => String(b.finished_at).localeCompare(String(a.finished_at)))[0]
+  return last ? localYmd(new Date(last.finished_at!)) : callDay(call)
+}
+
+// Abas de concluídos do técnico
+export const FINISHED_TABS: { key: string; label: string; statuses: string[] }[] = [
+  { key: 'aprovados', label: 'Aprovados', statuses: ['aprovado', 'retorno'] },
+  { key: 'orcamentos', label: 'Orçamentos', statuses: ['orcamento'] },
+  { key: 'recusados', label: 'Recusados', statuses: ['nao_aprovou', 'pagou_somente_visita'] },
+]
+
 export function computeLocks(calls: QueueCall[], openCallIds: Set<string>, today: string): Map<string, LockInfo> {
   const locks = new Map<string, LockInfo>()
   const sorted = [...calls].sort(compareQueue)
@@ -63,6 +94,7 @@ export function computeLocks(calls: QueueCall[], openCallIds: Set<string>, today
 export function useTecnicoQueue(enabled: boolean) {
   const [calls, setCalls] = useState<QueueCall[]>([])
   const [openIds, setOpenIds] = useState<Set<string>>(new Set())
+  const [visits, setVisits] = useState<VisitInfo[]>([])
   const [today, setToday] = useState(localYmd)
   const [loaded, setLoaded] = useState(false)
 
@@ -71,10 +103,12 @@ export function useTecnicoQueue(enabled: boolean) {
     const supabase = createClient()
     const [callsRes, visitsRes] = await Promise.all([
       supabase.from('calls').select('id, date, scheduled_date, scheduled_time, created_at').eq('status', 'agendado'),
-      supabase.from('service_visits').select('call_id').is('finished_at', null),
+      supabase.from('service_visits').select('call_id, started_at, finished_at, outcome'),
     ])
+    const allVisits = (visitsRes.data ?? []) as VisitInfo[]
     setCalls((callsRes.data ?? []) as QueueCall[])
-    setOpenIds(new Set((visitsRes.data ?? []).map((v: any) => v.call_id)))
+    setVisits(allVisits)
+    setOpenIds(new Set(allVisits.filter(v => !v.finished_at).map(v => v.call_id)))
     setToday(localYmd())
     setLoaded(true)
   }, [enabled])
@@ -103,5 +137,7 @@ export function useTecnicoQueue(enabled: boolean) {
     return locks.get(call.id) ?? { locked: false, message: '' }
   }
 
-  return { loaded: !enabled || loaded, lockOf, reload: load }
+  const visitsOf = useCallback((callId: string) => visits.filter(v => v.call_id === callId), [visits])
+
+  return { loaded: !enabled || loaded, lockOf, visitsOf, reload: load }
 }

@@ -8,6 +8,7 @@ import { mapsUrl } from '@/lib/maps'
 import { formatAddress, navigationAddress } from '@/lib/address'
 import { getServiceOrderParts } from '@/lib/db/stock'
 import type { LockInfo } from '@/lib/tecnico-queue'
+import { paymentsFromOs, formatPaymentLine, osCardPending } from '@/lib/payments'
 
 const fmt = (v: number) => `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
 
@@ -110,7 +111,7 @@ export default function TecnicoCallView({ call, lock, onChanged }: {
         )}
       </div>
 
-      {call.status === 'aprovado' && !so && (
+      {(call.status === 'aprovado' || call.status === 'retorno') && !so && (
         <Link href={`/dashboard/chamados/${call.id}/finalizar`}
           className="flex items-center justify-center gap-2 py-3.5 rounded-xl text-base font-bold text-white"
           style={{ background: 'var(--primary)' }}>
@@ -128,14 +129,24 @@ export default function TecnicoCallView({ call, lock, onChanged }: {
             <span className="text-slate-500">Valor</span>
             <span className="font-bold text-slate-800">{fmt(so.total_value)}</span>
           </div>
-          {so.payment_method && (
+          {call.return_of_call_id && (
             <div className="flex justify-between text-sm">
+              <span className="text-slate-500">Cliente pagou a peça</span>
+              <span className="text-slate-700">{(call.return_parts_paid ?? Number(so.total_value) > 0) ? 'Sim' : 'Não'}</span>
+            </div>
+          )}
+          {paymentsFromOs(so).length > 0 && (
+            <div className="flex justify-between gap-3 text-sm">
               <span className="text-slate-500">Pagamento</span>
               <span className="text-slate-700 text-right">
-                {so.payment_method}
-                {so.card_type && ` (${so.card_type === 'credito' ? 'Crédito' : 'Débito'}${so.card_type === 'credito' && so.installments > 1 ? ` ${so.installments}x` : ''})`}
+                {paymentsFromOs(so).map((l, i) => <span key={i} className="block">{formatPaymentLine(l)}</span>)}
               </span>
             </div>
+          )}
+          {osCardPending(so) && (
+            <p className="text-xs rounded-lg bg-amber-50 border border-amber-100 text-amber-800 px-3 py-2">
+              Cartão aguardando confirmação do Rodrigues — sua comissão aparece depois disso.
+            </p>
           )}
           {parts.length > 0 && (
             <div className="text-sm">

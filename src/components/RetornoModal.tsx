@@ -19,8 +19,9 @@ function localToday() {
 
 const inputCls = 'w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white'
 
-// Retorno (garantia) da Rodrigues: escolhe um chamado aprovado e registra
-// a volta do técnico. Não cobra serviço; só a peça, se o cliente pagar.
+// Retorno (garantia) da Rodrigues: escolhe um chamado aprovado e agenda a
+// volta do técnico (ele finaliza pelo login dele) ou registra um retorno já
+// feito. Não cobra serviço; só a peça, se o cliente pagar.
 export default function RetornoModal({ onClose }: { onClose: () => void }) {
   const router = useRouter()
   const [search, setSearch] = useState('')
@@ -31,7 +32,9 @@ export default function RetornoModal({ onClose }: { onClose: () => void }) {
   const [auxiliaries, setAuxiliaries] = useState<any[]>([])
   const [stockItems, setStockItems] = useState<any[]>([])
   const [tecnicoId, setTecnicoId] = useState('')
+  const [mode, setMode] = useState<'agendar' | 'registrar'>('agendar')
   const [date, setDate] = useState(localToday)
+  const [time, setTime] = useState('')
   const [lines, setLines] = useState<PartLine[]>([])
   const [description, setDescription] = useState('')
   const [partsPaid, setPartsPaid] = useState(false)
@@ -73,11 +76,14 @@ export default function RetornoModal({ onClose }: { onClose: () => void }) {
     setError('')
     try {
       const tecnico = tecnicos.find(a => a.id === tecnicoId)
-      const paid = lines.length > 0 ? partsPaid : null
+      const scheduled = mode === 'agendar'
+      if (scheduled && !tecnicoId) { setError('Escolha o técnico.'); setSaving(false); return }
+      const paid = !scheduled && lines.length > 0 ? partsPaid : null
       const call = await createCall({
         date,
         scheduled_date: date,
-        status: 'retorno',
+        ...(scheduled ? { scheduled_time: time || null } : {}),
+        status: scheduled ? 'agendado' : 'retorno',
         return_of_call_id: original.id,
         return_parts_paid: paid,
         client_id: original.client_id ?? null,
@@ -97,6 +103,12 @@ export default function RetornoModal({ onClose }: { onClose: () => void }) {
         driver: tecnico?.name ?? null,
         notes: description || null,
       })
+
+      // Agendado: o técnico completa peças e pagamento ao finalizar
+      if (scheduled) {
+        router.push(`/dashboard/chamados/${call.id}`)
+        return
+      }
 
       const total = paid ? partsTotal : 0
       const order = await createServiceOrder({
@@ -182,7 +194,16 @@ export default function RetornoModal({ onClose }: { onClose: () => void }) {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2">
+              {([['agendar', 'Agendar visita de retorno'], ['registrar', 'Registrar retorno já feito']] as const).map(([v, l]) => (
+                <button key={v} type="button" onClick={() => setMode(v)}
+                  className={`px-3 py-2.5 rounded-lg text-sm font-semibold transition ${mode === v ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                  {l}
+                </button>
+              ))}
+            </div>
+
+            <div className={`grid grid-cols-1 gap-3 ${mode === 'agendar' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Técnico</label>
                 <select value={tecnicoId} onChange={e => { setTecnicoId(e.target.value); setLines([]) }} className={inputCls}>
@@ -194,8 +215,15 @@ export default function RetornoModal({ onClose }: { onClose: () => void }) {
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Data</label>
                 <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inputCls} />
               </div>
+              {mode === 'agendar' && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Horário</label>
+                  <input type="time" value={time} onChange={e => setTime(e.target.value)} className={inputCls} />
+                </div>
+              )}
             </div>
 
+            {mode === 'registrar' && (<>
             <div className="border border-orange-100 bg-orange-50/40 rounded-xl p-3 space-y-2">
               <p className="text-xs font-bold text-orange-600">Peças usadas</p>
               {lines.map((l, idx) => (
@@ -232,11 +260,12 @@ export default function RetornoModal({ onClose }: { onClose: () => void }) {
                 </div>
               </div>
             )}
+            </>)}
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Descrição</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">{mode === 'agendar' ? 'Observações' : 'Descrição'}</label>
               <textarea rows={3} value={description} onChange={e => setDescription(e.target.value)}
-                placeholder="O que o cliente reclamou e o que foi feito..."
+                placeholder={mode === 'agendar' ? 'O que o cliente reclamou...' : 'O que o cliente reclamou e o que foi feito...'}
                 className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none" />
             </div>
 
@@ -245,7 +274,7 @@ export default function RetornoModal({ onClose }: { onClose: () => void }) {
             <button type="button" onClick={save} disabled={saving}
               className="w-full py-3 rounded-xl text-sm font-semibold bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-60 transition flex items-center justify-center gap-2">
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-              Salvar retorno
+              {mode === 'agendar' ? 'Agendar retorno' : 'Salvar retorno'}
             </button>
           </div>
         )}

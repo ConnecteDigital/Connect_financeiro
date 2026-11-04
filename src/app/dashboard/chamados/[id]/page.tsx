@@ -15,6 +15,8 @@ import { serviceWithoutAppliance } from '@/lib/service-config'
 import ServiceTimer from '@/components/ServiceTimer'
 import TecnicoCallView from '@/components/TecnicoCallView'
 import { useTecnicoQueue } from '@/lib/tecnico-queue'
+import { paymentsFromOs, formatPaymentLine, osCardPending, osCardGross } from '@/lib/payments'
+import { syncOsAutoExpenses } from '@/lib/db/service-orders'
 
 const statusConfig: Record<string, { label: string; color: string; bg: string; icon: React.ElementType }> = {
   agendado: { label: 'Agendado', color: 'text-blue-700', bg: 'bg-blue-100', icon: Clock },
@@ -24,6 +26,7 @@ const statusConfig: Record<string, { label: string; color: string; bg: string; i
   cancelado: { label: 'Cancelado', color: 'text-red-600', bg: 'bg-red-100', icon: XCircle },
   pagou_somente_visita: { label: 'Pagou a visita', color: 'text-cyan-700', bg: 'bg-cyan-100', icon: Wallet },
   retorno: { label: 'Retorno', color: 'text-violet-700', bg: 'bg-violet-100', icon: RotateCcw },
+  orcamento: { label: 'Orçamento', color: 'text-sky-700', bg: 'bg-sky-100', icon: FileText },
 }
 
 const paymentBadge: Record<string, { label: string; color: string }> = {
@@ -56,6 +59,9 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
   const [addressCopied, setAddressCopied] = useState(false)
   const [returnCalls, setReturnCalls] = useState<any[]>([])
   const [originalCall, setOriginalCall] = useState<any>(null)
+  const [cardNet, setCardNet] = useState('')
+  const [confirmingCard, setConfirmingCard] = useState(false)
+  const [cardError, setCardError] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const queue = useTecnicoQueue(isTecnico)
 
@@ -152,6 +158,30 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
       setCall(updated)
     } finally {
       setUpdatingPayment(false)
+    }
+  }
+
+  // Rodrigues: o dono informa quanto caiu do cartão; aí a OS fica paga e a
+  // taxa da maquininha e a comissão do técnico são lançadas
+  async function confirmCard(soRow: any) {
+    const net = Number(cardNet.replace(',', '.'))
+    if (!cardNet || !(net >= 0)) { setCardError('Informe o valor líquido que caiu.'); return }
+    setConfirmingCard(true)
+    setCardError('')
+    try {
+      const supabase = createClient()
+      const total = Number(soRow.total_value || 0)
+      const { error } = await supabase.from('service_orders').update({
+        card_net_value: net, payment_status: 'pago', amount_paid: total, remaining_amount: 0,
+      }).eq('id', soRow.id)
+      if (error) throw error
+      await syncOsAutoExpenses(soRow.id)
+      setCardNet('')
+      setCall(await getCall(id))
+    } catch (err: any) {
+      setCardError('Erro ao confirmar: ' + (err.message ?? 'tente novamente'))
+    } finally {
+      setConfirmingCard(false)
     }
   }
 
@@ -311,7 +341,7 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
           <ServiceTimer callId={id} status={call.status}
             onChanged={() => getCall(id).then(setCall).catch(console.error)} />
 
-          {call.status === 'retorno' && (
+          {(call.status === 'retorno' || call.return_of_call_id) && (
             <div className="bg-violet-50 rounded-xl border border-violet-100 p-4 text-sm space-y-1">
               <p className="text-violet-800 font-semibold flex items-center gap-2">
                 <RotateCcw className="w-4 h-4" />
@@ -322,8 +352,10 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
                   </Link>
                 ) : '…'}
               </p>
-              {call.return_parts_paid != null && (
-                <p className="text-violet-700">Cliente pagou a peça: <span className="font-semibold">{call.return_parts_paid ? 'Sim' : 'Não'}</span></p>
+              {(call.return_parts_paid != null || call.service_orders?.[0]) && (
+                <p className="text-violet-700">Cliente pagou a peça: <span className="font-semibold">
+                  {(call.return_parts_paid ?? Number(call.service_orders[0].total_value || 0) > 0) ? 'Sim' : 'Não'}
+                </span></p>
               )}
             </div>
           )}
@@ -547,7 +579,10 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
                 <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Veículo</p>
                 <p className="text-slate-700 mt-0.5">{so.vehicle}</p>
               </div>}
-              {so.payment_method && <div>
+              {isRodrigues && Array.isArray(so.payments) ? <div className="col-span-2">
+                <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Forma de Pag.</p>
+                {paymentsFromOs(so).map((l, i) => <p key={i} className="text-slate-700 mt-0.5">{formatPaymentLine(l)}</p>)}
+              </div> : so.payment_method && <div>
                 <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Forma de Pag.</p>
                 <p className="text-slate-700 mt-0.5">
                   {so.payment_method}
@@ -653,6 +688,30 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
               </div>
             )}
           </div>
+
+          {isRodrigues && osCardPending(so) && (
+            <div className="bg-amber-50 rounded-xl border border-amber-200 p-5 space-y-3">
+              <h2 className="font-semibold text-amber-800 flex items-center gap-2 text-sm">
+                <Wallet className="w-4 h-4" /> Confirmar pagamento no cartão
+              </h2>
+              <p className="text-sm text-amber-800">
+                Total no cartão: <span className="font-semibold">{fmt(osCardGross(so) || Number(so.total_value || 0))}</span>.
+                Informe quanto caiu de fato — a taxa da maquininha e a comissão do técnico são lançadas depois disso.
+              </p>
+              <div className="flex flex-wrap items-end gap-2">
+                <div>
+                  <label className="block text-xs font-medium text-amber-800 mb-1">Valor líquido que caiu (R$)</label>
+                  <input type="number" min="0" step="0.01" value={cardNet} onChange={e => setCardNet(e.target.value)}
+                    className="w-40 px-3 py-2 border border-amber-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400" />
+                </div>
+                <button onClick={() => confirmCard(so)} disabled={confirmingCard}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50">
+                  {confirmingCard ? 'Confirmando...' : 'Confirmar'}
+                </button>
+              </div>
+              {cardError && <p className="text-xs text-red-600">{cardError}</p>}
+            </div>
+          )}
 
           {/* Pagamento */}
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">

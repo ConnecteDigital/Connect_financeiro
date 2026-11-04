@@ -23,7 +23,8 @@ import { getStockItems, getServiceOrderParts, addServiceOrderParts, adjustStockQ
 import { navigationAddress } from '@/lib/address'
 import StockPartPicker from '@/components/StockPartPicker'
 import AddressExtraFields from '@/components/AddressExtraFields'
-import RodriguesCardFields from '@/components/RodriguesCardFields'
+import PaymentLinesEditor from '@/components/PaymentLinesEditor'
+import { PaymentLine, paymentSummaryFields, paymentsFromOs, hasCard } from '@/lib/payments'
 import AfterHoursToggle, { commissionPctFor } from '@/components/AfterHoursToggle'
 import { isAfterHours, localDateTime } from '@/lib/business-hours'
 import { getCallVisits } from '@/lib/db/service-visits'
@@ -54,6 +55,7 @@ const CALL_STATUSES_RODRIGUES = [
   { value: 'aprovado', label: 'Aprovado' },
   { value: 'nao_aprovou', label: 'Não aprovou' },
   { value: 'pagou_somente_visita', label: 'Pagou somente a visita' },
+  { value: 'orcamento', label: 'Orçamento' },
 ]
 
 const PAYMENT_METHODS = ['Dinheiro', 'Cartão', 'PIX', 'Boleto']
@@ -144,8 +146,8 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const [paymentMethodsMulti, setPaymentMethodsMulti] = useState<string[]>([])
   const [cardType, setCardType] = useState('')
   const [cardFeePct, setCardFeePct] = useState(0)
-  const [installments, setInstallments] = useState(1)
   const [cardNetValue, setCardNetValue] = useState<number | null>(null)
+  const [paymentLines, setPaymentLines] = useState<PaymentLine[]>([])
   const [osNumber, setOsNumber] = useState('')
   const [partnerName, setPartnerName] = useState('')
   const [amountPaid, setAmountPaid] = useState(0)
@@ -271,7 +273,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         setPaymentMethodsMulti(so.payment_method ? String(so.payment_method).split(',').map((s: string) => s.trim()).filter(Boolean) : [])
         setCardType(so.card_type ?? '')
         setCardFeePct(Number(so.card_fee_pct ?? 0))
-        setInstallments(Number(so.installments ?? 1))
+        setPaymentLines(paymentsFromOs(so))
         setPartnerName(so.partner_name ?? '')
         setAmountPaid(Number(so.amount_paid ?? 0))
         setRemainingAmount(Number(so.remaining_amount ?? 0))
@@ -652,10 +654,12 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
           payment_method: isMillenium
             ? (paymentMethodsMulti.length > 0 ? paymentMethodsMulti.join(', ') : null)
             : (paymentMethod || null),
-          card_type: (isMillenium || isRodrigues) ? (cardType || null) : null,
+          card_type: isMillenium ? (cardType || null) : null,
           card_fee_pct: isMillenium ? cardFeePct : 0,
-          installments: isRodrigues && cardType === 'credito' ? installments : null,
-          ...(isRodrigues ? { card_net_value: paymentMethod === 'Cartão' ? cardNetValue : null } : {}),
+          ...(isRodrigues ? {
+            ...paymentSummaryFields(paymentLines),
+            card_net_value: hasCard(paymentLines) ? cardNetValue : null,
+          } : {}),
           // Técnico não envia: o banco recalcula "fora do horário" ao sincronizar
           ...(isRodrigues && !isTecnico ? { after_hours: afterHours } : {}),
           partner_name: isMillenium ? (partnerName || null) : null,
@@ -1205,7 +1209,10 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Forma de Pagamento</label>
-              {isMillenium ? (
+              {isRodrigues ? (
+                <PaymentLinesEditor lines={paymentLines} onChange={setPaymentLines} total={bruto}
+                  showNet netValue={cardNetValue} setNetValue={setCardNetValue} />
+              ) : isMillenium ? (
                 <>
                   <div className="flex flex-wrap gap-2">
                     {PAYMENT_METHODS.map(m => (
@@ -1254,11 +1261,6 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                       <span className="px-4 py-2 rounded-lg text-sm font-medium bg-orange-500 text-white">{paymentMethod}</span>
                     )}
                   </div>
-                  {isRodrigues && paymentMethod === 'Cartão' && (
-                    <RodriguesCardFields cardType={cardType} setCardType={setCardType}
-                      installments={installments} setInstallments={setInstallments}
-                      netValue={cardNetValue} setNetValue={setCardNetValue} bruto={bruto} />
-                  )}
                 </div>
               )}
             </div>

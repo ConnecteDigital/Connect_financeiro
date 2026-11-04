@@ -23,7 +23,8 @@ import { getStockItems, addServiceOrderParts, adjustStockQuantity } from '@/lib/
 import { navigationAddress } from '@/lib/address'
 import StockPartPicker from '@/components/StockPartPicker'
 import AddressExtraFields from '@/components/AddressExtraFields'
-import RodriguesCardFields from '@/components/RodriguesCardFields'
+import PaymentLinesEditor from '@/components/PaymentLinesEditor'
+import { PaymentLine, paymentSummaryFields, hasCard } from '@/lib/payments'
 import AfterHoursToggle, { commissionPctFor } from '@/components/AfterHoursToggle'
 import { isAfterHours } from '@/lib/business-hours'
 
@@ -225,8 +226,8 @@ export default function NovoChamadoPage() {
   const [dueDate, setDueDate] = useState('')
   const [paymentMethods, setPaymentMethods] = useState<string[]>([])
   const [cardType, setCardType] = useState('')
-  const [installments, setInstallments] = useState(1)
   const [cardNetValue, setCardNetValue] = useState<number | null>(null)
+  const [paymentLines, setPaymentLines] = useState<PaymentLine[]>([])
   const [cardFeePct, setCardFeePct] = useState(0)
   const [partnerName, setPartnerName] = useState('')
   const [amountPaid, setAmountPaid] = useState(0)
@@ -580,10 +581,13 @@ export default function NovoChamadoPage() {
           own_other_cost: ownOtherCost,
           other_service_value: otherServiceValue,
           payment_method: paymentMethods.length > 0 ? paymentMethods.join(', ') : null,
-          card_type: (isMillenium || isRodrigues) ? (cardType || null) : null,
+          card_type: isMillenium ? (cardType || null) : null,
           card_fee_pct: isMillenium ? cardFeePct : 0,
-          installments: isRodrigues && cardType === 'credito' ? installments : null,
-          ...(isRodrigues ? { card_net_value: paymentMethods.includes('Cartão') ? cardNetValue : null, after_hours: afterHours } : {}),
+          ...(isRodrigues ? {
+            ...paymentSummaryFields(paymentLines),
+            card_net_value: hasCard(paymentLines) ? cardNetValue : null,
+            after_hours: afterHours,
+          } : {}),
           partner_name: isMillenium ? (partnerName || null) : null,
           payment_status: paymentStatus,
           amount_paid: amountPaid,
@@ -1484,6 +1488,10 @@ export default function NovoChamadoPage() {
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Forma de Pagamento</label>
+              {isRodrigues ? (
+                <PaymentLinesEditor lines={paymentLines} onChange={setPaymentLines} total={bruto}
+                  showNet netValue={cardNetValue} setNetValue={setCardNetValue} />
+              ) : (<>
               <div className="flex flex-wrap gap-2">
                 {PAYMENT_METHODS.map(m => (
                   <button key={m} type="button" onClick={() => setPaymentMethods(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m])}
@@ -1516,11 +1524,7 @@ export default function NovoChamadoPage() {
                   )}
                 </div>
               )}
-              {isRodrigues && paymentMethods.includes('Cartão') && (
-                <RodriguesCardFields cardType={cardType} setCardType={setCardType}
-                  installments={installments} setInstallments={setInstallments}
-                  netValue={cardNetValue} setNetValue={setCardNetValue} bruto={bruto} />
-              )}
+              </>)}
             </div>
           </div>
 

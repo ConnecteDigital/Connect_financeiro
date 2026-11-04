@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useTenant } from '@/lib/tenant-context'
 import { getOpenVisit } from '@/lib/db/service-visits'
 import { formatDuration } from '@/lib/business-hours'
-import { useTecnicoQueue, compareQueue, localYmd } from '@/lib/tecnico-queue'
+import { useTecnicoQueue, compareQueue, localYmd, callKind, CALL_KIND_STYLE } from '@/lib/tecnico-queue'
 
 const fmt = (v: number) => `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
 
@@ -39,7 +39,7 @@ export default function TecnicoHome() {
   const [today, setToday] = useState<any[] | null>(null)
   const [openVisit, setOpenVisit] = useState<any>(null)
   const [now, setNow] = useState(() => Date.now())
-  const { lockOf } = useTecnicoQueue(true)
+  const { lockOf, visitsOf } = useTecnicoQueue(true)
 
   // Serviço em andamento: o tempo vem da hora de início gravada no banco
   useEffect(() => {
@@ -56,7 +56,7 @@ export default function TecnicoHome() {
     const day = localYmd()
     createClient()
       .from('calls')
-      .select('id, status, date, scheduled_date, scheduled_time, created_at, contact_name, service_category, call_address, address_number, call_neighborhood, client:clients(name)')
+      .select('id, status, date, scheduled_date, scheduled_time, created_at, contact_name, service_category, call_address, address_number, call_neighborhood, return_of_call_id, client:clients(name)')
       .eq('status', 'agendado')
       .or(`scheduled_date.eq.${day},and(scheduled_date.is.null,date.eq.${day})`)
       .then(({ data }) => setToday((data ?? []).sort(compareQueue)))
@@ -140,12 +140,19 @@ export default function TecnicoHome() {
               const lock = lockOf(c)
               const time = c.scheduled_time ? String(c.scheduled_time).slice(0, 5) : null
               const name = c.client?.name ?? c.contact_name ?? 'Sem identificação'
+              const kind = callKind(c, visitsOf(c.id))
+              const tags = (
+                <>
+                  <span className={`ml-1.5 px-1.5 py-0.5 rounded-md text-[11px] font-semibold border align-middle ${CALL_KIND_STYLE[kind]}`}>{kind}</span>
+                  {c.call_neighborhood && <span className="ml-1.5 text-xs font-normal text-zinc-500">{c.call_neighborhood}</span>}
+                </>
+              )
               if (lock.locked) {
                 return (
                   <div key={c.id} className="flex items-center gap-3 px-4 py-3 bg-zinc-50/60">
                     <Lock className="w-4 h-4 text-zinc-400 flex-shrink-0" />
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-zinc-600 truncate">{time && `${time} · `}{name}</p>
+                      <p className="text-sm font-semibold text-zinc-600 truncate">{time && `${time} · `}{name}{tags}</p>
                       <p className="text-xs text-zinc-400 truncate mt-0.5">
                         {[c.service_category, lock.message].filter(Boolean).join(' · ')}
                       </p>
@@ -158,10 +165,10 @@ export default function TecnicoHome() {
                   className="flex items-center justify-between px-4 py-3 hover:bg-zinc-50 transition">
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-zinc-800 truncate">
-                      {time && <span style={{ color: 'var(--primary)' }}>{time} · </span>}{name}
+                      {time && <span style={{ color: 'var(--primary)' }}>{time} · </span>}{name}{tags}
                     </p>
                     <p className="text-xs text-zinc-500 truncate mt-0.5">
-                      {[c.service_category, [c.call_address, c.address_number].filter(Boolean).join(', '), c.call_neighborhood].filter(Boolean).join(' · ')}
+                      {[c.service_category, [c.call_address, c.address_number].filter(Boolean).join(', ')].filter(Boolean).join(' · ')}
                     </p>
                   </div>
                   <ChevronRight className="w-4 h-4 text-zinc-300 flex-shrink-0" />

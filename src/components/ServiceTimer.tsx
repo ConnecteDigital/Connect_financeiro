@@ -10,6 +10,7 @@ import { formatDuration } from '@/lib/business-hours'
 import { useTenant } from '@/lib/tenant-context'
 
 const END_REASONS: { value: VisitOutcome; label: string; date: 'required' | 'optional' | 'none'; notes: boolean }[] = [
+  { value: 'orcamento', label: 'Orçamento — cliente vai decidir', date: 'none', notes: false },
   { value: 'remarcado', label: 'Faltou peça / remarcar', date: 'required', notes: false },
   { value: 'cliente_ausente', label: 'Cliente não estava em casa', date: 'optional', notes: false },
   { value: 'nao_aprovou', label: 'Cliente não aprovou', date: 'none', notes: false },

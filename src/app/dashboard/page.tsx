@@ -10,6 +10,8 @@ import DateRangePicker, { DateRange } from '@/components/DateRangePicker'
 import Link from 'next/link'
 import { useTenant } from '@/lib/tenant-context'
 import TecnicoHome from '@/components/TecnicoHome'
+import { createClient } from '@/lib/supabase/client'
+import { osCardPending, osCardGross } from '@/lib/payments'
 
 interface Stats {
   total_calls: number; approved_calls: number; scheduled_calls: number
@@ -80,6 +82,17 @@ function OwnerDashboard() {
   const { tenant } = useTenant()
   const isRodrigues = tenant?.call_form_config?.rodrigues_custom === true
   const router = useRouter()
+  const [cardsPending, setCardsPending] = useState<any[]>([])
+
+  // Rodrigues: OS pagas no cartão esperando o dono informar o líquido
+  useEffect(() => {
+    if (!isRodrigues) return
+    createClient()
+      .from('service_orders')
+      .select('id, call_id, os_number, total_value, payments, payment_method, card_net_value, call:calls(contact_name, client:clients(name))')
+      .is('card_net_value', null)
+      .then(({ data }) => setCardsPending((data ?? []).filter(osCardPending)))
+  }, [isRodrigues])
 
   function openReceivables() {
     setShowReceivables(true)
@@ -156,6 +169,29 @@ function OwnerDashboard() {
           </div>
         </div>
       </div>
+
+      {isRodrigues && cardsPending.length > 0 && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <p className="text-sm font-semibold text-amber-800 flex items-center gap-2">
+            <Wallet className="w-4 h-4" /> Cartões para confirmar ({cardsPending.length})
+          </p>
+          <div className="mt-2 divide-y divide-amber-100">
+            {cardsPending.map(so => {
+              const c: any = Array.isArray(so.call) ? so.call[0] : so.call
+              const client: any = Array.isArray(c?.client) ? c.client[0] : c?.client
+              return (
+                <Link key={so.id} href={`/dashboard/chamados/${so.call_id}`}
+                  className="flex items-center justify-between gap-2 py-2 text-sm">
+                  <span className="text-amber-900 truncate">{so.os_number ? `${so.os_number} · ` : ''}{client?.name ?? c?.contact_name ?? 'Chamado'}</span>
+                  <span className="flex items-center gap-1 font-semibold text-amber-800 flex-shrink-0">
+                    R$ {fmt(osCardGross(so) || Number(so.total_value || 0))} <ChevronRight className="w-4 h-4" />
+                  </span>
+                </Link>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── Call stats chips (todos clicáveis) ────────────────── */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
