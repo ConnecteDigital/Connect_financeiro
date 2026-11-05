@@ -118,9 +118,11 @@ export default function ChamadosPage() {
   }, [calls])
 
   // Origens presentes nos chamados atuais
+  // (Rodrigues não usa origem: sem filtro de origem)
   const presentOrigins = useMemo(() => {
+    if (isRodrigues) return []
     return Object.keys(originCounts).filter(o => o !== 'sem_origem')
-  }, [originCounts])
+  }, [originCounts, isRodrigues])
 
   // Contagem por canal
   const channelCounts = useMemo(() => {
@@ -633,7 +635,7 @@ export default function ChamadosPage() {
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${cfg?.color}`}>{cfg?.label}</span>
                       <span className="text-xs text-zinc-400">{new Date(c.date + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
-                      <span className="text-xs text-zinc-400">{getOriginLabel(c.origin)}</span>
+                      {!isRodrigues && <span className="text-xs text-zinc-400">{getOriginLabel(c.origin)}</span>}
                     </div>
                     {so && (
                       <div className="flex items-center justify-between mt-2 pt-2 border-t border-zinc-50">

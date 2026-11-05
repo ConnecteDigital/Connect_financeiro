@@ -472,7 +472,7 @@ export default function NovoChamadoPage() {
       setError('Informe o nome do contato ou selecione um cliente cadastrado.')
       return
     }
-    if (origins.length === 0) {
+    if (!isRodrigues && origins.length === 0) {
       setError('Selecione a origem do chamado.')
       return
     }
@@ -510,7 +510,7 @@ export default function NovoChamadoPage() {
         client_id: finalClientId || null,
         contact_name: contactName || null,
         contact_phone: contactPhone || null,
-        origin: origins.join(', '),
+        origin: isRodrigues ? 'Direto' : origins.join(', '),
         status: callStatus,
         notes: callNotes || null,
         service_category: serviceCategoryText || null,
@@ -681,7 +681,7 @@ export default function NovoChamadoPage() {
   const inputCls = 'w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]'
 
   async function handleSimplifiedSubmit(targetStatus: 'agendado' | 'aprovado') {
-    if (origins.length === 0) { setError('Selecione a origem do chamado.'); return }
+    if (!isRodrigues && origins.length === 0) { setError('Selecione a origem do chamado.'); return }
     if (!contactName.trim()) { setError('Informe o nome do contato.'); return }
     setSaving(true); setError('')
     try {
@@ -705,7 +705,7 @@ export default function NovoChamadoPage() {
         client_id: simplifiedClientId,
         contact_name: contactName || null,
         contact_phone: contactPhone || null,
-        origin: origins.join(', '),
+        origin: isRodrigues ? 'Direto' : origins.join(', '),
         status: targetStatus,
         notes: null,
         service_category: serviceCategory || null,
@@ -746,7 +746,7 @@ export default function NovoChamadoPage() {
 
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-5">
           {/* Origem */}
-          <div>
+          {!isRodrigues && <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">Origem *</label>
             <div className="flex flex-wrap gap-2">
               {callOrigins.map(o => (
@@ -758,7 +758,7 @@ export default function NovoChamadoPage() {
                 </button>
               ))}
             </div>
-          </div>
+          </div>}
 
           {/* Canal */}
           <div>
@@ -875,7 +875,7 @@ export default function NovoChamadoPage() {
         <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3">Informações do Chamado</h2>
 
         {/* Origem */}
-        <div>
+        {!isRodrigues && <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">Origem *</label>
           <div className="flex flex-wrap gap-2">
             {callOrigins.map(o => (
@@ -892,7 +892,7 @@ export default function NovoChamadoPage() {
               </span>
             )}
           </div>
-        </div>
+        </div>}
 
         {/* Canal */}
         <div>

@@ -54,6 +54,7 @@ export default function RelatoriosPage() {
 
   const { origins: tenantOrigins } = useCallOrigins()
   const { tenant } = useTenant()
+  const isRodrigues = tenant?.call_form_config?.rodrigues_custom === true
 
   function openImprimirPage(mode: 'pdf' | 'image') {
     const payload = { tab: mainTab, range, tenantName: tenant?.name, tenantCnpj: tenant?.cnpj, data, expData, ceData }
@@ -258,7 +259,7 @@ export default function RelatoriosPage() {
         <>
           {/* Filters */}
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-3 space-y-3">
-            <div>
+            {!isRodrigues && <div>
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Origem</p>
               <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
                 {[{ v: 'todos', l: 'Todos' }, ...tenantOrigins.map(o => ({ v: o.value, l: o.label }))].map(o => (
@@ -269,7 +270,7 @@ export default function RelatoriosPage() {
                   </button>
                 ))}
               </div>
-            </div>
+            </div>}
             <div>
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Tipo de Serviço</p>
               <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
@@ -356,7 +357,7 @@ export default function RelatoriosPage() {
               )}
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {data?.byOrigin?.length > 0 && (
+                {!isRodrigues && data?.byOrigin?.length > 0 && (
                   <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
                     <div className="flex items-center gap-2 mb-4">
                       <Globe className="w-5 h-5 text-purple-600" />

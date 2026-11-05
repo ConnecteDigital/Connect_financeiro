@@ -172,13 +172,13 @@ export default function EditarOrcamentoPage() {
             <input type="text" value={clientCity} onChange={e => setClientCity(e.target.value)}
               className="input-field py-2.5 text-sm" placeholder="Porto Alegre" />
           </div>
-          <div>
+          {tenant?.call_form_config?.rodrigues_custom !== true && <div>
             <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Origem</label>
             <select value={origin} onChange={e => setOrigin(e.target.value)} className="input-field py-2.5 text-sm">
               <option value="">Selecionar...</option>
               {origins.map(o => <option key={o} value={o}>{o}</option>)}
             </select>
-          </div>
+          </div>}
           <div>
             <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Válido até</label>
             <input type="date" value={validUntil} onChange={e => setValidUntil(e.target.value)}

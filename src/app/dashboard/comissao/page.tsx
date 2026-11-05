@@ -44,14 +44,26 @@ export default function ComissaoPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  // Comissão é sempre de UM mês (pela data de vencimento): virou o mês,
-  // começa do zero. Os meses anteriores ficam na seta ‹; não passa do atual.
-  const [monthOffset, setMonthOffset] = useState(0)
+  // Comissão por SEMANA (segunda a domingo — é paga por semana) ou por MÊS,
+  // pela data de vencimento. Os períodos anteriores ficam na seta ‹; não
+  // passa do atual.
+  const [mode, setMode] = useState<'semana' | 'mes'>('semana')
+  const [offset, setOffset] = useState(0)
   const now = new Date()
-  const first = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1)
-  const start = localDate(first)
-  const end = localDate(new Date(now.getFullYear(), now.getMonth() + monthOffset + 1, 0))
-  const monthLabel = first.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+  let start: string, end: string, periodLabel: string
+  if (mode === 'semana') {
+    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7) + offset * 7)
+    const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6)
+    start = localDate(monday)
+    end = localDate(sunday)
+    const short = (d: Date) => d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+    periodLabel = offset === 0 ? `Esta semana · ${short(monday)} a ${short(sunday)}` : `${short(monday)} a ${short(sunday)}`
+  } else {
+    const first = new Date(now.getFullYear(), now.getMonth() + offset, 1)
+    start = localDate(first)
+    end = localDate(new Date(now.getFullYear(), now.getMonth() + offset + 1, 0))
+    periodLabel = first.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+  }
   // Serviços do mês no cartão que o dono ainda não confirmou: a comissão
   // só é lançada depois disso
   useEffect(() => {
@@ -75,12 +87,21 @@ export default function ComissaoPage() {
         <h1 className="text-2xl font-bold text-zinc-900">Minha Comissão</h1>
       </div>
 
+      <div className="flex bg-zinc-100 rounded-xl p-1">
+        {([['semana', 'Semana'], ['mes', 'Mês']] as const).map(([v, l]) => (
+          <button key={v} type="button" onClick={() => { setMode(v); setOffset(0) }}
+            className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${mode === v ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500'}`}>
+            {l}
+          </button>
+        ))}
+      </div>
+
       <div className="flex items-center justify-between bg-white rounded-2xl border border-zinc-100 px-4 py-2.5 shadow-sm">
-        <button onClick={() => setMonthOffset(o => o - 1)} className="p-1.5 hover:bg-zinc-100 rounded-lg text-zinc-500">
+        <button onClick={() => setOffset(o => o - 1)} className="p-1.5 hover:bg-zinc-100 rounded-lg text-zinc-500">
           <ChevronLeft className="w-5 h-5" />
         </button>
-        <p className="font-semibold text-zinc-800 capitalize text-sm">{monthLabel}</p>
-        <button onClick={() => setMonthOffset(o => Math.min(0, o + 1))} disabled={monthOffset === 0}
+        <p className={`font-semibold text-zinc-800 text-sm ${mode === 'mes' ? 'capitalize' : ''}`}>{periodLabel}</p>
+        <button onClick={() => setOffset(o => Math.min(0, o + 1))} disabled={offset === 0}
           className="p-1.5 hover:bg-zinc-100 rounded-lg text-zinc-500 disabled:opacity-30">
           <ChevronRight className="w-5 h-5" />
         </button>
@@ -130,7 +151,7 @@ export default function ComissaoPage() {
             {[...Array(3)].map((_, i) => <div key={i} className="h-12 bg-zinc-50 rounded-lg animate-pulse" />)}
           </div>
         ) : monthEntries.length === 0 ? (
-          <p className="px-4 py-10 text-center text-sm text-zinc-400">Nenhuma comissão neste mês</p>
+          <p className="px-4 py-10 text-center text-sm text-zinc-400">{mode === 'semana' ? 'Nenhuma comissão nesta semana' : 'Nenhuma comissão neste mês'}</p>
         ) : (
           <div className="divide-y divide-zinc-50">
             {monthEntries.map(e => {

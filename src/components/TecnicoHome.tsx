@@ -18,6 +18,14 @@ function monthRange(offset: number) {
   return { start: localYmd(first), end: localYmd(last), label: first.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) }
 }
 
+// Semana atual, de segunda a domingo (a comissão é paga por semana)
+function currentWeekRange() {
+  const now = new Date()
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7))
+  const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6)
+  return { start: localYmd(monday), end: localYmd(sunday) }
+}
+
 interface Summary {
   total: number
   approved: number
@@ -40,6 +48,15 @@ export default function TecnicoHome() {
   const [openVisit, setOpenVisit] = useState<any>(null)
   const [now, setNow] = useState(() => Date.now())
   const { lockOf, visitsOf } = useTecnicoQueue(true)
+  const [weekPending, setWeekPending] = useState<number | null>(null)
+
+  // A receber nesta semana (sempre a semana atual)
+  useEffect(() => {
+    const { start, end } = currentWeekRange()
+    createClient().from('expenses').select('amount').eq('status', 'pendente')
+      .gte('due_date', start).lte('due_date', end)
+      .then(({ data }) => setWeekPending((data ?? []).reduce((s, e) => s + Number(e.amount || 0), 0)))
+  }, [])
 
   // Serviço em andamento: o tempo vem da hora de início gravada no banco
   useEffect(() => {
@@ -196,9 +213,9 @@ export default function TecnicoHome() {
         className="block rounded-3xl p-5 text-white shadow-sm"
         style={{ background: 'var(--primary)' }}>
         <div className="flex items-center gap-2 text-white/80 text-xs font-medium uppercase tracking-wide">
-          <Wallet className="w-4 h-4" /> Comissão a receber
+          <Wallet className="w-4 h-4" /> Comissão a receber · esta semana
         </div>
-        <p className="text-3xl font-bold mt-1">{loading ? '—' : fmt(data.commissionPending)}</p>
+        <p className="text-3xl font-bold mt-1">{weekPending === null ? '—' : fmt(weekPending)}</p>
         <p className="text-sm text-white/80 mt-1 capitalize">
           Total de {monthLabel}: {loading ? '—' : fmt(data.commissionMonth)}
         </p>

@@ -5,8 +5,9 @@ import { use } from 'react'
 import Link from 'next/link'
 import { getCall } from '@/lib/db/calls'
 import { useTenant } from '@/lib/tenant-context'
-import { formatAddress } from '@/lib/address'
-import { serviceWithoutAppliance } from '@/lib/service-config'
+import { getServiceOrderParts } from '@/lib/db/stock'
+import { createClient } from '@/lib/supabase/client'
+import RodriguesCertificado from '@/components/RodriguesCertificado'
 import { ArrowLeft, Share2, Loader2, FileImage, FileText } from 'lucide-react'
 
 const BRL = (v: number | string) =>
@@ -20,10 +21,25 @@ function ImprimirContent({ id }: { id: string }) {
   const [loading, setLoading] = useState(true)
   const [sharing, setSharing] = useState<'png' | 'pdf' | null>(null)
   const sheetRef = useRef<HTMLDivElement>(null)
+  const isRodrigues = tenant?.call_form_config?.rodrigues_custom === true
+  const [parts, setParts] = useState<any[]>([])
+  const [tecnicoName, setTecnicoName] = useState('')
 
   useEffect(() => {
     getCall(id).then(setCall).catch(console.error).finally(() => setLoading(false))
   }, [id])
+
+  // Rodrigues: peças usadas e nome do técnico da OS, pro certificado
+  useEffect(() => {
+    const so = call?.service_orders?.[0]
+    if (!isRodrigues || !so) return
+    getServiceOrderParts(so.id).then(setParts).catch(console.error)
+    const auxId = so.auxiliary_id ?? call.technician_id
+    const fallback = call.driver ?? ''
+    if (!auxId) { Promise.resolve().then(() => setTecnicoName(fallback)); return }
+    createClient().from('auxiliaries').select('name').eq('id', auxId).maybeSingle()
+      .then(({ data }) => setTecnicoName(data?.name ?? fallback))
+  }, [call, isRodrigues])
 
   async function buildCanvas() {
     const html2canvas = (await import('html2canvas')).default
@@ -72,10 +88,16 @@ function ImprimirContent({ id }: { id: string }) {
       const ratio = canvas.height / canvas.width
       const imgW = pageW
       const imgH = imgW * ratio
+      if (isRodrigues) {
+        // Certificado da Rodrigues sempre em uma página só
+        const h = Math.min(imgH, pageH)
+        const w = h / ratio
+        pdf.addImage(imgData, 'PNG', (pageW - w) / 2, 0, w, h)
+      }
       // Se a imagem for maior que uma página, adiciona páginas extras
       let y = 0
       let remaining = imgH
-      while (remaining > 0) {
+      while (!isRodrigues && remaining > 0) {
         pdf.addImage(imgData, 'PNG', 0, -y, imgW, imgH)
         remaining -= pageH
         y += pageH
@@ -106,16 +128,8 @@ function ImprimirContent({ id }: { id: string }) {
   if (!so) return <div className="flex items-center justify-center h-screen text-slate-500">Este chamado não possui ordem de serviço.</div>
 
   const isMillenium = tenant?.call_form_config?.millenium_custom_os === true
-  const isRodrigues = tenant?.call_form_config?.rodrigues_custom === true
   const companyName = tenant?.name ?? 'Empresa'
-  const tenantTagline = isRodrigues
-    ? 'Rodrigues Refrigerações Assistência Técnica em Refrigeradores'
-    : 'Atendimento 24h · Domingos e Feriados'
-  const contactLine = [
-    tenant?.cnpj ? `CNPJ ${tenant.cnpj}` : null,
-    tenant?.address || null,
-    tenant?.phone || null,
-  ].filter(Boolean).join(' · ')
+  const tenantTagline = 'Atendimento 24h · Domingos e Feriados'
   const origin = call.origin as string | null
   const originBranding = origin ? (tenant?.origin_branding?.[origin] ?? null) : null
   const logoUrl = originBranding?.logo_url ?? tenant?.logo_url
@@ -148,6 +162,9 @@ function ImprimirContent({ id }: { id: string }) {
         className="os-sheet bg-white mx-auto"
         style={{ maxWidth: 720, fontFamily: 'Arial, sans-serif', fontSize: 11, color: '#000', padding: 16 }}
       >
+        {isRodrigues ? (
+          <RodriguesCertificado tenant={tenant} call={call} so={so} parts={parts} tecnicoName={tecnicoName} />
+        ) : (<>
         {/* ── Header ── */}
         <div style={{ display: 'flex', border: B, marginBottom: 0 }}>
           {/* Logo / Company */}
@@ -160,14 +177,11 @@ function ImprimirContent({ id }: { id: string }) {
               <p style={{ fontWeight: 900, fontSize: 20, color: brandColor, letterSpacing: '-0.02em', lineHeight: 1.1 }}>{companyName.toUpperCase()}</p>
             )}
             <p style={{ fontSize: 10, color: '#777', marginTop: 4 }}>{tenantTagline}</p>
-            {isRodrigues && contactLine && (
-              <p style={{ fontSize: 8, color: '#999', marginTop: 2 }}>{contactLine}</p>
-            )}
           </div>
           {/* OS Number */}
           <div style={{ width: 160, padding: '14px 16px', textAlign: 'right', flexShrink: 0 }}>
             <p style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#777' }}>Ordem de Serviço</p>
-            <p style={{ fontSize: isRodrigues ? 22 : 42, fontWeight: 900, lineHeight: 1, color: '#000', marginTop: 4 }}>{so.os_number}</p>
+            <p style={{ fontSize: 42, fontWeight: 900, lineHeight: 1, color: '#000', marginTop: 4 }}>{so.os_number}</p>
           </div>
         </div>
 
@@ -178,29 +192,21 @@ function ImprimirContent({ id }: { id: string }) {
 
         {/* Nome | CNPJ/CPF */}
         <div style={{ display: 'flex', border: B, borderTop: 'none' }}>
-          <div style={{ flex: 1, ...cellSt, borderRight: isRodrigues ? undefined : B }}>
+          <div style={{ flex: 1, ...cellSt, borderRight: B }}>
             <span style={labelSt}>Nome</span>
             <span style={valueSt}>{clientName}</span>
           </div>
-          {!isRodrigues && (
-            <div style={{ width: 200, ...cellSt }}>
-              <span style={labelSt}>CNPJ / CPF</span>
-              <span style={valueSt}>{client?.cpf_cnpj || call.contact_cpf || ''}</span>
-            </div>
-          )}
+          <div style={{ width: 200, ...cellSt }}>
+            <span style={labelSt}>CNPJ / CPF</span>
+            <span style={valueSt}>{client?.cpf_cnpj || call.contact_cpf || ''}</span>
+          </div>
         </div>
 
         {/* Endereço | Bairro | CEP */}
         <div style={{ display: 'flex', border: B, borderTop: 'none' }}>
           <div style={{ flex: 2, ...cellSt, borderRight: B }}>
             <span style={labelSt}>Endereço</span>
-            <span style={valueSt}>
-              {isRodrigues
-                ? (client?.address
-                    ? formatAddress({ address: client.address, number: client.address_number, complement: client.address_complement })
-                    : formatAddress({ address: call.call_address, number: call.address_number, complement: call.address_complement }))
-                : (client?.address || call.call_address || '')}
-            </span>
+            <span style={valueSt}>{client?.address || call.call_address || ''}</span>
           </div>
           <div style={{ flex: 1, ...cellSt, borderRight: B }}>
             <span style={labelSt}>Bairro</span>
@@ -235,44 +241,21 @@ function ImprimirContent({ id }: { id: string }) {
 
         {/* Categoria | Data (Rodrigues: "Defeito Apresentado", sem data duplicada — fica só no rodapé) */}
         <div style={{ display: 'flex', border: B, borderTop: 'none' }}>
-          <div style={{ flex: 1, ...cellSt, borderRight: isRodrigues ? undefined : B }}>
-            <span style={labelSt}>{isRodrigues ? 'Defeito Apresentado' : 'Categoria'}</span>
-            <span style={valueSt}>{(isRodrigues ? serviceWithoutAppliance(call.service_category, call.appliance_type, call.device_brand) : call.service_category) || '—'}</span>
+          <div style={{ flex: 1, ...cellSt, borderRight: B }}>
+            <span style={labelSt}>Categoria</span>
+            <span style={valueSt}>{call.service_category || '—'}</span>
           </div>
-          {!isRodrigues && (
-            <div style={{ width: 150, ...cellSt }}>
-              <span style={labelSt}>Data</span>
-              <span style={valueSt}>{osDate}</span>
-            </div>
-          )}
+          <div style={{ width: 150, ...cellSt }}>
+            <span style={labelSt}>Data</span>
+            <span style={valueSt}>{osDate}</span>
+          </div>
         </div>
 
         {/* Endereço do Serviço */}
         <div style={{ border: B, borderTop: 'none', ...cellSt }}>
           <span style={labelSt}>Endereço do Serviço</span>
-          <span style={valueSt}>
-            {isRodrigues
-              ? formatAddress({ address: call.call_address, number: call.address_number, complement: call.address_complement, neighborhood: call.call_neighborhood, city: call.call_city })
-              : (call.call_address ? `${call.call_address}${call.call_city ? ` - ${call.call_city}` : ''}` : (client?.address || ''))}
-          </span>
-          {isRodrigues && call.address_reference && (
-            <span style={{ display: 'block', fontSize: 9, color: '#555', marginTop: 2 }}>Referência: {call.address_reference}</span>
-          )}
+          <span style={valueSt}>{call.call_address ? `${call.call_address}${call.call_city ? ` - ${call.call_city}` : ''}` : (client?.address || '')}</span>
         </div>
-
-        {/* Tipo/Marca do Aparelho — só Rodrigues */}
-        {isRodrigues && (call.appliance_type || call.device_brand) && (
-          <div style={{ display: 'flex', border: B, borderTop: 'none' }}>
-            <div style={{ flex: 1, ...cellSt, borderRight: B }}>
-              <span style={labelSt}>Tipo do Aparelho</span>
-              <span style={valueSt}>{call.appliance_type || '—'}</span>
-            </div>
-            <div style={{ flex: 1, ...cellSt }}>
-              <span style={labelSt}>Marca</span>
-              <span style={valueSt}>{call.device_brand || '—'}</span>
-            </div>
-          </div>
-        )}
 
         {/* ── SERVIÇOS / PEÇAS ── */}
         <div style={{ border: B, borderTop: 'none', background: '#f5f5f5', padding: '3px 8px', textAlign: 'center', fontWeight: 700, fontSize: 11, letterSpacing: '0.04em' }}>
@@ -284,7 +267,7 @@ function ImprimirContent({ id }: { id: string }) {
             <tr>
               <th style={{ border: B, borderTop: 'none', padding: '4px 8px', textAlign: 'left', width: 55, fontWeight: 700 }}>Qtd</th>
               <th style={{ border: B, borderTop: 'none', padding: '4px 8px', textAlign: 'left', fontWeight: 700 }}>Descrição</th>
-              {!isRodrigues && <th style={{ border: B, borderTop: 'none', padding: '4px 8px', textAlign: 'right', width: 100, fontWeight: 700 }}>Vlr Unit.</th>}
+              <th style={{ border: B, borderTop: 'none', padding: '4px 8px', textAlign: 'right', width: 100, fontWeight: 700 }}>Vlr Unit.</th>
               <th style={{ border: B, borderTop: 'none', padding: '4px 8px', textAlign: 'right', width: 110, fontWeight: 700 }}>Vlr Total</th>
             </tr>
           </thead>
@@ -300,7 +283,7 @@ function ImprimirContent({ id }: { id: string }) {
                   {it.description}
                   {it.notes && <span style={{ display: 'block', fontSize: 9, color: '#555', marginTop: 2 }}>{it.notes}</span>}
                 </td>
-                {!isRodrigues && <td style={{ border: B, padding: '5px 8px', textAlign: 'right', verticalAlign: 'top' }}>{BRL(it.unit_price)}</td>}
+                <td style={{ border: B, padding: '5px 8px', textAlign: 'right', verticalAlign: 'top' }}>{BRL(it.unit_price)}</td>
                 <td style={{ border: B, padding: '5px 8px', textAlign: 'right', verticalAlign: 'top' }}>{BRL(it.total ?? it.quantity * it.unit_price)}</td>
               </tr>
             ))}
@@ -308,7 +291,7 @@ function ImprimirContent({ id }: { id: string }) {
               <tr key={`e${i}`}>
                 <td style={{ border: B, padding: '5px 8px', height: 24 }}>&nbsp;</td>
                 <td style={{ border: B, padding: '5px 8px' }}>&nbsp;</td>
-                {!isRodrigues && <td style={{ border: B, padding: '5px 8px' }}>&nbsp;</td>}
+                <td style={{ border: B, padding: '5px 8px' }}>&nbsp;</td>
                 <td style={{ border: B, padding: '5px 8px' }}>&nbsp;</td>
               </tr>
             ))}
@@ -322,18 +305,6 @@ function ImprimirContent({ id }: { id: string }) {
             <span style={{ fontWeight: 900, fontSize: 14 }}>{BRL(valorTotal)}</span>
           </div>
         </div>
-
-        {/* ── Descrição do serviço (Rodrigues) ── */}
-        {isRodrigues && so.observations && (
-          <>
-            <div style={{ border: B, borderTop: 'none', background: '#f5f5f5', padding: '3px 8px', textAlign: 'center', fontWeight: 700, fontSize: 11, letterSpacing: '0.04em' }}>
-              DESCRIÇÃO DO SERVIÇO
-            </div>
-            <div style={{ border: B, borderTop: 'none', ...cellSt, fontSize: 11, whiteSpace: 'pre-wrap' }}>
-              {so.observations}
-            </div>
-          </>
-        )}
 
         {/* ── Forma de Pagamento ── */}
         <div style={{ border: B, borderTop: 'none', ...cellSt }}>
@@ -349,32 +320,6 @@ function ImprimirContent({ id }: { id: string }) {
             : so.has_guarantee_6m ? 'Garantia 6 meses'
             : so.has_guarantee_1y ? 'Garantia 1 ano'
             : so.has_no_guarantee ? 'Sem garantia' : ''
-
-          if (isRodrigues) {
-            if (!garantia) return null
-            const GARANTIA_TEXT: Record<string, string> = {
-              'Garantia 90 dias': 'Garantia de 90 dias sobre mão de obra, conforme Código de Defesa do Consumidor.',
-              'Garantia 6 meses': 'Garantia de 6 meses sobre mão de obra e peças.',
-              'Garantia 1 ano': 'Garantia de 1 ano sobre mão de obra e peças.',
-              'Sem garantia': 'Este serviço não possui garantia.',
-            }
-            return (
-              <>
-                <div style={{ border: B, borderTop: 'none', background: '#f5f5f5', padding: '3px 8px', textAlign: 'center', fontWeight: 700, fontSize: 11, letterSpacing: '0.04em' }}>
-                  GARANTIA
-                </div>
-                <div style={{ border: B, borderTop: 'none', ...cellSt }}>
-                  <span style={labelSt}>Garantia</span>
-                  <span style={valueSt}>{garantia}</span>
-                  {GARANTIA_TEXT[garantia] && (
-                    <span style={{ display: 'block', fontSize: 9, color: '#555', marginTop: 4, lineHeight: 1.4, fontWeight: 400 }}>
-                      {GARANTIA_TEXT[garantia]}
-                    </span>
-                  )}
-                </div>
-              </>
-            )
-          }
 
           const plantaBaixa = so.has_floor_plan ? 'Com planta baixa'
             : so.has_no_floor_plan ? 'Sem planta baixa'
@@ -431,6 +376,7 @@ function ImprimirContent({ id }: { id: string }) {
         <p style={{ textAlign: 'center', fontSize: 10, color: '#777', marginTop: 10 }}>
           {companyName.toUpperCase()} · {tenantTagline}
         </p>
+        </>)}
       </div>
 
       {/* Espaço para o botão fixo não cobrir o fim da folha */}

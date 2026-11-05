@@ -53,6 +53,7 @@ interface Tenant {
   logo_url: string | null
   primary_color: string
   origin_branding?: Record<string, { color: string; logo_url?: string }>
+  call_form_config?: any
 }
 
 function fmt(n: number) {
@@ -95,7 +96,7 @@ export default function OrcamentoDetailPage() {
       if (user) {
         const { data: profile } = await supabase.from('profiles').select('tenant_id').eq('id', user.id).single()
         if (profile?.tenant_id) {
-          const { data: t } = await supabase.from('tenants').select('id, name, logo_url, primary_color, origin_branding').eq('id', profile.tenant_id).single()
+          const { data: t } = await supabase.from('tenants').select('id, name, logo_url, primary_color, origin_branding, call_form_config').eq('id', profile.tenant_id).single()
           if (t) setTenantData(t as Tenant)
         }
       }
@@ -267,7 +268,7 @@ export default function OrcamentoDetailPage() {
               ['CPF/CNPJ', quote.client_cpf],
               ['Endereço', quote.client_address],
               ['Cidade', quote.client_city],
-              ['Origem', siteName],
+              ['Origem', tenantData?.call_form_config?.rodrigues_custom === true ? null : siteName],
               ['Válido até', quote.valid_until ? new Date(quote.valid_until + 'T12:00:00').toLocaleDateString('pt-BR') : null],
             ].filter(([, v]) => v).map(([label, value]) => (
               <div key={String(label)}>

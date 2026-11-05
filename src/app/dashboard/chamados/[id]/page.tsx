@@ -245,7 +245,7 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
             <p className="text-slate-500 text-xs sm:text-sm mt-0.5">
               {call.call_number && <span className="font-mono font-semibold text-orange-500">{call.call_number}{' · '}</span>}
               {new Date(call.date).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' })}
-              {' · '}{getOriginLabel(call.origin)}
+              {!isRodrigues && <>{' · '}{getOriginLabel(call.origin)}</>}
             </p>
           </div>
         </div>
@@ -465,10 +465,10 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
                   <p className="text-slate-700 font-medium mt-0.5">{call.client?.name ?? call.contact_name}</p>
                 </div>
               )}
-              <div>
+              {!isRodrigues && <div>
                 <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Origem</p>
                 <p className="text-slate-700 font-medium mt-0.5">{getOriginLabel(call.origin)}</p>
-              </div>
+              </div>}
               <div>
                 <p className="text-slate-400 text-xs uppercase tracking-wide font-medium">Status</p>
                 <p className="text-slate-700 font-medium mt-0.5">{cfg?.label}</p>

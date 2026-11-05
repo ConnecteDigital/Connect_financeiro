@@ -756,7 +756,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3">Informações do Chamado</h2>
 
         {/* Origem */}
-        <div>
+        {!isRodrigues && <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">Origem *</label>
           <div className="flex flex-wrap gap-2">
             {callOrigins.map(o => (
@@ -766,7 +766,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
               </button>
             ))}
           </div>
-        </div>
+        </div>}
 
         {/* Status */}
         <div>
