@@ -42,6 +42,11 @@ function ImprimirContent({ id }: { id: string }) {
   }, [call, isRodrigues])
 
   async function buildCanvas() {
+    if (isRodrigues) {
+      // Certificado: sempre na largura de papel, mesmo gerado no celular
+      const { buildSheetCanvas } = await import('@/lib/sheet-capture')
+      return buildSheetCanvas(sheetRef.current!, { fixedWidth: 720 })
+    }
     const html2canvas = (await import('html2canvas')).default
     return html2canvas(sheetRef.current!, {
       scale: 2,
