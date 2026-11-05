@@ -601,7 +601,8 @@ export default function ConfiguracoesPage() {
         />
       </div>
 
-      {/* Técnicos */}
+      {/* Técnicos — na Rodrigues o quadro único "Técnicos e comissões" substitui este */}
+      {tenant?.call_form_config?.rodrigues_custom === true ? <RodriguesCommissionSettings /> : (
       <div className="rounded-xl border p-6 space-y-4"
         style={{ background: 'var(--surface)', borderColor: 'var(--border)', boxShadow: 'var(--shadow-sm)' }}>
         <div className="flex items-center gap-2 border-b pb-3" style={{ borderColor: 'var(--border)' }}>
@@ -638,6 +639,7 @@ export default function ConfiguracoesPage() {
           }}
         />
       </div>
+      )}
 
       {/* Auxiliares */}
       <div className="rounded-xl border p-6 space-y-4"
@@ -783,7 +785,6 @@ export default function ConfiguracoesPage() {
         </div>
       </div>
 
-      {tenant?.call_form_config?.rodrigues_custom === true && <RodriguesCommissionSettings />}
 
       {/* Identidade por Origem */}
       <div className="rounded-xl border p-6 space-y-4"
