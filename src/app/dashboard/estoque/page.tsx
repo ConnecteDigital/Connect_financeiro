@@ -28,6 +28,7 @@ function StockSection({ title, items, auxiliaryId, onChanged }: {
   const [unitValue, setUnitValue] = useState(0)
   const [saving, setSaving] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
   const [editQty, setEditQty] = useState(0)
   const [editValue, setEditValue] = useState(0)
 
@@ -45,14 +46,16 @@ function StockSection({ title, items, auxiliaryId, onChanged }: {
 
   function startEdit(item: StockItem) {
     setEditingId(item.id)
+    setEditName(item.name)
     setEditQty(item.quantity)
     setEditValue(item.unit_value)
   }
 
   async function saveEdit(id: string) {
+    if (!editName.trim()) return
     setSaving(true)
     try {
-      await updateStockItem(id, { quantity: editQty, unit_value: editValue })
+      await updateStockItem(id, { name: editName.trim(), quantity: editQty, unit_value: editValue })
       setEditingId(null)
       onChanged()
     } finally {
@@ -99,26 +102,42 @@ function StockSection({ title, items, auxiliaryId, onChanged }: {
         <p className="px-4 py-8 text-center text-sm text-zinc-400">Nenhum item cadastrado</p>
       ) : (
         <div className="divide-y divide-zinc-50">
-          {items.map(item => (
+          {items.map(item => editingId === item.id ? (
+            <div key={item.id} className="px-4 py-3 bg-zinc-50 space-y-2">
+              <label className="block text-xs font-medium text-zinc-500">Nome da peça</label>
+              <input type="text" value={editName} onChange={e => setEditName(e.target.value)}
+                className="w-full px-3 py-2 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" />
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">Quantidade</label>
+                  <input type="number" min="0" value={editQty} onChange={e => setEditQty(Number(e.target.value))}
+                    className="w-full px-3 py-2 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-zinc-500 mb-1">Valor unit. (R$)</label>
+                  <input type="number" min="0" step="0.01" value={editValue} onChange={e => setEditValue(Number(e.target.value))}
+                    className="w-full px-3 py-2 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setEditingId(null)}
+                  className="flex-1 py-2 rounded-lg text-sm font-medium bg-white border border-zinc-200 text-zinc-600 hover:bg-zinc-100 transition">
+                  <X className="w-4 h-4 inline mr-1" />Cancelar
+                </button>
+                <button onClick={() => saveEdit(item.id)} disabled={saving || !editName.trim()}
+                  className="flex-1 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50 transition"
+                  style={{ background: 'var(--primary)' }}>
+                  <Check className="w-4 h-4 inline mr-1" />{saving ? 'Salvando...' : 'Salvar'}
+                </button>
+              </div>
+            </div>
+          ) : (
             <div key={item.id} className="flex items-center justify-between px-4 py-3 gap-2">
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-zinc-800 truncate">{item.name}</p>
                 <p className="text-xs text-zinc-400 mt-0.5">{fmt(item.unit_value)} / un.</p>
               </div>
-              {editingId === item.id ? (
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <input type="number" min="0" value={editQty} onChange={e => setEditQty(Number(e.target.value))}
-                    className="w-16 px-2 py-1.5 border border-zinc-200 rounded-lg text-sm text-center" />
-                  <input type="number" min="0" step="0.01" value={editValue} onChange={e => setEditValue(Number(e.target.value))}
-                    className="w-20 px-2 py-1.5 border border-zinc-200 rounded-lg text-sm text-center" />
-                  <button onClick={() => saveEdit(item.id)} disabled={saving} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition">
-                    <Check className="w-4 h-4" />
-                  </button>
-                  <button onClick={() => setEditingId(null)} className="p-1.5 text-zinc-400 hover:bg-zinc-100 rounded-lg transition">
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              ) : (
+              {(
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${item.quantity <= 0 ? 'bg-red-50 text-red-600' : item.quantity <= 2 ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-700'}`}>
                     {item.quantity} un.
