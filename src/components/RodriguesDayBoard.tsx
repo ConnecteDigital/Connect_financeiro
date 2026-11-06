@@ -11,7 +11,9 @@ import { localYmd } from '@/lib/tecnico-queue'
 // painel do dia — cada técnico com sua linha do tempo (00h a 24h) e o
 // resumo do dia dele. Quem aprova/recusa é o técnico; aqui é só acompanhar.
 
-const NAME_COL = 'w-24 sm:w-44'
+const HOUR_PX = 120
+const DAY_PX = HOUR_PX * 24
+const NAME_COL = 'w-44'
 const ROW_H = 46
 const DEFAULT_MIN = 60 // duração presumida de um serviço que ainda não começou
 
@@ -67,15 +69,16 @@ export default function RodriguesDayBoard({ calls, day }: { calls: any[]; day: s
   const [visits, setVisits] = useState<any[]>([])
   const [now, setNow] = useState(() => new Date())
   const scrollRef = useRef<HTMLDivElement>(null)
-  // Escala da linha do tempo: mais compacta no celular
-  const [HOUR_PX, setHourPx] = useState(120)
+  // Computador: linha do tempo na horizontal, todos os técnicos.
+  // Celular: escolhe o técnico e vê o dia dele na vertical.
+  const [isMobile, setIsMobile] = useState(false)
   useEffect(() => {
-    const fit = () => setHourPx(window.innerWidth < 640 ? 88 : 120)
+    const fit = () => setIsMobile(window.innerWidth < 640)
     fit()
     window.addEventListener('resize', fit)
     return () => window.removeEventListener('resize', fit)
   }, [])
-  const DAY_PX = HOUR_PX * 24
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const isToday = day === localYmd(now)
 
   useEffect(() => {
@@ -104,7 +107,7 @@ export default function RodriguesDayBoard({ calls, day }: { calls: any[]; day: s
     const n = new Date()
     const startHour = day === localYmd(n) ? Math.max(0, Math.min(n.getHours() - 1, 7)) : 7
     el.scrollLeft = startHour * HOUR_PX
-  }, [day, HOUR_PX])
+  }, [day, isMobile])
 
   const dayStart = useMemo(() => new Date(day + 'T00:00:00').getTime(), [day])
   const toMin = (iso: string) => Math.min(1440, Math.max(0, (new Date(iso).getTime() - dayStart) / 60_000))
@@ -181,6 +184,9 @@ export default function RodriguesDayBoard({ calls, day }: { calls: any[]; day: s
   const dayRevenue = lanes.reduce((s, l) => s + l.revenue, 0)
   const nowMin = (now.getTime() - dayStart) / 60_000
 
+  // Celular: técnico escolhido (por padrão o que tem mais serviços)
+  const selected = lanes.find(l => l.id === selectedId) ?? lanes[0] ?? null
+
   const summary: { label: string; value: number | string; cls: string }[] = [
     { label: 'Chamados', value: calls.length, cls: 'text-zinc-900' },
     { label: 'A fazer', value: dayCounts.a_fazer, cls: 'text-blue-600' },
@@ -205,7 +211,82 @@ export default function RodriguesDayBoard({ calls, day }: { calls: any[]; day: s
         <p className="text-xs text-zinc-500 -mt-2">Faturado no dia: <span className="font-semibold text-zinc-700">{fmtMoney(dayRevenue)}</span></p>
       )}
 
-      {/* Linha do tempo por técnico */}
+      {isMobile ? (
+        <>
+          {/* Técnicos: resumo de cada um; toque pra ver o dia dele */}
+          <div className="grid grid-cols-2 gap-2">
+            {lanes.map(l => {
+              const active = selected?.id === l.id
+              return (
+                <button key={l.id} type="button" onClick={() => setSelectedId(l.id)}
+                  className={`text-left rounded-2xl border px-3 py-2.5 transition ${active ? 'bg-white shadow-sm' : 'bg-white/60 border-zinc-100'}`}
+                  style={active ? { borderColor: 'var(--primary)', boxShadow: '0 0 0 1px var(--primary)' } : {}}>
+                  <p className={`text-sm font-semibold truncate ${l.id === 'none' ? 'text-red-600' : 'text-zinc-800'}`}>{l.name}</p>
+                  <p className="text-xs text-zinc-500">{l.total === 0 ? 'Livre' : `${l.total} serviço${l.total > 1 ? 's' : ''}`}</p>
+                  {l.total > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-1">
+                      {(Object.keys(PHASE) as Phase[]).filter(k => l.counts[k] > 0).map(k => (
+                        <span key={k} title={PHASE[k].label} className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-zinc-600">
+                          <span className={`w-1.5 h-1.5 rounded-full ${PHASE[k].dot}`} />{l.counts[k]}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Dia do técnico escolhido: linha do tempo vertical, na ordem do horário */}
+          {selected && (
+            <div className="bg-white rounded-2xl border border-zinc-100 shadow-sm overflow-hidden">
+              <p className="px-4 py-2.5 border-b border-zinc-100 text-sm font-semibold text-zinc-700">
+                Dia de {selected.name}
+              </p>
+              {selected.blocks.length === 0 ? (
+                <p className="px-4 py-8 text-center text-sm text-zinc-400">Nenhum serviço com horário neste dia.</p>
+              ) : (
+                <div className="px-4 py-3">
+                  {selected.blocks.map((b, i) => {
+                    const name = b.call.client?.name ?? b.call.contact_name ?? 'Sem nome'
+                    const prev = selected.blocks[i - 1]
+                    // Marca "agora" entre o serviço anterior e este
+                    const showNow = isToday && nowMin < b.start && (!prev || nowMin >= prev.start)
+                    const last = i === selected.blocks.length - 1
+                    const started = b.phase !== 'a_fazer' && visits.some(v => v.call_id === b.call.id)
+                    return (
+                      <div key={b.call.id}>
+                        {showNow && <NowMark min={nowMin} />}
+                        <div className="flex gap-3">
+                          <div className="w-11 flex-shrink-0 text-right pt-2.5">
+                            <p className="text-sm font-bold text-zinc-800 tabular-nums">{hhmm(b.start)}</p>
+                            {started && <p className="text-[10px] text-zinc-400 tabular-nums">até {b.phase === 'andamento' ? 'agora' : hhmm(b.end)}</p>}
+                          </div>
+                          <div className="relative flex flex-col items-center flex-shrink-0">
+                            <span className={`mt-3.5 w-3 h-3 rounded-full ring-4 ring-white ${PHASE[b.phase].dot} ${b.phase === 'andamento' ? 'animate-pulse' : ''}`} />
+                            {!last && <span className="flex-1 w-px bg-zinc-200 mt-1" />}
+                          </div>
+                          <Link href={`/dashboard/chamados/${b.call.id}`}
+                            className={`flex-1 min-w-0 mb-3 rounded-xl border px-3 py-2 active:scale-[0.99] transition ${PHASE[b.phase].block}`}>
+                            <p className="text-sm font-bold truncate">{name}</p>
+                            <p className="text-xs opacity-90 truncate">
+                              {b.phase === 'andamento' ? <><Timer className="inline w-3 h-3 -mt-0.5" /> Em andamento</> : PHASE[b.phase].label}
+                              {b.call.call_neighborhood ? ` · ${b.call.call_neighborhood}` : ''}
+                            </p>
+                            {b.call.service_category && <p className="text-xs opacity-75 truncate">{b.call.service_category}</p>}
+                          </Link>
+                        </div>
+                      </div>
+                    )
+                  })}
+                  {isToday && selected.blocks.every(b => nowMin >= b.start) && <NowMark min={nowMin} />}
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      ) : (
+      /* Linha do tempo por técnico */
       <div className="bg-white rounded-2xl border border-zinc-100 shadow-sm overflow-hidden">
         <div ref={scrollRef} className="overflow-x-auto">
           <div className="relative" style={{ width: 'max-content' }}>
@@ -283,6 +364,8 @@ export default function RodriguesDayBoard({ calls, day }: { calls: any[]; day: s
         </div>
       </div>
 
+      )}
+
       {/* Legenda */}
       <div className="flex flex-wrap gap-x-3 gap-y-1">
         {(['a_fazer', 'andamento', 'aprovado', 'orcamento', 'recusado', 'retorno'] as Phase[]).map(k => (
@@ -315,6 +398,17 @@ export default function RodriguesDayBoard({ calls, day }: { calls: any[]; day: s
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function NowMark({ min }: { min: number }) {
+  return (
+    <div className="flex items-center gap-2 mb-3">
+      <span className="w-11 text-right text-[11px] font-bold text-red-500 tabular-nums">{hhmm(min)}</span>
+      <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0 ml-0.5" />
+      <span className="flex-1 h-px bg-red-400" />
+      <span className="text-[10px] font-semibold text-red-500 uppercase">Agora</span>
     </div>
   )
 }
