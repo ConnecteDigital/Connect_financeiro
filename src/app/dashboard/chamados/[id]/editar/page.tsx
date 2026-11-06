@@ -168,6 +168,8 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const [technicianId, setTechnicianId] = useState('')
   const [callDriverName, setCallDriverName] = useState('')
   const [deviceBrandOther, setDeviceBrandOther] = useState('')
+  const [deviceModel, setDeviceModel] = useState('')
+  const [hadModel, setHadModel] = useState(false)
   const [visitFee, setVisitFee] = useState(0)
   const [recentVisitFees, setRecentVisitFees] = useState<number[]>([])
   const [stockItems, setStockItems] = useState<any[]>([])
@@ -200,6 +202,8 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
       setCallCity(call.call_city ?? '')
       setCallNeighborhood(call.call_neighborhood ?? '')
       setAddressExtra({ number: call.address_number ?? '', complement: call.address_complement ?? '', reference: call.address_reference ?? '' })
+      setDeviceModel(call.device_model ?? '')
+      setHadModel(!!call.device_model)
       if (call.device_brand) {
         setDeviceBrand(APPLIANCE_BRANDS.includes(call.device_brand) ? call.device_brand : 'Outra')
         if (!APPLIANCE_BRANDS.includes(call.device_brand)) setDeviceBrandOther(call.device_brand)
@@ -592,6 +596,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         ...(isRodrigues ? {
           device_brand: (deviceBrand === 'Outra' ? deviceBrandOther : deviceBrand) || null,
           appliance_type: applianceType || null,
+          ...(deviceModel.trim() || hadModel ? { device_model: deviceModel.trim() || null } : {}),
           visit_fee: visitFee > 0 ? visitFee : null,
           // Técnico não troca o responsável do chamado (só o dono)
           ...(isTecnico ? {} : {
@@ -937,6 +942,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
             onApplianceChange={a => setRodriguesSelection(a, a ? rodService : '')}
             brand={deviceBrand} setBrand={setDeviceBrand}
             brandOther={deviceBrandOther} setBrandOther={setDeviceBrandOther}
+            model={deviceModel} setModel={setDeviceModel}
             serviceNames={categoryNames}
             service={rodService}
             onServiceChange={sv => setRodriguesSelection(applianceType, sv)}

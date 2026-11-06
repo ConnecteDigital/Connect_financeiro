@@ -5,8 +5,11 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useTenant } from '@/lib/tenant-context'
 import { getCall } from '@/lib/db/calls'
+import { serviceWithoutAppliance } from '@/lib/service-config'
 import { Plus, Trash2, Loader2, ArrowLeft, Eye, EyeOff } from 'lucide-react'
 import Link from 'next/link'
+import RodriguesQuoteFields from '@/components/RodriguesQuoteFields'
+import type { QuoteDetails } from '@/lib/rodrigues-doc'
 
 interface Item {
   description: string
@@ -46,6 +49,8 @@ function NovoOrcamentoForm() {
 
   // Display option
   const [showTotal, setShowTotal] = useState(true)
+  const isRodrigues = tenant?.call_form_config?.rodrigues_custom === true
+  const [details, setDetails] = useState<QuoteDetails>({ validity_days: '7', payment_conditions: 'À vista.' })
 
   // Pre-fill from chamado
   useEffect(() => {
@@ -62,6 +67,16 @@ function NovoOrcamentoForm() {
         setClientCity(call.call_city ?? call.client?.city ?? '')
         setOrigin(call.origin ?? '')
         if (call.notes) setNotes(call.notes)
+        const t = call.scheduled_time ? String(call.scheduled_time).slice(0, 5) : ''
+        setDetails(d => ({
+          ...d,
+          appliance: call.appliance_type ?? d.appliance,
+          brand: call.device_brand ?? d.brand,
+          model: call.device_model ?? d.model,
+          defect: serviceWithoutAppliance(call.service_category, call.appliance_type, call.device_brand) || d.defect,
+          visit_date: call.scheduled_date ?? call.date ?? d.visit_date,
+          visit_period: t ? (Number(t.slice(0, 2)) < 12 ? 'Manhã (08:00 - 12:00)' : Number(t.slice(0, 2)) < 18 ? 'Tarde (12:00 - 18:00)' : 'Noite (19:00 - 22:00)') : d.visit_period,
+        }))
 
         // Pre-fill items from service order items if available
         const so = call.service_orders?.[0]
@@ -134,6 +149,7 @@ function NovoOrcamentoForm() {
         status: 'pendente',
         show_total: showTotal,
         call_id: callId || null,
+        ...(isRodrigues ? { details: Object.fromEntries(Object.entries(details).map(([k, v]) => [k, typeof v === 'string' ? v.trim() : v]).filter(([, v]) => v)) } : {}),
       }).select().single()
 
       if (error) {
@@ -216,6 +232,8 @@ function NovoOrcamentoForm() {
           </div>
         </div>
       </div>
+
+      {isRodrigues && <RodriguesQuoteFields value={details} onChange={setDetails} />}
 
       {/* Section 2: Services */}
       <div className="rounded-2xl p-6 space-y-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>

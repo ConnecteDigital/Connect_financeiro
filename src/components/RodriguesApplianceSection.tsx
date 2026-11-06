@@ -14,6 +14,8 @@ export default function RodriguesApplianceSection(props: {
   setBrand: (v: string) => void
   brandOther: string
   setBrandOther: (v: string) => void
+  model?: string
+  setModel?: (v: string) => void
   serviceNames: string[]
   service: string
   onServiceChange: (v: string) => void
@@ -52,6 +54,14 @@ export default function RodriguesApplianceSection(props: {
                 placeholder="Digite a marca..." className={`${inputCls} mt-2`} />
             )}
           </div>
+
+          {props.setModel && (
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Modelo <span className="text-slate-400 font-normal">(opcional)</span></label>
+              <input type="text" value={props.model ?? ''} onChange={e => props.setModel!(e.target.value)}
+                placeholder="Ex: BRM50" className={inputCls} />
+            </div>
+          )}
 
           {props.serviceNames.length > 0 && (
             <div>

@@ -8,6 +8,9 @@ import { useTenant } from '@/lib/tenant-context'
 import { getServiceOrderParts } from '@/lib/db/stock'
 import { createClient } from '@/lib/supabase/client'
 import RodriguesCertificado from '@/components/RodriguesCertificado'
+import RodriguesDocument, { DOC_WIDTH } from '@/components/RodriguesDocument'
+import ScaledSheet from '@/components/ScaledSheet'
+import { rodriguesOsDoc } from '@/lib/rodrigues-os-doc'
 import { ArrowLeft, Share2, Loader2, FileImage, FileText } from 'lucide-react'
 
 const BRL = (v: number | string) =>
@@ -24,6 +27,9 @@ function ImprimirContent({ id }: { id: string }) {
   const isRodrigues = tenant?.call_form_config?.rodrigues_custom === true
   const [parts, setParts] = useState<any[]>([])
   const [tecnicoName, setTecnicoName] = useState('')
+  // Rodrigues: Ordem de serviço (modelo novo) ou o Certificado de garantia
+  const [docKind, setDocKind] = useState<'os' | 'certificado'>('os')
+  const docRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     getCall(id).then(setCall).catch(console.error).finally(() => setLoading(false))
@@ -43,8 +49,10 @@ function ImprimirContent({ id }: { id: string }) {
 
   async function buildCanvas() {
     if (isRodrigues) {
-      // Certificado: sempre na largura de papel, mesmo gerado no celular
       const { buildSheetCanvas } = await import('@/lib/sheet-capture')
+      // Ordem de serviço: folha A4 fixa, copiada fora da tela
+      if (docKind === 'os') return buildSheetCanvas(docRef.current!)
+      // Certificado: sempre na largura de papel, mesmo gerado no celular
       return buildSheetCanvas(sheetRef.current!, { fixedWidth: 720 })
     }
     const html2canvas = (await import('html2canvas')).default
@@ -161,7 +169,30 @@ function ImprimirContent({ id }: { id: string }) {
         </Link>
       </div>
 
-      {/* OS Sheet */}
+      {isRodrigues && (
+        <div className="print:hidden max-w-3xl mx-auto px-3 pb-3">
+          <div className="flex bg-zinc-100 rounded-xl p-1">
+            {([['os', 'Ordem de serviço'], ['certificado', 'Certificado de garantia']] as const).map(([k, l]) => (
+              <button key={k} type="button" onClick={() => setDocKind(k)}
+                className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${docKind === k ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500'}`}>
+                {l}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {isRodrigues && docKind === 'os' ? (
+        <>
+          <div className="max-w-3xl mx-auto px-3">
+            <ScaledSheet width={DOC_WIDTH}><RodriguesDocument {...rodriguesOsDoc(tenant, call, so)} /></ScaledSheet>
+          </div>
+          <div style={{ position: 'fixed', left: -10000, top: 0 }} aria-hidden>
+            <div ref={docRef}><RodriguesDocument {...rodriguesOsDoc(tenant, call, so)} /></div>
+          </div>
+        </>
+      ) : (
+      /* OS Sheet */
       <div
         ref={sheetRef}
         className="os-sheet bg-white mx-auto"
@@ -383,6 +414,7 @@ function ImprimirContent({ id }: { id: string }) {
         </p>
         </>)}
       </div>
+      )}
 
       {/* Espaço para o botão fixo não cobrir o fim da folha */}
       <div className="print:hidden" style={{ height: 96 }} />

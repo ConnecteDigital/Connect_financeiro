@@ -4,8 +4,11 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { ArrowLeft, Share2, Check, X, Loader2, Edit2 } from 'lucide-react'
+import { ArrowLeft, Share2, Check, X, Loader2, Edit2, FileDown, ImageIcon } from 'lucide-react'
 import { createCall } from '@/lib/db/calls'
+import RodriguesDocument, { DOC_WIDTH, type RodriguesDocProps } from '@/components/RodriguesDocument'
+import ScaledSheet from '@/components/ScaledSheet'
+import { docHeaderOf, type QuoteDetails } from '@/lib/rodrigues-doc'
 
 const ORIGIN_LABELS: Record<string, string> = {
   site_lider: 'Site Líder',
@@ -43,6 +46,7 @@ interface Quote {
   origin: string | null
   notes: string | null
   show_total: boolean
+  details?: QuoteDetails | null
   created_at: string
   updated_at: string
 }
@@ -68,6 +72,31 @@ function hexToRgb(hex: string): string {
   return `${r}, ${g}, ${b}`
 }
 
+const brDate = (d?: string | null) => d ? new Date(d.length === 10 ? d + 'T12:00:00' : d).toLocaleDateString('pt-BR') : ''
+
+// Orçamento da Rodrigues no modelo de documento deles
+function rodriguesQuoteDoc(q: Quote, tenant: Tenant | null): RodriguesDocProps {
+  const header = docHeaderOf(tenant)
+  const d = q.details ?? {}
+  const validity = d.validity_days
+    || (q.valid_until ? String(Math.max(0, Math.round((new Date(q.valid_until + 'T12:00:00').getTime() - new Date(q.created_at).getTime()) / 86_400_000))) : '')
+  return {
+    header,
+    title: `Orçamento ${q.quote_number ?? ''}`.trim(),
+    date: brDate(q.created_at),
+    client: { name: q.client_name, addressLines: [q.client_address ?? '', q.client_city ?? ''], phone: q.client_phone },
+    info: [['Validade do orçamento', validity ? `${validity}` : null], ['Marca', d.brand], ['Modelo', d.model], ['Aparelho', d.appliance], ['Defeito', d.defect]],
+    visit: d.visit_date || d.visit_period?.trim() ? { date: brDate(d.visit_date), period: d.visit_period?.trim() } : null,
+    items: (q.items ?? []).map(it => ({ description: it.description, quantity: Number(it.quantity), unit_price: Number(it.unit_price) })),
+    showPrices: q.show_total !== false,
+    discount: Number(q.discount || 0),
+    payment: { methods: header.payment_methods, pix: header.pix, conditions: d.payment_conditions },
+    guarantee: q.guarantee,
+    extraInfo: [q.service_description, q.notes].filter(Boolean).join('\n\n') || null,
+    signatures: [header.name],
+  }
+}
+
 const STATUS_MAP: Record<string, { label: string; bg: string; color: string }> = {
   pendente: { label: 'Pendente', bg: 'rgba(245,158,11,0.12)', color: '#f59e0b' },
   aprovado: { label: 'Aprovado', bg: 'rgba(16,185,129,0.12)', color: '#10b981' },
@@ -85,6 +114,22 @@ export default function OrcamentoDetailPage() {
   const [updatingStatus, setUpdatingStatus] = useState(false)
   const [sharing, setSharing] = useState(false)
   const shareCardRef = useRef<HTMLDivElement>(null)
+  const docRef = useRef<HTMLDivElement>(null)
+  const [docSharing, setDocSharing] = useState<'pdf' | 'png' | null>(null)
+
+  async function handleDocShare(kind: 'pdf' | 'png') {
+    if (!docRef.current || docSharing || !quote) return
+    setDocSharing(kind)
+    try {
+      const { shareSheet } = await import('@/lib/sheet-capture')
+      const base = `Orcamento-${quote.quote_number ?? ''}-${quote.client_name}`.replace(/[^\p{L}\p{N}._-]+/gu, '_')
+      await shareSheet(docRef.current, base, kind, `Orçamento ${quote.quote_number ?? ''}`)
+    } catch (e: unknown) {
+      if ((e as { name?: string })?.name !== 'AbortError') alert('Não foi possível gerar o arquivo. Tente novamente.')
+    } finally {
+      setDocSharing(null)
+    }
+  }
 
   useEffect(() => {
     if (!id) return
@@ -193,6 +238,8 @@ export default function OrcamentoDetailPage() {
   }
 
   const status = STATUS_MAP[quote.status] ?? STATUS_MAP.pendente
+  const isRodrigues = tenantData?.call_form_config?.rodrigues_custom === true
+  const rodDoc = isRodrigues ? rodriguesQuoteDoc(quote, tenantData) : null
   const originBranding = quote.origin ? (tenantData?.origin_branding?.[quote.origin] ?? null) : null
   const brandColor = originBranding?.color ?? tenantData?.primary_color ?? '#f97316'
   const brandLogo = originBranding?.logo_url ?? tenantData?.logo_url
@@ -232,11 +279,26 @@ export default function OrcamentoDetailPage() {
               <Edit2 className="w-4 h-4" />
               <span className="hidden sm:inline">Editar</span>
             </Link>
+            {rodDoc ? (
+              <>
+                <button onClick={() => handleDocShare('pdf')} disabled={!!docSharing} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition"
+                  style={{ background: 'var(--primary)' }}>
+                  {docSharing === 'pdf' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+                  PDF
+                </button>
+                <button onClick={() => handleDocShare('png')} disabled={!!docSharing} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition"
+                  style={{ background: 'var(--surface-secondary)', color: 'var(--text-secondary)' }}>
+                  {docSharing === 'png' ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
+                  <span className="hidden sm:inline">Imagem</span>
+                </button>
+              </>
+            ) : (
             <button onClick={handleShare} disabled={sharing} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition"
               style={{ background: 'var(--surface-secondary)', color: 'var(--text-secondary)' }}>
               {sharing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 className="w-4 h-4" />}
               <span className="hidden sm:inline">Compartilhar</span>
             </button>
+            )}
           </div>
         </div>
 
@@ -258,6 +320,9 @@ export default function OrcamentoDetailPage() {
           </div>
         )}
 
+        {rodDoc ? (
+          <ScaledSheet width={DOC_WIDTH}><RodriguesDocument {...rodDoc} /></ScaledSheet>
+        ) : (<>
         {/* Client info card */}
         <div className="rounded-2xl p-5 space-y-3" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Dados do Cliente</h2>
@@ -349,7 +414,15 @@ export default function OrcamentoDetailPage() {
             <p className="text-sm whitespace-pre-wrap" style={{ color: 'var(--text-secondary)' }}>{quote.notes}</p>
           </div>
         )}
+        </>)}
       </div>
+
+      {/* Rodrigues: cópia em tamanho real, fora da tela, pra gerar o PDF/imagem */}
+      {rodDoc && (
+        <div style={{ position: 'fixed', left: -10000, top: 0 }} aria-hidden>
+          <div ref={docRef}><RodriguesDocument {...rodDoc} /></div>
+        </div>
+      )}
 
       {/* Share card — off-screen, fixed width 500px, always rendered for html2canvas */}
       <div

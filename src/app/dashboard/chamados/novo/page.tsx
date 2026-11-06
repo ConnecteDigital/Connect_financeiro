@@ -136,6 +136,7 @@ export default function NovoChamadoPage() {
   const [applianceType, setApplianceType] = useState('')
   const [deviceBrand, setDeviceBrand] = useState('')
   const [deviceBrandOther, setDeviceBrandOther] = useState('')
+  const [deviceModel, setDeviceModel] = useState('')
   const [partsCost, setPartsCost] = useState(0)
   const [stockItems, setStockItems] = useState<any[]>([])
   const [stockLines, setStockLines] = useState<{ stock_item_id: string; item_name: string; quantity: number; unit_value: number; total_value: number }[]>([])
@@ -524,6 +525,7 @@ export default function NovoChamadoPage() {
         driver: scheduledDriver || null,
         device_brand: isRodrigues ? ((deviceBrand === 'Outra' ? deviceBrandOther : deviceBrand) || null) : null,
         appliance_type: isRodrigues ? (applianceType || null) : null,
+        ...(isRodrigues && deviceModel.trim() ? { device_model: deviceModel.trim() } : {}),
         visit_fee: isRodrigues && isScheduled && visitFee > 0 ? visitFee : null,
         technician_id: isRodrigues ? (technicianId || auxiliaryId || null) : null,
         ...(isRodrigues ? {
@@ -1272,6 +1274,7 @@ export default function NovoChamadoPage() {
             onApplianceChange={a => setRodriguesSelection(a, a ? rodService : '')}
             brand={deviceBrand} setBrand={setDeviceBrand}
             brandOther={deviceBrandOther} setBrandOther={setDeviceBrandOther}
+            model={deviceModel} setModel={setDeviceModel}
             serviceNames={categoryNames}
             service={rodService}
             onServiceChange={sv => setRodriguesSelection(applianceType, sv)}

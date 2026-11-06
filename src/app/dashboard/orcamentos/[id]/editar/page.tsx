@@ -6,6 +6,8 @@ import { createClient } from '@/lib/supabase/client'
 import { useTenant } from '@/lib/tenant-context'
 import { Plus, Trash2, Loader2, ArrowLeft, Eye, EyeOff } from 'lucide-react'
 import Link from 'next/link'
+import RodriguesQuoteFields from '@/components/RodriguesQuoteFields'
+import type { QuoteDetails } from '@/lib/rodrigues-doc'
 
 interface Item {
   description: string
@@ -42,6 +44,8 @@ export default function EditarOrcamentoPage() {
   const [taxes, setTaxes] = useState('')
   const [notes, setNotes] = useState('')
   const [showTotal, setShowTotal] = useState(true)
+  const isRodrigues = tenant?.call_form_config?.rodrigues_custom === true
+  const [details, setDetails] = useState<QuoteDetails>({})
 
   const subtotal = items.reduce((s, it) => s + it.quantity * it.unit_price, 0)
   const total = subtotal - Number(discount || 0) + Number(taxes || 0)
@@ -66,6 +70,7 @@ export default function EditarOrcamentoPage() {
         setTaxes(data.taxes != null ? String(data.taxes) : '')
         setNotes(data.notes ?? '')
         setShowTotal(data.show_total !== false)
+        setDetails(data.details ?? {})
       }
       setLoading(false)
     }
@@ -107,6 +112,7 @@ export default function EditarOrcamentoPage() {
         notes: notes.trim() || null,
         show_total: showTotal,
         updated_at: new Date().toISOString(),
+        ...(isRodrigues ? { details: Object.fromEntries(Object.entries(details).map(([k, v]) => [k, typeof v === 'string' ? v.trim() : v]).filter(([, v]) => v)) } : {}),
       }).eq('id', id)
 
       if (error) {
@@ -186,6 +192,8 @@ export default function EditarOrcamentoPage() {
           </div>
         </div>
       </div>
+
+      {isRodrigues && <RodriguesQuoteFields value={details} onChange={setDetails} />}
 
       {/* Section 2: Services */}
       <div className="rounded-2xl p-6 space-y-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
