@@ -534,6 +534,8 @@ export default function NovoChamadoPage() {
       })
       if (isRodrigues && isScheduled && visitFee > 0) addRecentVisitFee(visitFee)
 
+      if (isRodrigues && !isApproved) await uploadPendingFiles(call.id)
+
       if (isApproved) {
         await uploadPendingFiles(call.id)
 
@@ -857,6 +859,51 @@ export default function NovoChamadoPage() {
       </div>
     )
   }
+
+  // Fotos e documentos — na Rodrigues aparece já ao criar o chamado
+  const photosSection = (
+    <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-4">
+        <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3">Fotos e Documentos</h2>
+        <p className="text-xs text-slate-500">Anexe fotos do local ou documentos relacionados ao serviço. Ficam salvos na OS.</p>
+
+        <div className="flex gap-3">
+          <button type="button" onClick={() => cameraInputRef.current?.click()}
+            className="flex items-center gap-2 px-4 py-2.5 bg-orange-50 border border-orange-200 text-orange-600 rounded-xl text-sm font-medium hover:bg-orange-100 transition active:scale-95">
+            <Camera className="w-4 h-4" /> Tirar Foto
+          </button>
+          <button type="button" onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-2 px-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-sm font-medium hover:bg-slate-100 transition active:scale-95">
+            <Paperclip className="w-4 h-4" /> Anexar Arquivo
+          </button>
+          <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" multiple className="hidden"
+            onChange={e => addFiles(e.target.files)} />
+          <input ref={fileInputRef} type="file" multiple className="hidden"
+            onChange={e => addFiles(e.target.files)} />
+        </div>
+
+        {pendingFiles.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {pendingFiles.map(f => (
+              <div key={f.id} className="relative rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+                {f.preview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={f.preview} alt={f.file.name} className="w-full h-24 object-cover" />
+                ) : (
+                  <div className="w-full h-24 flex flex-col items-center justify-center gap-1 text-slate-400 px-2">
+                    <FileText className="w-7 h-7" />
+                    <span className="text-xs truncate w-full text-center">{f.file.name}</span>
+                  </div>
+                )}
+                <button type="button" onClick={() => removePendingFile(f.id)}
+                  className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1">
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+  )
 
   return (
     <form onSubmit={handleSubmit} className="max-w-4xl mx-auto space-y-6">
@@ -1343,6 +1390,8 @@ export default function NovoChamadoPage() {
         </div>
       </div>
 
+      {isRodrigues && !isApproved && photosSection}
+
       {/* OS — só quando aprovado */}
       {isApproved && (
         <>
@@ -1811,48 +1860,7 @@ export default function NovoChamadoPage() {
             )}
           </div>
 
-          {/* Fotos e documentos */}
-          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6 space-y-4">
-            <h2 className="font-semibold text-slate-800 text-base border-b border-slate-100 pb-3">Fotos e Documentos</h2>
-            <p className="text-xs text-slate-500">Anexe fotos do local ou documentos relacionados ao serviço. Ficam salvos na OS.</p>
-
-            <div className="flex gap-3">
-              <button type="button" onClick={() => cameraInputRef.current?.click()}
-                className="flex items-center gap-2 px-4 py-2.5 bg-orange-50 border border-orange-200 text-orange-600 rounded-xl text-sm font-medium hover:bg-orange-100 transition active:scale-95">
-                <Camera className="w-4 h-4" /> Tirar Foto
-              </button>
-              <button type="button" onClick={() => fileInputRef.current?.click()}
-                className="flex items-center gap-2 px-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-sm font-medium hover:bg-slate-100 transition active:scale-95">
-                <Paperclip className="w-4 h-4" /> Anexar Arquivo
-              </button>
-              <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" multiple className="hidden"
-                onChange={e => addFiles(e.target.files)} />
-              <input ref={fileInputRef} type="file" multiple className="hidden"
-                onChange={e => addFiles(e.target.files)} />
-            </div>
-
-            {pendingFiles.length > 0 && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {pendingFiles.map(f => (
-                  <div key={f.id} className="relative rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
-                    {f.preview ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={f.preview} alt={f.file.name} className="w-full h-24 object-cover" />
-                    ) : (
-                      <div className="w-full h-24 flex flex-col items-center justify-center gap-1 text-slate-400 px-2">
-                        <FileText className="w-7 h-7" />
-                        <span className="text-xs truncate w-full text-center">{f.file.name}</span>
-                      </div>
-                    )}
-                    <button type="button" onClick={() => removePendingFile(f.id)}
-                      className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1">
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          {photosSection}
         </>
       )}
 

@@ -3,7 +3,7 @@
 import { use, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Camera, Loader2, Save, Trash2, X } from 'lucide-react'
+import { ArrowLeft, Camera, Loader2, Save, Trash2, X, Paperclip } from 'lucide-react'
 import { getCall } from '@/lib/db/calls'
 import { createServiceOrder, updateServiceOrder, syncOsAutoExpenses } from '@/lib/db/service-orders'
 import { getStockItems, getServiceOrderParts, addServiceOrderParts, adjustStockQuantity, restorePreviousServiceOrderParts } from '@/lib/db/stock'
@@ -34,11 +34,13 @@ export default function FinalizarServicoPage({ params }: { params: Promise<{ id:
   const [stockItems, setStockItems] = useState<any[]>([])
   const [stockLines, setStockLines] = useState<StockLine[]>([])
   const [extraPartsCost, setExtraPartsCost] = useState(0)
+  const [uberCost, setUberCost] = useState(0)
   const [paymentLines, setPaymentLines] = useState<PaymentLine[]>([])
   const [partsPaid, setPartsPaid] = useState(false)
   const [observations, setObservations] = useState('')
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
   const cameraRef = useRef<HTMLInputElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const so = call?.service_orders?.[0] ?? null
   // Retorno (garantia): não cobra o serviço, só a peça, se o cliente pagar
@@ -59,6 +61,7 @@ export default function FinalizarServicoPage({ params }: { params: Promise<{ id:
         setPaymentLines(paymentsFromOs(existing))
         setPartsPaid(c.return_parts_paid ?? Number(existing.total_value ?? 0) > 0)
         setObservations(existing.observations ?? '')
+        setUberCost(Number(existing.uber_cost ?? 0))
         const parts = await getServiceOrderParts(existing.id)
         const lines = parts.map((p: any) => ({
           stock_item_id: p.stock_item_id, item_name: p.item_name, quantity: Number(p.quantity),
@@ -122,6 +125,7 @@ export default function FinalizarServicoPage({ params }: { params: Promise<{ id:
         subtotal: chargedTotal,
         total_value: chargedTotal,
         parts_cost: partsTotal,
+        uber_cost: uberCost || 0,
         ...paymentSummaryFields(lines),
         card_net_value: keepConfirmed ? so.card_net_value : null,
         observations: observations || null,
@@ -236,6 +240,12 @@ export default function FinalizarServicoPage({ params }: { params: Promise<{ id:
             <input type="number" min="0" step="0.01" value={extraPartsCost || ''} onChange={e => setExtraPartsCost(Number(e.target.value))}
               className={inputCls} placeholder="0,00" />
           </div>
+          <div className="mt-3">
+            <label className="block text-xs font-medium text-slate-600 mb-1">Custo de Uber pra trazer peça (R$)</label>
+            <input type="number" min="0" step="0.01" value={uberCost || ''} onChange={e => setUberCost(Number(e.target.value))}
+              className={inputCls} placeholder="0,00 — deixe em branco se não teve" />
+            <p className="text-xs text-slate-400 mt-1">É descontado do valor antes de calcular a comissão, igual à peça.</p>
+          </div>
         </div>
 
         {isReturn && (
@@ -272,12 +282,20 @@ export default function FinalizarServicoPage({ params }: { params: Promise<{ id:
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">Fotos</label>
-          <button type="button" onClick={() => cameraRef.current?.click()}
-            className="flex items-center gap-2 px-4 py-2.5 bg-orange-50 border border-orange-200 text-orange-600 rounded-xl text-sm font-medium hover:bg-orange-100 transition">
-            <Camera className="w-4 h-4" /> Tirar / anexar foto
-          </button>
+          <label className="block text-sm font-medium text-slate-700 mb-2">Fotos e arquivos do serviço</label>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => cameraRef.current?.click()}
+              className="flex items-center gap-2 px-4 py-2.5 bg-orange-50 border border-orange-200 text-orange-600 rounded-xl text-sm font-medium hover:bg-orange-100 transition">
+              <Camera className="w-4 h-4" /> Tirar foto
+            </button>
+            <button type="button" onClick={() => fileRef.current?.click()}
+              className="flex items-center gap-2 px-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-sm font-medium hover:bg-slate-100 transition">
+              <Paperclip className="w-4 h-4" /> Anexar arquivo / galeria
+            </button>
+          </div>
           <input ref={cameraRef} type="file" accept="image/*" capture="environment" multiple className="hidden"
+            onChange={e => { addFiles(e.target.files); e.target.value = '' }} />
+          <input ref={fileRef} type="file" multiple className="hidden"
             onChange={e => { addFiles(e.target.files); e.target.value = '' }} />
           {pendingFiles.length > 0 && (
             <div className="grid grid-cols-3 gap-2 mt-2">

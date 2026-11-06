@@ -10,6 +10,7 @@ import { useTenant } from '@/lib/tenant-context'
 import RetornoModal from '@/components/RetornoModal'
 import { useTecnicoQueue, compareQueue, callDay, callKind, finishedDay, CALL_KIND_STYLE, FINISHED_TABS } from '@/lib/tecnico-queue'
 import { formatAddress } from '@/lib/address'
+import RodriguesDayBoard from '@/components/RodriguesDayBoard'
 
 type Status = 'todos' | 'agendado' | 'aprovado' | 'nao_quis_visita' | 'nao_aprovou' | 'cancelado' | 'pagou_somente_visita' | 'retorno' | 'orcamento'
 
@@ -59,6 +60,8 @@ export default function ChamadosPage() {
   const router = useRouter()
   const { tenant, isTecnico } = useTenant()
   const isRodrigues = tenant?.call_form_config?.rodrigues_custom === true
+  // Gerente da Rodrigues: painel do dia por técnico, sem lista nem aprovar/recusar
+  const isRodriguesOwner = isRodrigues && !isTecnico
   const [dayFilter, setDayFilter] = useState(localToday)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [retornoOpen, setRetornoOpen] = useState(false)
@@ -279,7 +282,7 @@ export default function ChamadosPage() {
                 value={search} onChange={e => handleSearchChange(e.target.value)}
                 className="w-full pl-9 pr-4 py-2.5 bg-white border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] shadow-sm" />
             </div>
-            {!isTecnico && (
+            {!isTecnico && !isRodriguesOwner && (
               <>
                 <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as Status)}
                   className="flex-shrink-0 px-3 py-2.5 bg-white border border-zinc-200 rounded-xl text-xs font-semibold text-zinc-600 shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]">
@@ -294,7 +297,7 @@ export default function ChamadosPage() {
             )}
           </div>
 
-          {filtersOpen && !isTecnico && (
+          {filtersOpen && !isTecnico && !isRodriguesOwner && (
             <div className="space-y-2">
               {presentOrigins.length > 0 && (
                 <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
@@ -511,6 +514,36 @@ export default function ChamadosPage() {
             </div>
           )}
         </div>
+      ) : isRodriguesOwner ? (
+        debouncedSearch.trim() ? (
+          <div className="bg-white rounded-2xl border border-zinc-100 shadow-sm overflow-hidden">
+            <p className="px-4 py-3 border-b border-zinc-100 text-sm font-semibold text-zinc-700">Resultado da busca ({calls.length})</p>
+            {calls.length === 0 ? (
+              <p className="px-4 py-8 text-center text-sm text-zinc-400">Nenhum chamado encontrado</p>
+            ) : (
+              <div className="divide-y divide-zinc-50">
+                {calls.slice(0, 100).map(c => {
+                  const cfg = statusConfig[c.status]
+                  const day = c.scheduled_date ?? c.date
+                  return (
+                    <Link key={c.id} href={`/dashboard/chamados/${c.id}`}
+                      className="flex items-center justify-between gap-2 px-4 py-3 hover:bg-zinc-50 transition">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-zinc-800 truncate">{c.client?.name ?? c.contact_name ?? 'Sem identificação'}</p>
+                        <p className="text-xs text-zinc-500 truncate mt-0.5">
+                          {[new Date(day + 'T12:00:00').toLocaleDateString('pt-BR'), c.scheduled_time ? String(c.scheduled_time).slice(0, 5) : null, c.service_category].filter(Boolean).join(' · ')}
+                        </p>
+                      </div>
+                      {cfg && <span className={`flex-shrink-0 px-2 py-0.5 rounded-full text-xs font-medium border ${cfg.color}`}>{cfg.label}</span>}
+                    </Link>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        ) : (
+          <RodriguesDayBoard calls={filteredCalls} day={dayFilter} />
+        )
       ) : isTecnico ? (
         <div className="space-y-4">
           {tecnicoQueue.length === 0 ? (

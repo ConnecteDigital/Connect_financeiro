@@ -6,7 +6,7 @@ import { getExpenses } from '@/lib/db/expenses'
 import { createClient } from '@/lib/supabase/client'
 import { osCardGross, osCardPending } from '@/lib/payments'
 
-const OS_FIELDS = 'id, os_number, date, total_value, parts_cost, after_hours, payments, payment_method, card_net_value, call:calls(contact_name, return_of_call_id, client:clients(name))'
+const OS_FIELDS = 'id, os_number, date, total_value, parts_cost, uber_cost, after_hours, payments, payment_method, card_net_value, call:calls(contact_name, return_of_call_id, client:clients(name))'
 
 const one = (v: any) => Array.isArray(v) ? v[0] : v
 const clientOf = (so: any) => {
@@ -188,7 +188,7 @@ export default function ComissaoPage() {
   )
 }
 
-// Como a comissão foi calculada: (total − peças − taxa da maquininha) × %
+// Como a comissão foi calculada: (total − peças − Uber − taxa da maquininha) × %
 function CommissionDetail({ so, amount }: { so: any; amount: number }) {
   if (!so) {
     return <p className="px-4 pb-3 text-xs text-zinc-400">Sem ordem de serviço vinculada.</p>
@@ -197,13 +197,15 @@ function CommissionDetail({ so, amount }: { so: any; amount: number }) {
   const parts = Number(so.parts_cost || 0)
   const card = osCardGross(so)
   const fee = card > 0 && so.card_net_value != null ? Math.max(card - Number(so.card_net_value), 0) : 0
-  const base = Math.max(total - parts - fee, 0)
+  const uber = Number(so.uber_cost || 0)
+  const base = Math.max(total - parts - uber - fee, 0)
   const pct = base > 0 ? (amount / base) * 100 : 0
   const rows: [string, string][] = [
     ['Cliente', clientOf(so)],
     ['OS', `${so.os_number ?? '—'} · ${fmtDate(so.date)}`],
     ['Valor total', fmt(total)],
     ['Peças', `− ${fmt(parts)}`],
+    ...(uber > 0 ? [['Uber (entrega de peça)', `− ${fmt(uber)}`] as [string, string]] : []),
     ['Taxa da maquininha', `− ${fmt(fee)}`],
     ['Base da comissão', fmt(base)],
     [`% aplicada (${so.after_hours ? 'fora do horário' : 'horário comercial'})`, `${pct.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`],
