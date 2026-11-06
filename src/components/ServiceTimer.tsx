@@ -11,7 +11,7 @@ import { useTenant } from '@/lib/tenant-context'
 
 const END_REASONS: { value: VisitOutcome; label: string; date: 'required' | 'optional' | 'none'; notes: boolean }[] = [
   { value: 'orcamento', label: 'Orçamento — cliente vai decidir', date: 'none', notes: false },
-  { value: 'remarcado', label: 'Faltou peça / remarcar', date: 'required', notes: false },
+  { value: 'remarcado', label: 'Faltou peça / remarcar', date: 'optional', notes: false },
   { value: 'cliente_ausente', label: 'Cliente não estava em casa', date: 'optional', notes: false },
   { value: 'nao_aprovou', label: 'Cliente não aprovou', date: 'none', notes: false },
   { value: 'pagou_somente_visita', label: 'Pagou somente a visita', date: 'none', notes: false },
@@ -38,7 +38,7 @@ export default function ServiceTimer({ callId, status, onChanged }: {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [endOpen, setEndOpen] = useState(false)
-  const [reason, setReason] = useState<VisitOutcome>('remarcado')
+  const [reason, setReason] = useState<VisitOutcome | null>(null)
   const [newDate, setNewDate] = useState('')
   const [notes, setNotes] = useState('')
 
@@ -83,16 +83,20 @@ export default function ServiceTimer({ callId, status, onChanged }: {
     }
   }
 
-  const reasonCfg = END_REASONS.find(r => r.value === reason)!
-  const canConfirmEnd = (reasonCfg.date !== 'required' || !!newDate) && (!reasonCfg.notes || notes.trim().length > 0)
+  const reasonCfg = END_REASONS.find(r => r.value === reason) ?? null
+  const missing = !reasonCfg ? 'Escolha o motivo'
+    : reasonCfg.date === 'required' && !newDate ? 'Escolha a nova data'
+    : reasonCfg.notes && !notes.trim() ? 'Escreva uma observação'
+    : ''
+  const canConfirmEnd = !missing
 
   async function handleEnd() {
-    if (!canConfirmEnd) return
+    if (!canConfirmEnd || !reasonCfg) return
     setBusy(true); setError('')
     try {
-      await finishServiceVisit(callId, reason, notes, reasonCfg.date === 'none' ? undefined : (newDate || undefined))
+      await finishServiceVisit(callId, reasonCfg.value, notes, reasonCfg.date === 'none' ? undefined : (newDate || undefined))
       setEndOpen(false)
-      setNotes(''); setNewDate('')
+      setNotes(''); setNewDate(''); setReason(null)
       load()
       onChanged()
     } catch (e: any) {
@@ -174,7 +178,7 @@ export default function ServiceTimer({ callId, status, onChanged }: {
                 </label>
               ))}
             </div>
-            {reasonCfg.date !== 'none' && (
+            {reasonCfg && reasonCfg.date !== 'none' && (
               <div>
                 <label className="block text-xs font-medium text-zinc-500 mb-1.5">
                   Nova data {reasonCfg.date === 'required' ? '*' : '(opcional)'}
@@ -185,14 +189,16 @@ export default function ServiceTimer({ callId, status, onChanged }: {
             )}
             <div>
               <label className="block text-xs font-medium text-zinc-500 mb-1.5">
-                Observação {reasonCfg.notes ? '*' : '(opcional)'}
+                Observação {reasonCfg?.notes ? '*' : '(opcional)'}
               </label>
               <textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)}
                 className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none"
                 placeholder="Ex: precisa de compressor 1/4 HP..." />
             </div>
+            {error && <p className="text-sm text-red-500">{error}</p>}
+            {missing && <p className="text-xs text-zinc-400 text-center">{missing} pra confirmar.</p>}
             <div className="flex gap-3">
-              <button onClick={() => setEndOpen(false)} disabled={busy}
+              <button onClick={() => { setEndOpen(false); setError('') }} disabled={busy}
                 className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition">
                 Cancelar
               </button>

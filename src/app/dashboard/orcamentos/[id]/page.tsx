@@ -8,6 +8,7 @@ import { ArrowLeft, Share2, Check, X, Loader2, Edit2, FileDown, ImageIcon } from
 import { createCall } from '@/lib/db/calls'
 import RodriguesDocument, { DOC_WIDTH, type RodriguesDocProps } from '@/components/RodriguesDocument'
 import ScaledSheet from '@/components/ScaledSheet'
+import { useSheetShare } from '@/lib/use-sheet-share'
 import { docHeaderOf, type QuoteDetails } from '@/lib/rodrigues-doc'
 
 const ORIGIN_LABELS: Record<string, string> = {
@@ -115,21 +116,11 @@ export default function OrcamentoDetailPage() {
   const [sharing, setSharing] = useState(false)
   const shareCardRef = useRef<HTMLDivElement>(null)
   const docRef = useRef<HTMLDivElement>(null)
-  const [docSharing, setDocSharing] = useState<'pdf' | 'png' | null>(null)
-
-  async function handleDocShare(kind: 'pdf' | 'png') {
-    if (!docRef.current || docSharing || !quote) return
-    setDocSharing(kind)
-    try {
-      const { shareSheet } = await import('@/lib/sheet-capture')
-      const base = `Orcamento-${quote.quote_number ?? ''}-${quote.client_name}`.replace(/[^\p{L}\p{N}._-]+/gu, '_')
-      await shareSheet(docRef.current, base, kind, `Orçamento ${quote.quote_number ?? ''}`)
-    } catch (e: unknown) {
-      if ((e as { name?: string })?.name !== 'AbortError') alert('Não foi possível gerar o arquivo. Tente novamente.')
-    } finally {
-      setDocSharing(null)
-    }
-  }
+  const isRodQuote = tenantData?.call_form_config?.rodrigues_custom === true && !!quote
+  const docBase = `Orcamento ${quote?.quote_number ?? ''} ${quote?.client_name ?? ''}`
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/[^a-zA-Z0-9._-]+/g, '_')
+  const docShare = useSheetShare(docRef, docBase, `Orçamento ${quote?.quote_number ?? ''}`,
+    JSON.stringify([quote?.updated_at, quote?.id, tenantData?.id]), isRodQuote)
 
   useEffect(() => {
     if (!id) return
@@ -281,14 +272,14 @@ export default function OrcamentoDetailPage() {
             </Link>
             {rodDoc ? (
               <>
-                <button onClick={() => handleDocShare('pdf')} disabled={!!docSharing} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition"
+                <button onClick={() => docShare.send('pdf')} disabled={!!docShare.busy} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition"
                   style={{ background: 'var(--primary)' }}>
-                  {docSharing === 'pdf' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
-                  PDF
+                  {docShare.busy === 'pdf' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+                  {docShare.busy === 'pdf' ? 'Gerando...' : 'Enviar PDF'}
                 </button>
-                <button onClick={() => handleDocShare('png')} disabled={!!docSharing} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition"
+                <button onClick={() => docShare.send('png')} disabled={!!docShare.busy} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition"
                   style={{ background: 'var(--surface-secondary)', color: 'var(--text-secondary)' }}>
-                  {docSharing === 'png' ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
+                  {docShare.busy === 'png' ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
                   <span className="hidden sm:inline">Imagem</span>
                 </button>
               </>
@@ -301,6 +292,11 @@ export default function OrcamentoDetailPage() {
             )}
           </div>
         </div>
+
+        {rodDoc && docShare.error && <p className="text-sm text-red-500">{docShare.error}</p>}
+        {rodDoc && !docShare.files.pdf && !docShare.busy && (
+          <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Preparando o PDF...</p>
+        )}
 
         {/* Status actions */}
         {quote.status === 'pendente' && (

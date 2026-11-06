@@ -24,9 +24,8 @@ export async function buildSheetCanvas(el: HTMLElement, opts: { fixedWidth?: num
   })
 }
 
-// Gera PDF (A4, quebra em páginas se precisar) ou PNG da folha e abre o
-// compartilhar do celular (ou baixa o arquivo no computador).
-export async function shareSheet(el: HTMLElement, fileBase: string, kind: 'pdf' | 'png', title: string) {
+// Gera o arquivo PDF (A4, quebra em páginas se precisar) ou PNG da folha.
+export async function sheetFile(el: HTMLElement, fileBase: string, kind: 'pdf' | 'png'): Promise<File> {
   const canvas = await buildSheetCanvas(el)
   let blob: Blob
   if (kind === 'png') {
@@ -42,6 +41,7 @@ export async function shareSheet(el: HTMLElement, fileBase: string, kind: 'pdf' 
     const sliceH = Math.floor(canvas.width * pageH / pageW)
     for (let y = 0, page = 0; y < canvas.height; y += sliceH, page++) {
       const h = Math.min(sliceH, canvas.height - y)
+      if (page > 0 && h < 40) break // sobra em branco
       const part = document.createElement('canvas')
       part.width = canvas.width
       part.height = h
@@ -51,14 +51,28 @@ export async function shareSheet(el: HTMLElement, fileBase: string, kind: 'pdf' 
     }
     blob = pdf.output('blob')
   }
-  const name = `${fileBase}.${kind}`
-  const file = new File([blob], name, { type: kind === 'pdf' ? 'application/pdf' : 'image/png' })
+  return new File([blob], `${fileBase}.${kind}`, { type: kind === 'pdf' ? 'application/pdf' : 'image/png' })
+}
+
+function downloadFile(file: File) {
+  const url = URL.createObjectURL(file)
+  const a = document.createElement('a')
+  a.href = url; a.download = file.name
+  document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 10_000)
+}
+
+// Envia um arquivo JÁ GERADO. Tem que ser chamado direto no toque do
+// botão (sem nada demorado antes): o celular só deixa abrir o
+// "compartilhar" logo depois de um toque. Se não der, baixa o arquivo.
+export async function shareFile(file: File, title: string) {
   if (navigator.canShare?.({ files: [file] })) {
-    await navigator.share({ files: [file], title })
-  } else {
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url; a.download = name; a.click()
-    URL.revokeObjectURL(url)
+    try {
+      await navigator.share({ files: [file], title })
+      return
+    } catch (e: unknown) {
+      if ((e as { name?: string })?.name === 'AbortError') return
+    }
   }
+  downloadFile(file)
 }

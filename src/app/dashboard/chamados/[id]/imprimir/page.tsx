@@ -11,6 +11,7 @@ import RodriguesCertificado from '@/components/RodriguesCertificado'
 import RodriguesDocument, { DOC_WIDTH } from '@/components/RodriguesDocument'
 import ScaledSheet from '@/components/ScaledSheet'
 import { rodriguesOsDoc } from '@/lib/rodrigues-os-doc'
+import { useSheetShare } from '@/lib/use-sheet-share'
 import { ArrowLeft, Share2, Loader2, FileImage, FileText } from 'lucide-react'
 
 const BRL = (v: number | string) =>
@@ -30,6 +31,10 @@ function ImprimirContent({ id }: { id: string }) {
   // Rodrigues: Ordem de serviço (modelo novo) ou o Certificado de garantia
   const [docKind, setDocKind] = useState<'os' | 'certificado'>('os')
   const docRef = useRef<HTMLDivElement>(null)
+  const osNum = call?.service_orders?.[0]?.os_number ?? 'OS'
+  const osShare = useSheetShare(docRef, `OS-${osNum}`.replace(/[^a-zA-Z0-9._-]+/g, '_'), `Ordem de Serviço ${osNum}`,
+    JSON.stringify([call?.id, call?.service_orders?.[0]?.updated_at ?? call?.service_orders?.[0]?.total_value, tenant?.id]),
+    isRodrigues && docKind === 'os' && !!call?.service_orders?.[0])
 
   useEffect(() => {
     getCall(id).then(setCall).catch(console.error).finally(() => setLoading(false))
@@ -420,24 +425,26 @@ function ImprimirContent({ id }: { id: string }) {
       <div className="print:hidden" style={{ height: 96 }} />
 
       {/* Botões de compartilhar fixos no rodapé */}
+      {(() => { const b = sharing ?? osShare.busy; return (
       <div className="print:hidden fixed bottom-6 inset-x-0 flex justify-center gap-3 z-50">
         <button
-          onClick={handleSharePng}
-          disabled={!!sharing}
+          onClick={isRodrigues && docKind === 'os' ? () => osShare.send('png') : handleSharePng}
+          disabled={!!b}
           className="flex items-center gap-2 text-white font-semibold px-6 py-3.5 rounded-2xl shadow-2xl transition active:scale-95 disabled:opacity-70"
           style={{ backgroundColor: '#16a34a', boxShadow: '0 8px 24px rgba(22,163,74,0.40)' }}>
-          {sharing === 'png' ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileImage className="w-5 h-5" />}
-          {sharing === 'png' ? 'Gerando...' : 'Imagem'}
+          {b === 'png' ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileImage className="w-5 h-5" />}
+          {b === 'png' ? 'Gerando...' : 'Imagem'}
         </button>
         <button
-          onClick={handleSharePdf}
-          disabled={!!sharing}
+          onClick={isRodrigues && docKind === 'os' ? () => osShare.send('pdf') : handleSharePdf}
+          disabled={!!b}
           className="flex items-center gap-2 text-white font-semibold px-6 py-3.5 rounded-2xl shadow-2xl transition active:scale-95 disabled:opacity-70"
           style={{ backgroundColor: '#2563eb', boxShadow: '0 8px 24px rgba(37,99,235,0.40)' }}>
-          {sharing === 'pdf' ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileText className="w-5 h-5" />}
-          {sharing === 'pdf' ? 'Gerando...' : 'PDF'}
+          {b === 'pdf' ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileText className="w-5 h-5" />}
+          {b === 'pdf' ? 'Gerando...' : 'PDF'}
         </button>
       </div>
+      ) })()}
 
       <style>{`
         @media print {
