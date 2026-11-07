@@ -31,9 +31,28 @@ function ImprimirContent({ id }: { id: string }) {
   // Rodrigues: Ordem de serviço (modelo novo) ou o Certificado de garantia
   const [docKind, setDocKind] = useState<'os' | 'certificado'>('os')
   const docRef = useRef<HTMLDivElement>(null)
+  // Fotos anexadas ao chamado, já baixadas (pra entrar no PDF)
+  const [photos, setPhotos] = useState<string[]>([])
+  useEffect(() => {
+    if (!isRodrigues || !id) return
+    let alive = true
+    const storage = createClient().storage.from('chamados-anexos')
+    storage.list(id, { sortBy: { column: 'created_at', order: 'asc' } }).then(async ({ data }) => {
+      const names = (data ?? []).map(f => f.name).filter(n => /\.(jpe?g|png|gif|webp)$/i.test(n)).slice(0, 6)
+      const urls = await Promise.all(names.map(async n => {
+        const url = storage.getPublicUrl(`${id}/${n}`).data.publicUrl
+        try {
+          const blob = await (await fetch(url)).blob()
+          return await new Promise<string>(res => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.readAsDataURL(blob) })
+        } catch { return url }
+      }))
+      if (alive) setPhotos(urls)
+    }).catch(() => {})
+    return () => { alive = false }
+  }, [id, isRodrigues])
   const osNum = call?.service_orders?.[0]?.os_number ?? 'OS'
   const osShare = useSheetShare(docRef, `OS-${osNum}`.replace(/[^a-zA-Z0-9._-]+/g, '_'), `Ordem de Serviço ${osNum}`,
-    JSON.stringify([call?.id, call?.service_orders?.[0]?.updated_at ?? call?.service_orders?.[0]?.total_value, tenant?.id]),
+    JSON.stringify([call?.id, call?.service_orders?.[0]?.updated_at ?? call?.service_orders?.[0]?.total_value, tenant?.id, photos.length]),
     isRodrigues && docKind === 'os' && !!call?.service_orders?.[0])
 
   useEffect(() => {
@@ -190,10 +209,10 @@ function ImprimirContent({ id }: { id: string }) {
       {isRodrigues && docKind === 'os' ? (
         <>
           <div className="max-w-3xl mx-auto px-3">
-            <ScaledSheet width={DOC_WIDTH}><RodriguesDocument {...rodriguesOsDoc(tenant, call, so)} /></ScaledSheet>
+            <ScaledSheet width={DOC_WIDTH}><RodriguesDocument {...rodriguesOsDoc(tenant, call, so)} photos={photos} /></ScaledSheet>
           </div>
           <div style={{ position: 'fixed', left: -10000, top: 0 }} aria-hidden>
-            <div ref={docRef}><RodriguesDocument {...rodriguesOsDoc(tenant, call, so)} /></div>
+            <div ref={docRef}><RodriguesDocument {...rodriguesOsDoc(tenant, call, so)} photos={photos} /></div>
           </div>
         </>
       ) : (

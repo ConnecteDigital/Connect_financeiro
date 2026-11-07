@@ -29,6 +29,7 @@ export interface RodriguesDocProps {
   payment?: { methods?: string; pix?: string; conditions?: string | null } | null
   guarantee?: string | null
   extraInfo?: string | null
+  photos?: string[]        // fotos do aparelho/etiqueta anexadas ao chamado
   signatures: string[]
 }
 
@@ -212,6 +213,18 @@ export default function RodriguesDocument(p: RodriguesDocProps) {
       {p.extraInfo && (
         <Section title="Informações adicionais">
           <div style={{ fontSize: 12, lineHeight: 1.4, whiteSpace: 'pre-wrap', marginBottom: 10 }}>{p.extraInfo}</div>
+        </Section>
+      )}
+
+      {/* ── Fotos ── */}
+      {p.photos && p.photos.length > 0 && (
+        <Section title="Fotos">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+            {p.photos.slice(0, 6).map((src, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img key={i} src={src} alt="" style={{ width: 'calc(33.33% - 6px)', height: 170, objectFit: 'contain', background: '#f7f7f7', border: '1px solid #e5e5e5', borderRadius: 4 }} />
+            ))}
+          </div>
         </Section>
       )}
 
