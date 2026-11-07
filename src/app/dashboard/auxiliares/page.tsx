@@ -8,6 +8,7 @@ import {
 import { createClient } from '@/lib/supabase/client'
 import { useTenant } from '@/lib/tenant-context'
 import Link from 'next/link'
+import RodriguesComissoesBoard from '@/components/RodriguesComissoesBoard'
 
 const fmt = (v: number) => `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
 
@@ -355,6 +356,9 @@ export default function ComissoesPage() {
       setSharingReport(false)
     }
   }
+
+  // Rodrigues: painel por técnico com baixa por dia/semana/mês
+  if (tenant?.call_form_config?.rodrigues_custom === true) return <RodriguesComissoesBoard />
 
   if (!commissionsEnabled) {
     return (

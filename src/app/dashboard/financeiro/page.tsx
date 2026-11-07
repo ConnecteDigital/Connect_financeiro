@@ -7,6 +7,7 @@ import { Wallet, TrendingDown, TrendingUp, FileText, BarChart3, Plus, Loader2, C
 import DateRangePicker, { DateRange } from '@/components/DateRangePicker'
 import { format, startOfMonth, endOfMonth } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import RodriguesSaidas, { RODRIGUES_CATEGORIES } from '@/components/RodriguesSaidas'
 
 type Tab = 'saidas' | 'entradas' | 'boletos' | 'saldo'
 
@@ -21,6 +22,8 @@ interface Expense {
   paid_date?: string
   created_at: string
   supplier?: { id: string; name: string } | null
+  auxiliary_id?: string | null
+  source_service_order_id?: string | null
 }
 
 interface CashEntry {
@@ -62,6 +65,7 @@ const STATIC_CATEGORIES = ['combustivel', 'material', 'alimentacao', 'salario', 
 export default function FinanceiroPage() {
   const { tenant } = useTenant()
   const [activeTab, setActiveTab] = useState<Tab>('saidas')
+  const isRodrigues = tenant?.call_form_config?.rodrigues_custom === true
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [cashEntries, setCashEntries] = useState<CashEntry[]>([])
   const [serviceOrdersReceita, setServiceOrdersReceita] = useState(0)
@@ -93,7 +97,7 @@ export default function FinanceiroPage() {
   const [showBoletoForm, setShowBoletoForm] = useState(false)
   const [savingEntry, setSavingEntry] = useState(false)
 
-  const [newSaida, setNewSaida] = useState({ description: '', amount: '', category: 'outros', type: 'avulso', due_date: new Date().toISOString().slice(0, 10), status: 'pendente' as string })
+  const [newSaida, setNewSaida] = useState({ description: '', amount: '', category: tenant?.call_form_config?.rodrigues_custom === true ? 'Outros' : 'outros', type: 'avulso', due_date: new Date().toISOString().slice(0, 10), status: 'pendente' as string })
   const [newEntrada, setNewEntrada] = useState({ description: '', amount: '', entry_type: 'avulso', due_date: new Date().toISOString().slice(0, 10), status: 'pendente' as string })
   const [newBoleto, setNewBoleto] = useState({ description: '', amount: '', direction: 'saida', boleto_bank: '', boleto_code: '', due_date: new Date().toISOString().slice(0, 10) })
 
@@ -110,9 +114,10 @@ export default function FinanceiroPage() {
     const supabase = createClient()
     supabase.from('expenses').select('category').then(({ data }) => {
       if (!data) return
-      const cats = new Set<string>(STATIC_CATEGORIES)
+      const base = tenant.call_form_config?.rodrigues_custom === true ? RODRIGUES_CATEGORIES : STATIC_CATEGORIES
+      const cats = new Set<string>(base)
       data.forEach(r => { if (r.category) cats.add(r.category) })
-      setAllCategories(Array.from(cats).sort())
+      setAllCategories(Array.from(cats).sort((a, b) => a.localeCompare(b, 'pt-BR')))
     })
   }, [tenant])
 
@@ -458,90 +463,8 @@ export default function FinanceiroPage() {
     { key: 'saldo', label: 'Saldo', icon: <BarChart3 className="w-4 h-4" /> },
   ]
 
-  const modalBase = 'fixed inset-0 z-50 flex items-center justify-center p-4'
-  const modalOverlay = 'absolute inset-0 bg-black/40'
-  const modalCard = 'relative w-full max-w-md rounded-2xl p-5 space-y-4 shadow-2xl'
-
-  return (
-    <div className="space-y-5">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(var(--primary-rgb),0.1)' }}>
-            <Wallet className="w-5 h-5" style={{ color: 'var(--primary)' }} />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Financeiro</h1>
-            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Gerencie saídas, entradas, boletos e saldo</p>
-          </div>
-        </div>
-        <DateRangePicker value={range} onChange={setRange} variant="card" />
-      </div>
-
-      {/* Tabs */}
-      <div className="flex gap-1 p-1 rounded-2xl" style={{ background: 'var(--surface-secondary)' }}>
-        {tabs.map(t => (
-          <button key={t.key} onClick={() => setActiveTab(t.key)}
-            className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium transition-all"
-            style={activeTab === t.key
-              ? { background: 'var(--surface)', color: 'var(--primary)', boxShadow: 'var(--shadow-sm)' }
-              : { color: 'var(--text-secondary)' }}>
-            {t.icon}
-            <span className="hidden sm:inline">{t.label}</span>
-          </button>
-        ))}
-      </div>
-
-      {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--primary)' }} />
-        </div>
-      ) : (
-        <>
-          {/* SAÍDAS TAB */}
-          {activeTab === 'saidas' && (
-            <div className="space-y-4">
-              {/* Summary */}
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { label: 'Total', value: totalExpenses, color: 'var(--text-primary)' },
-                  { label: 'Pago', value: paidExpenses, color: '#10b981' },
-                  { label: 'Pendente', value: pendingExpenses, color: '#f59e0b' },
-                ].map(card => (
-                  <div key={card.label} className="rounded-2xl p-3" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-                    <p className="text-xs font-medium truncate" style={{ color: 'var(--text-secondary)' }}>{card.label}</p>
-                    <p className="text-sm font-bold mt-1 leading-tight break-all" style={{ color: card.color }}>{fmt(card.value)}</p>
-                  </div>
-                ))}
-              </div>
-
-              {/* Add button + PDF */}
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{filteredExpenses.length} saídas</p>
-                <div className="flex gap-2">
-                  <button onClick={() => handleExportPDF('saidas')}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition"
-                    style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)', background: 'var(--surface)' }}>
-                    <Download className="w-4 h-4" />
-                    <span className="hidden sm:inline">PDF</span>
-                  </button>
-                  <button onClick={() => setShowSaidaForm(v => !v)}
-                    className="btn-primary text-sm px-4 py-2.5 flex items-center gap-2">
-                    <Plus className="w-4 h-4" />
-                    Nova Saída
-                  </button>
-                </div>
-              </div>
-
-              {/* Search */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--text-tertiary)' }} />
-                <input type="text" placeholder="Buscar descrição..." value={saidasSearch}
-                  onChange={e => setSaidasSearch(e.target.value)}
-                  className="input-field pl-9 py-2 text-sm w-full" />
-              </div>
-
-              {showSaidaForm && (
-                <div className="rounded-2xl p-5 space-y-4" style={{ background: 'var(--surface)', border: '1px solid var(--primary)' }}>
+  const saidaForm = (
+    <div className="rounded-2xl p-5 space-y-4" style={{ background: 'var(--surface)', border: '1px solid var(--primary)' }}>
                   <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Nova Saída</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="sm:col-span-2">
@@ -595,7 +518,112 @@ export default function FinanceiroPage() {
                     </button>
                   </div>
                 </div>
-              )}
+  )
+
+  const modalBase = 'fixed inset-0 z-50 flex items-center justify-center p-4'
+  const modalOverlay = 'absolute inset-0 bg-black/40'
+  const modalCard = 'relative w-full max-w-md rounded-2xl p-5 space-y-4 shadow-2xl'
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(var(--primary-rgb),0.1)' }}>
+            <Wallet className="w-5 h-5" style={{ color: 'var(--primary)' }} />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Financeiro</h1>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Gerencie saídas, entradas, boletos e saldo</p>
+          </div>
+        </div>
+        <DateRangePicker value={range} onChange={setRange} variant="card" />
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 p-1 rounded-2xl" style={{ background: 'var(--surface-secondary)' }}>
+        {tabs.map(t => (
+          <button key={t.key} onClick={() => setActiveTab(t.key)}
+            className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium transition-all"
+            style={activeTab === t.key
+              ? { background: 'var(--surface)', color: 'var(--primary)', boxShadow: 'var(--shadow-sm)' }
+              : { color: 'var(--text-secondary)' }}>
+            {t.icon}
+            <span className="hidden sm:inline">{t.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--primary)' }} />
+        </div>
+      ) : (
+        <>
+          {/* SAÍDAS TAB — Rodrigues: por tipo e por serviço */}
+          {activeTab === 'saidas' && isRodrigues && (
+            <RodriguesSaidas expenses={expenses} onToggle={e => toggleExpenseStatus(e as Expense)} onEdit={e => openEditExpense(e as Expense)} onDelete={deleteExpense}
+              header={<>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{expenses.length} saídas no período</p>
+                  <div className="flex gap-2">
+                    <button onClick={() => handleExportPDF('saidas')}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition"
+                      style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)', background: 'var(--surface)' }}>
+                      <Download className="w-4 h-4" /><span className="hidden sm:inline">PDF</span>
+                    </button>
+                    <button onClick={() => setShowSaidaForm(v => !v)} className="btn-primary text-sm px-4 py-2.5 flex items-center gap-2">
+                      <Plus className="w-4 h-4" /> Nova Saída
+                    </button>
+                  </div>
+                </div>
+                {showSaidaForm && saidaForm}
+              </>} />
+          )}
+
+          {/* SAÍDAS TAB */}
+          {activeTab === 'saidas' && !isRodrigues && (
+            <div className="space-y-4">
+              {/* Summary */}
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { label: 'Total', value: totalExpenses, color: 'var(--text-primary)' },
+                  { label: 'Pago', value: paidExpenses, color: '#10b981' },
+                  { label: 'Pendente', value: pendingExpenses, color: '#f59e0b' },
+                ].map(card => (
+                  <div key={card.label} className="rounded-2xl p-3" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+                    <p className="text-xs font-medium truncate" style={{ color: 'var(--text-secondary)' }}>{card.label}</p>
+                    <p className="text-sm font-bold mt-1 leading-tight break-all" style={{ color: card.color }}>{fmt(card.value)}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Add button + PDF */}
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{filteredExpenses.length} saídas</p>
+                <div className="flex gap-2">
+                  <button onClick={() => handleExportPDF('saidas')}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition"
+                    style={{ borderColor: 'var(--border)', color: 'var(--text-secondary)', background: 'var(--surface)' }}>
+                    <Download className="w-4 h-4" />
+                    <span className="hidden sm:inline">PDF</span>
+                  </button>
+                  <button onClick={() => setShowSaidaForm(v => !v)}
+                    className="btn-primary text-sm px-4 py-2.5 flex items-center gap-2">
+                    <Plus className="w-4 h-4" />
+                    Nova Saída
+                  </button>
+                </div>
+              </div>
+
+              {/* Search */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--text-tertiary)' }} />
+                <input type="text" placeholder="Buscar descrição..." value={saidasSearch}
+                  onChange={e => setSaidasSearch(e.target.value)}
+                  className="input-field pl-9 py-2 text-sm w-full" />
+              </div>
+
+              {showSaidaForm && saidaForm}
 
               {/* Filters */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
