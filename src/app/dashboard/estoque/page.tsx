@@ -1,10 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Package, Plus, Trash2, Pencil, X, Check } from 'lucide-react'
+import { Package, Plus, Trash2, Pencil, X, Check, Search } from 'lucide-react'
 import { useTenant } from '@/lib/tenant-context'
 import { getStockItems, createStockItem, updateStockItem, deleteStockItem } from '@/lib/db/stock'
 import { getAuxiliaries } from '@/lib/db/auxiliaries'
+
+const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 
 const fmt = (v: number) => `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
 
@@ -16,12 +18,15 @@ interface StockItem {
   unit_value: number
 }
 
-function StockSection({ title, items, auxiliaryId, onChanged }: {
+function StockSection({ title, items: allItems, auxiliaryId, onChanged, query = '' }: {
   title: string
   items: StockItem[]
   auxiliaryId: string | null
   onChanged: () => void
+  query?: string
 }) {
+  const q = norm(query.trim())
+  const items = q ? allItems.filter(i => norm(i.name).includes(q)) : allItems
   const [adding, setAdding] = useState(false)
   const [name, setName] = useState('')
   const [quantity, setQuantity] = useState(0)
@@ -72,7 +77,9 @@ function StockSection({ title, items, auxiliaryId, onChanged }: {
   return (
     <div className="bg-white rounded-2xl border border-zinc-100 shadow-sm overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100">
-        <p className="text-sm font-semibold text-zinc-700">{title}</p>
+        <p className="text-sm font-semibold text-zinc-700">
+          {title} <span className="text-xs font-normal text-zinc-400">({q ? `${items.length} de ${allItems.length}` : allItems.length})</span>
+        </p>
         <button onClick={() => setAdding(a => !a)}
           className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition"
           style={{ background: 'rgba(var(--primary-rgb),0.1)', color: 'var(--primary)' }}>
@@ -99,7 +106,7 @@ function StockSection({ title, items, auxiliaryId, onChanged }: {
       )}
 
       {items.length === 0 ? (
-        <p className="px-4 py-8 text-center text-sm text-zinc-400">Nenhum item cadastrado</p>
+        <p className="px-4 py-8 text-center text-sm text-zinc-400">{q ? 'Nenhuma peça encontrada' : 'Nenhum item cadastrado'}</p>
       ) : (
         <div className="divide-y divide-zinc-50">
           {items.map(item => editingId === item.id ? (
@@ -164,6 +171,20 @@ export default function EstoquePage() {
   const [loading, setLoading] = useState(true)
   const [items, setItems] = useState<StockItem[]>([])
   const [technicians, setTechnicians] = useState<any[]>([])
+  const [query, setQuery] = useState('')
+
+  const searchBox = (
+    <div className="sticky top-0 z-10 -mx-1 px-1 py-1" style={{ background: 'var(--background, #f5f5f7)' }}>
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+        <input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar peça pelo nome..."
+          className="w-full pl-9 pr-9 py-2.5 bg-white border border-zinc-200 rounded-xl text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" />
+        {query && (
+          <button type="button" onClick={() => setQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-zinc-400"><X className="w-4 h-4" /></button>
+        )}
+      </div>
+    </div>
+  )
 
   async function load() {
     setLoading(true)
@@ -204,7 +225,8 @@ export default function EstoquePage() {
           <h1 className="text-2xl font-bold text-zinc-900">Meu Estoque</h1>
           <p className="text-zinc-500 text-sm mt-0.5">Peças que você carrega para os serviços</p>
         </div>
-        <StockSection title="Minhas Peças" items={myItems} auxiliaryId={myItems[0]?.auxiliary_id ?? null} onChanged={load} />
+        {searchBox}
+        <StockSection title="Minhas Peças" items={myItems} auxiliaryId={myItems[0]?.auxiliary_id ?? null} onChanged={load} query={query} />
       </div>
     )
   }
@@ -222,10 +244,12 @@ export default function EstoquePage() {
         <p className="text-zinc-500 text-sm mt-0.5">Peças da loja e de cada técnico</p>
       </div>
 
-      <StockSection title="Estoque da Loja" items={storeItems} auxiliaryId={null} onChanged={load} />
+      {searchBox}
+
+      <StockSection title="Estoque da Loja" items={storeItems} auxiliaryId={null} onChanged={load} query={query} />
 
       {byTechnician.map(({ technician, items: techItems }) => (
-        <StockSection key={technician.id} title={`Estoque — ${technician.name}`} items={techItems} auxiliaryId={technician.id} onChanged={load} />
+        <StockSection key={technician.id} title={`Estoque — ${technician.name}`} items={techItems} auxiliaryId={technician.id} onChanged={load} query={query} />
       ))}
 
       {technicians.length === 0 && (
