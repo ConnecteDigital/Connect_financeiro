@@ -11,6 +11,9 @@ import RetornoModal from '@/components/RetornoModal'
 import { useTecnicoQueue, compareQueue, callDay, callKind, finishedDay, CALL_KIND_STYLE, FINISHED_TABS } from '@/lib/tecnico-queue'
 import { formatAddress } from '@/lib/address'
 import RodriguesDayBoard from '@/components/RodriguesDayBoard'
+import ScheduleBlockModal from '@/components/ScheduleBlockModal'
+import DayPicker from '@/components/DayPicker'
+import { getBlocksForRange, type BlockOnDay } from '@/lib/db/schedule-blocks'
 
 type Status = 'todos' | 'agendado' | 'aprovado' | 'nao_quis_visita' | 'nao_aprovou' | 'cancelado' | 'pagou_somente_visita' | 'retorno' | 'orcamento'
 
@@ -65,6 +68,26 @@ export default function ChamadosPage() {
   const [dayFilter, setDayFilter] = useState(localToday)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [retornoOpen, setRetornoOpen] = useState(false)
+  // Bloqueios de agenda + calendário pra pular de dia (dono da Rodrigues)
+  const [blocks, setBlocks] = useState<BlockOnDay[]>([])
+  const [blockModal, setBlockModal] = useState<{ block?: BlockOnDay | null } | null>(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [monthBlocks, setMonthBlocks] = useState<BlockOnDay[]>([])
+  const [blocksVersion, setBlocksVersion] = useState(0)
+  useEffect(() => {
+    if (!isRodriguesOwner) return
+    getBlocksForRange(dayFilter, dayFilter).then(setBlocks).catch(() => setBlocks([]))
+  }, [isRodriguesOwner, dayFilter, blocksVersion])
+  const loadMonthBlocks = useCallback((y: number, m: number) => {
+    const s = `${y}-${String(m + 1).padStart(2, '0')}-01`
+    const e = `${y}-${String(m + 1).padStart(2, '0')}-${String(new Date(y, m + 1, 0).getDate()).padStart(2, '0')}`
+    getBlocksForRange(s, e).then(setMonthBlocks).catch(() => setMonthBlocks([]))
+  }, [])
+  useEffect(() => {
+    if (!pickerOpen) return
+    const d = new Date(dayFilter + 'T12:00:00')
+    loadMonthBlocks(d.getFullYear(), d.getMonth())
+  }, [pickerOpen, dayFilter, loadMonthBlocks])
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<Status>('todos')
@@ -233,6 +256,13 @@ export default function ChamadosPage() {
                 <span className="hidden sm:inline">Resumo do Dia</span>
               </button>
               {isRodrigues && (
+                <button onClick={() => setBlockModal({ block: null })} title="Bloquear agenda"
+                  className="flex items-center gap-2 text-sm px-3 py-2.5 rounded-xl border font-semibold transition text-zinc-700 border-zinc-200 bg-white hover:bg-zinc-50">
+                  <Lock className="w-4 h-4" />
+                  <span className="hidden sm:inline">Bloqueio</span>
+                </button>
+              )}
+              {isRodrigues && (
                 <button onClick={() => setRetornoOpen(true)}
                   className="flex items-center gap-2 text-sm px-4 py-2.5 rounded-xl border font-semibold transition text-violet-700 border-violet-200 bg-violet-50 hover:bg-violet-100">
                   <RotateCcw className="w-4 h-4" />
@@ -258,9 +288,11 @@ export default function ChamadosPage() {
             <ChevronLeft className="w-5 h-5" />
           </button>
           <div className="text-center">
-            <p className="font-semibold text-zinc-800 capitalize text-sm">
+            <button type="button" onClick={() => { if (isRodriguesOwner) setPickerOpen(true) }}
+              className="font-semibold text-zinc-800 capitalize text-sm flex items-center gap-1.5 mx-auto">
+              {isRodriguesOwner && <CalendarDays className="w-4 h-4" style={{ color: 'var(--primary)' }} />}
               {new Date(dayFilter + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
-            </p>
+            </button>
             {dayFilter !== localToday() && (
               <button onClick={() => setDayFilter(localToday())} className="text-xs font-medium" style={{ color: 'var(--primary)' }}>Voltar para hoje</button>
             )}
@@ -542,7 +574,7 @@ export default function ChamadosPage() {
             )}
           </div>
         ) : (
-          <RodriguesDayBoard calls={filteredCalls} day={dayFilter} />
+          <RodriguesDayBoard calls={filteredCalls} day={dayFilter} blocks={blocks} onEditBlock={b => setBlockModal({ block: b })} />
         )
       ) : isTecnico ? (
         <div className="space-y-4">
@@ -776,6 +808,17 @@ export default function ChamadosPage() {
         </div>
       )}
       {retornoOpen && <RetornoModal onClose={() => setRetornoOpen(false)} />}
+      {blockModal && (
+        <ScheduleBlockModal day={dayFilter} block={blockModal.block} onClose={() => setBlockModal(null)}
+          onSaved={() => { setBlockModal(null); setBlocksVersion(v => v + 1) }} />
+      )}
+      {pickerOpen && (
+        <DayPicker value={dayFilter} onPick={setDayFilter} onClose={() => setPickerOpen(false)} onMonthChange={loadMonthBlocks}
+          marks={{
+            ...Object.fromEntries(monthBlocks.map(b => [b.day, '#a1a1aa'])),
+            ...Object.fromEntries(Object.keys(callsByDay).map(d => [d, 'var(--primary)'])),
+          }} />
+      )}
     </div>
   )
 }

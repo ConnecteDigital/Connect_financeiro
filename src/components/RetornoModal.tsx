@@ -9,6 +9,7 @@ import { getAuxiliaries } from '@/lib/db/auxiliaries'
 import { getStockItems, addServiceOrderParts, adjustStockQuantity } from '@/lib/db/stock'
 import { formatAddress } from '@/lib/address'
 import StockPartPicker from '@/components/StockPartPicker'
+import { toastSuccess } from '@/components/Toast'
 
 interface PartLine { stock_item_id: string; item_name: string; quantity: number; unit_value: number; total_value: number }
 
@@ -106,6 +107,7 @@ export default function RetornoModal({ onClose }: { onClose: () => void }) {
 
       // Agendado: o técnico completa peças e pagamento ao finalizar
       if (scheduled) {
+        toastSuccess('Retorno agendado!')
         router.push(`/dashboard/chamados/${call.id}`)
         return
       }
@@ -132,6 +134,7 @@ export default function RetornoModal({ onClose }: { onClose: () => void }) {
         await Promise.all(lines.map(l => adjustStockQuantity(l.stock_item_id, -l.quantity)))
       }
       await syncOsAutoExpenses(order.id)
+      toastSuccess('Retorno registrado!')
       router.push(`/dashboard/chamados/${call.id}`)
     } catch (err) {
       console.error(err)
@@ -141,8 +144,11 @@ export default function RetornoModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" style={{ backdropFilter: 'blur(4px)', background: 'rgba(0,0,0,0.4)' }}>
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-lg max-h-[90dvh] overflow-y-auto">
+    // z acima do BottomNav/MoreDrawer (z-40/z-50) do layout; no celular ocupa
+    // a tela toda e o conteúdo rola por dentro, pra nada ficar atrás da barra
+    <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-0 sm:p-4" style={{ backdropFilter: 'blur(4px)', background: 'rgba(0,0,0,0.4)' }}>
+      <div className="bg-white sm:rounded-2xl shadow-2xl w-full max-w-lg h-[100dvh] sm:h-auto sm:max-h-[90dvh] overflow-y-auto"
+        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)' }}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 sticky top-0 bg-white">
           <div className="flex items-center gap-2">
             {original && (

@@ -12,6 +12,7 @@ import {
 import { ConnectDigitalLogo } from '@/components/logos'
 import { useTenant } from '@/lib/tenant-context'
 import { TenantProvider } from '@/lib/tenant-context'
+import { ToastProvider } from '@/components/Toast'
 import OnboardingWizard from '@/components/OnboardingWizard'
 
 const mainNav = [
@@ -604,7 +605,9 @@ function lightenHex(hex: string, amount: number) {
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <TenantProvider>
-      <DashboardInner>{children}</DashboardInner>
+      <ToastProvider>
+        <DashboardInner>{children}</DashboardInner>
+      </ToastProvider>
     </TenantProvider>
   )
 }

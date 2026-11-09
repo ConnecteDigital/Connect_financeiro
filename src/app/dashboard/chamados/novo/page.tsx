@@ -13,6 +13,8 @@ import { getAuxiliaries, createAuxiliary } from '@/lib/db/auxiliaries'
 import { getServiceTypes } from '@/lib/db/service-types'
 import { getServiceConfig, rodriguesServiceLabel } from '@/lib/service-config'
 import RodriguesApplianceSection from '@/components/RodriguesApplianceSection'
+import ScheduleFields from '@/components/ScheduleFields'
+import { toastSuccess } from '@/components/Toast'
 import { useCallOrigins } from '@/lib/use-call-origins'
 import { useTenant } from '@/lib/tenant-context'
 import { createClient } from '@/lib/supabase/client'
@@ -119,6 +121,10 @@ export default function NovoChamadoPage() {
   const [callNeighborhood, setCallNeighborhood] = useState('')
   const [newClient, setNewClient] = useState(emptyNewClient)
   const [scheduledDate, setScheduledDate] = useState(localToday)
+  // Rodrigues não vê "Data do Chamado": ela acompanha a data do agendamento
+  useEffect(() => {
+    if (isRodrigues) setCallDate(scheduledDate || localToday())
+  }, [isRodrigues, scheduledDate])
   const [scheduledTime, setScheduledTime] = useState('')
   const [callAddress, setCallAddress] = useState('')
   const [addressExtra, setAddressExtra] = useState({ number: '', complement: '', reference: '' })
@@ -133,6 +139,7 @@ export default function NovoChamadoPage() {
   }, [isRodrigues])
   const [scheduledDriver, setScheduledDriver] = useState('')
   const [technicianId, setTechnicianId] = useState('')
+  const [durationMin, setDurationMin] = useState(60)
   const [applianceType, setApplianceType] = useState('')
   const [deviceBrand, setDeviceBrand] = useState('')
   const [deviceBrandOther, setDeviceBrandOther] = useState('')
@@ -528,6 +535,7 @@ export default function NovoChamadoPage() {
         ...(isRodrigues && deviceModel.trim() ? { device_model: deviceModel.trim() } : {}),
         visit_fee: isRodrigues && isScheduled && visitFee > 0 ? visitFee : null,
         technician_id: isRodrigues ? (technicianId || auxiliaryId || null) : null,
+        ...(isRodrigues && isScheduled ? { duration_minutes: durationMin } : {}),
         ...(isRodrigues ? {
           address_number: addressExtra.number || null,
           address_complement: addressExtra.complement || null,
@@ -669,6 +677,7 @@ export default function NovoChamadoPage() {
         }
       }
 
+      if (isRodrigues) toastSuccess('Chamado salvo!')
       if (isScheduled) {
         router.push(`/dashboard/chamados/${call.id}`)
       } else {
@@ -722,6 +731,7 @@ export default function NovoChamadoPage() {
         solicitante: solicitante || null,
         driver: null,
       })
+      if (isRodrigues) toastSuccess('Chamado salvo!')
       if (targetStatus === 'aprovado') {
         router.push(`/dashboard/chamados/${call.id}/nova-os`)
       } else {
@@ -784,11 +794,13 @@ export default function NovoChamadoPage() {
             </div>
           </div>
 
-          {/* Data */}
+          {/* Data (Rodrigues: a data do chamado é a do agendamento) */}
+          {!isRodrigues && (
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Data do Chamado *</label>
             <input type="date" required value={callDate} onChange={e => setCallDate(e.target.value)} className={inputCls} />
           </div>
+          )}
 
           {/* Contato */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -977,8 +989,8 @@ export default function NovoChamadoPage() {
         </div>
 
         {/* Data + horário do chamado */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className={isRodrigues ? 'col-span-4' : 'col-span-2 sm:col-span-2'}>
+        <div className={`grid grid-cols-2 sm:grid-cols-4 gap-3 ${isRodrigues ? 'hidden' : ''}`}>
+          <div className="col-span-2 sm:col-span-2">
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Data do Chamado *</label>
             <input type="date" required value={callDate} onChange={e => setCallDate(e.target.value)} className={inputCls} />
           </div>
@@ -1176,6 +1188,10 @@ export default function NovoChamadoPage() {
                 <input type="time" value={scheduledTime} onChange={e => setScheduledTime(e.target.value)}
                   className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
               </div>
+              {isRodrigues && (
+                <ScheduleFields auxiliaryId={technicianId || auxiliaryId} day={scheduledDate} time={scheduledTime}
+                  duration={durationMin} onDuration={setDurationMin} />
+              )}
               {isRodrigues && (
                 <div className="sm:col-span-2">
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">CEP</label>

@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { UserRound, Timer } from 'lucide-react'
+import { UserRound, Timer, Lock } from 'lucide-react'
+import type { BlockOnDay } from '@/lib/db/schedule-blocks'
 import { createClient } from '@/lib/supabase/client'
 import { getAuxiliaries } from '@/lib/db/auxiliaries'
 import { localYmd } from '@/lib/tecnico-queue'
@@ -62,9 +63,15 @@ interface Lane {
   total: number
   revenue: number
   counts: Record<Phase, number>
+  locks: BlockOnDay[]   // bloqueios de agenda do técnico neste dia
 }
 
-export default function RodriguesDayBoard({ calls, day }: { calls: any[]; day: string }) {
+export default function RodriguesDayBoard({ calls, day, blocks = [], onEditBlock }: {
+  calls: any[]
+  day: string
+  blocks?: BlockOnDay[]
+  onEditBlock?: (b: BlockOnDay) => void
+}) {
   const [tecnicos, setTecnicos] = useState<any[]>([])
   const [visits, setVisits] = useState<any[]>([])
   const [now, setNow] = useState(() => new Date())
@@ -119,6 +126,7 @@ export default function RodriguesDayBoard({ calls, day }: { calls: any[]; day: s
       byCall.get(v.call_id)!.push(v)
     }
     const nowMin = (now.getTime() - dayStart) / 60_000
+    const blocks_ = blocks
 
     const build = (id: string, name: string, list: any[]): Lane => {
       const blocks: Block[] = []
@@ -141,7 +149,7 @@ export default function RodriguesDayBoard({ calls, day }: { calls: any[]; day: s
         } else if (c.scheduled_time) {
           const [h, m] = String(c.scheduled_time).split(':').map(Number)
           start = h * 60 + (m || 0)
-          end = start + DEFAULT_MIN
+          end = start + (Number(c.duration_minutes) || DEFAULT_MIN)
         }
         const b: Block = { call: c, phase, start: start ?? 0, end: Math.min(1440, Math.max(end ?? 0, (start ?? 0) + 30)), timed: start !== null, row: 0 }
         ;(b.timed ? blocks : untimed).push(b)
@@ -155,7 +163,8 @@ export default function RodriguesDayBoard({ calls, day }: { calls: any[]; day: s
         rowEnds[r] = b.end
         b.row = r
       }
-      return { id, name, blocks, untimed, rows: Math.max(1, rowEnds.length), total: list.length, revenue, counts }
+      const locks = blocks_.filter(b => b.auxiliary_id === id || (b.auxiliary_id === null && id !== 'none'))
+      return { id, name, blocks, untimed, rows: Math.max(1, rowEnds.length), total: list.length, revenue, counts, locks }
     }
 
     const byTec = new Map<string, any[]>()
@@ -174,7 +183,7 @@ export default function RodriguesDayBoard({ calls, day }: { calls: any[]; day: s
     out.sort((a, b) => b.total - a.total || a.name.localeCompare(b.name))
     if (noTec.length) out.push(build('none', 'Sem técnico', noTec))
     return out
-  }, [calls, tecnicos, visits, now, dayStart])
+  }, [calls, tecnicos, visits, now, dayStart, blocks])
 
   const dayCounts = useMemo(() => {
     const c = Object.fromEntries(Object.keys(PHASE).map(k => [k, 0])) as Record<Phase, number>
@@ -223,6 +232,9 @@ export default function RodriguesDayBoard({ calls, day }: { calls: any[]; day: s
                   style={active ? { borderColor: 'var(--primary)', boxShadow: '0 0 0 1px var(--primary)' } : {}}>
                   <p className={`text-sm font-semibold truncate ${l.id === 'none' ? 'text-red-600' : 'text-zinc-800'}`}>{l.name}</p>
                   <p className="text-xs text-zinc-500">{l.total === 0 ? 'Livre' : `${l.total} serviço${l.total > 1 ? 's' : ''}`}</p>
+                  {l.locks.length > 0 && (
+                    <p className="text-[10px] font-semibold text-zinc-500 mt-1 flex items-center gap-1"><Lock className="w-3 h-3" /> {l.locks.some(b => b.all_day) ? 'Dia bloqueado' : `${l.locks.length} bloqueio${l.locks.length > 1 ? 's' : ''}`}</p>
+                  )}
                   {l.total > 0 && (
                     <div className="flex flex-wrap gap-1.5 mt-1">
                       {(Object.keys(PHASE) as Phase[]).filter(k => l.counts[k] > 0).map(k => (
@@ -243,16 +255,46 @@ export default function RodriguesDayBoard({ calls, day }: { calls: any[]; day: s
               <p className="px-4 py-2.5 border-b border-zinc-100 text-sm font-semibold text-zinc-700">
                 Dia de {selected.name}
               </p>
-              {selected.blocks.length === 0 ? (
+              {selected.blocks.length === 0 && selected.locks.length === 0 ? (
                 <p className="px-4 py-8 text-center text-sm text-zinc-400">Nenhum serviço com horário neste dia.</p>
               ) : (
                 <div className="px-4 py-3">
-                  {selected.blocks.map((b, i) => {
+                  {(() => {
+                    // Serviços e bloqueios juntos, na ordem do horário
+                    const rows: { start: number; end: number; b?: Block; lock?: BlockOnDay }[] = [
+                      ...selected.blocks.map(b => ({ start: b.start, end: b.end, b })),
+                      ...selected.locks.map(lock => ({ start: lock.startMin, end: lock.endMin, lock })),
+                    ].sort((a, b) => a.start - b.start)
+                    return rows.map((row, i) => {
+                    const prev = rows[i - 1]
+                    const showNow = isToday && nowMin < row.start && (!prev || nowMin >= prev.start)
+                    const last = i === rows.length - 1
+                    if (row.lock) {
+                      const lock = row.lock
+                      return (
+                        <div key={`lock-${lock.id}-${i}`}>
+                          {showNow && <NowMark min={nowMin} />}
+                          <div className="flex gap-3">
+                            <div className="w-11 flex-shrink-0 text-right pt-2.5">
+                              <p className="text-sm font-bold text-zinc-500 tabular-nums">{lock.all_day ? 'Dia' : hhmm(lock.startMin)}</p>
+                              {!lock.all_day && <p className="text-[10px] text-zinc-400 tabular-nums">até {hhmm(lock.endMin)}</p>}
+                            </div>
+                            <div className="relative flex flex-col items-center flex-shrink-0">
+                              <span className="mt-3.5 w-3 h-3 rounded-full ring-4 ring-white bg-zinc-400" />
+                              {!last && <span className="flex-1 w-px bg-zinc-200 mt-1" />}
+                            </div>
+                            <button type="button" onClick={() => onEditBlock?.(lock)}
+                              className="flex-1 min-w-0 mb-3 rounded-xl border border-zinc-300 bg-zinc-100 px-3 py-2 text-left active:scale-[0.99] transition"
+                              style={{ backgroundImage: 'repeating-linear-gradient(135deg, transparent 0 8px, rgba(0,0,0,0.04) 8px 16px)' }}>
+                              <p className="text-sm font-bold text-zinc-700 truncate flex items-center gap-1.5"><Lock className="w-3.5 h-3.5" /> Bloqueio{lock.reason ? ` · ${lock.reason}` : ''}</p>
+                              <p className="text-xs text-zinc-500">{lock.all_day ? 'Dia inteiro' : `${hhmm(lock.startMin)} – ${hhmm(lock.endMin)}`}{lock.repeat_weekly ? ' · toda semana' : ''}{lock.auxiliary_id === null ? ' · todos' : ''}</p>
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    }
+                    const b = row.b!
                     const name = b.call.client?.name ?? b.call.contact_name ?? 'Sem nome'
-                    const prev = selected.blocks[i - 1]
-                    // Marca "agora" entre o serviço anterior e este
-                    const showNow = isToday && nowMin < b.start && (!prev || nowMin >= prev.start)
-                    const last = i === selected.blocks.length - 1
                     const started = b.phase !== 'a_fazer' && visits.some(v => v.call_id === b.call.id)
                     return (
                       <div key={b.call.id}>
@@ -260,7 +302,7 @@ export default function RodriguesDayBoard({ calls, day }: { calls: any[]; day: s
                         <div className="flex gap-3">
                           <div className="w-11 flex-shrink-0 text-right pt-2.5">
                             <p className="text-sm font-bold text-zinc-800 tabular-nums">{hhmm(b.start)}</p>
-                            {started && <p className="text-[10px] text-zinc-400 tabular-nums">até {b.phase === 'andamento' ? 'agora' : hhmm(b.end)}</p>}
+                            <p className="text-[10px] text-zinc-400 tabular-nums">até {started && b.phase === 'andamento' ? 'agora' : hhmm(b.end)}</p>
                           </div>
                           <div className="relative flex flex-col items-center flex-shrink-0">
                             <span className={`mt-3.5 w-3 h-3 rounded-full ring-4 ring-white ${PHASE[b.phase].dot} ${b.phase === 'andamento' ? 'animate-pulse' : ''}`} />
@@ -278,8 +320,9 @@ export default function RodriguesDayBoard({ calls, day }: { calls: any[]; day: s
                         </div>
                       </div>
                     )
-                  })}
-                  {isToday && selected.blocks.every(b => nowMin >= b.start) && <NowMark min={nowMin} />}
+                  })
+                  })()}
+                  {isToday && selected.blocks.every(b => nowMin >= b.start) && selected.locks.every(b => nowMin >= b.startMin) && <NowMark min={nowMin} />}
                 </div>
               )}
             </div>
@@ -337,6 +380,15 @@ export default function RodriguesDayBoard({ calls, day }: { calls: any[]; day: s
                   {Array.from({ length: 24 }).map((_, h) => (
                     <div key={h} className={`absolute top-0 bottom-0 border-l ${h % 6 === 0 ? 'border-zinc-200' : 'border-zinc-100'}`} style={{ left: h * HOUR_PX }} />
                   ))}
+                  {l.locks.map((lock, i) => (
+                    <button key={`lock-${lock.id}-${i}`} type="button" onClick={() => onEditBlock?.(lock)}
+                      title={`Bloqueio${lock.reason ? ` · ${lock.reason}` : ''} · ${lock.all_day ? 'dia inteiro' : `${hhmm(lock.startMin)} – ${hhmm(lock.endMin)}`}`}
+                      className="absolute top-0 bottom-0 bg-zinc-200/70 border-x border-zinc-300 text-left px-1.5 py-1 overflow-hidden hover:bg-zinc-300/70 transition"
+                      style={{ left: lock.startMin / 60 * HOUR_PX, width: Math.max((lock.endMin - lock.startMin) / 60 * HOUR_PX, 40), backgroundImage: 'repeating-linear-gradient(135deg, transparent 0 8px, rgba(0,0,0,0.05) 8px 16px)' }}>
+                      <p className="text-[11px] font-bold text-zinc-600 truncate flex items-center gap-1"><Lock className="w-3 h-3" /> {lock.reason || 'Bloqueio'}</p>
+                      <p className="text-[10px] text-zinc-500 truncate">{lock.all_day ? 'Dia inteiro' : `${hhmm(lock.startMin)} – ${hhmm(lock.endMin)}`}</p>
+                    </button>
+                  ))}
                   {l.blocks.map(b => {
                     const w = Math.max((b.end - b.start) / 60 * HOUR_PX, 70)
                     const name = b.call.client?.name ?? b.call.contact_name ?? 'Sem nome'
@@ -346,7 +398,7 @@ export default function RodriguesDayBoard({ calls, day }: { calls: any[]; day: s
                         className={`absolute rounded-lg border px-1.5 py-1 overflow-hidden hover:shadow-md hover:z-10 transition ${PHASE[b.phase].block}`}
                         style={{ left: b.start / 60 * HOUR_PX + 1, width: w - 2, top: 6 + b.row * ROW_H, height: ROW_H - 6 }}>
                         <p className="text-[11px] font-bold leading-tight truncate">
-                          {hhmm(b.start)} {name}
+                          {hhmm(b.start)}–{hhmm(b.end)} {name}
                         </p>
                         <p className="text-[10px] leading-tight truncate opacity-80">
                           {b.phase === 'andamento' ? <><span className="inline-block w-1.5 h-1.5 rounded-full bg-white animate-pulse mr-1 align-middle" /><Timer className="inline w-2.5 h-2.5 -mt-0.5" /> em andamento</> : [b.call.call_neighborhood, b.call.service_category].filter(Boolean).join(' · ') || PHASE[b.phase].label}
@@ -373,6 +425,9 @@ export default function RodriguesDayBoard({ calls, day }: { calls: any[]; day: s
             <span className={`w-2.5 h-2.5 rounded-sm ${PHASE[k].dot}`} />{PHASE[k].label}
           </span>
         ))}
+        <span className="inline-flex items-center gap-1 text-[11px] text-zinc-500">
+          <span className="w-2.5 h-2.5 rounded-sm bg-zinc-300" />Bloqueio
+        </span>
         {isToday && (
           <span className="inline-flex items-center gap-1 text-[11px] text-zinc-500">
             <span className="w-0.5 h-3 bg-red-500" />Agora

@@ -10,6 +10,7 @@ import { getStockItems, getServiceOrderParts, addServiceOrderParts, adjustStockQ
 import { createClient } from '@/lib/supabase/client'
 import { useTenant } from '@/lib/tenant-context'
 import StockPartPicker from '@/components/StockPartPicker'
+import { toastSuccess } from '@/components/Toast'
 import PaymentLinesEditor from '@/components/PaymentLinesEditor'
 import { PaymentLine, paymentSummaryFields, paymentsFromOs, hasCard, cardGross, osCardGross } from '@/lib/payments'
 
@@ -168,6 +169,7 @@ export default function FinalizarServicoPage({ params }: { params: Promise<{ id:
       }))
 
       await syncOsAutoExpenses(soId)
+      toastSuccess(so ? 'Correção salva!' : 'Serviço concluído!')
       router.push(`/dashboard/chamados/${id}`)
     } catch (e: any) {
       console.error(e)

@@ -6,6 +6,7 @@ import { getAuxiliaries, updateAuxiliary, createAuxiliary, deleteAuxiliary } fro
 import { createClient } from '@/lib/supabase/client'
 import { useTenant } from '@/lib/tenant-context'
 import { DEFAULT_BUSINESS_HOURS } from '@/lib/business-hours'
+import { toastSuccess } from '@/components/Toast'
 
 interface TecRow { id: string; name: string; percentage: string; after: string }
 
@@ -120,6 +121,7 @@ export default function RodriguesCommissionSettings() {
       if (writeErr) throw writeErr
       updateTenant({ call_form_config: merged })
       setSaved(true)
+      toastSuccess('Salvo!')
       setTimeout(() => setSaved(false), 3000)
     } catch (e: any) {
       console.error(e)

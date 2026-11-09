@@ -267,7 +267,11 @@ export default function ResumoDiaPage() {
         @page { margin: 12mm 10mm; size: A4 landscape; }
         @media print { .no-print { display: none !important; } body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 
-        .page { padding: 16px; }
+        .page { padding: 16px; max-width: 100vw; overflow-x: hidden; }
+        .table-wrap { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .header h1 { overflow-wrap: anywhere; }
+        .summary { flex-wrap: wrap; }
+        .summary-card { min-width: 0; flex: 1 1 120px; }
 
         .header { margin-bottom: 12px; }
         .header h1 { font-size: 16px; font-weight: bold; color: #1a1a1a; }
@@ -297,7 +301,8 @@ export default function ResumoDiaPage() {
 
         .print-btn { position: fixed; bottom: 24px; right: 24px; background: #1e4d2b; color: white; border: none; padding: 12px 20px; border-radius: 10px; font-size: 14px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,0.2); z-index: 100; }
 
-        .date-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+        .date-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; }
+        .date-bar input { max-width: 100%; }
         .date-bar input { border: 1px solid #ccc; padding: 4px 8px; border-radius: 6px; font-size: 11px; }
         .date-bar button { background: #1e4d2b; color: white; border: none; padding: 5px 12px; border-radius: 6px; font-size: 11px; cursor: pointer; }
       `}</style>
@@ -346,6 +351,7 @@ export default function ResumoDiaPage() {
         ) : calls.length === 0 ? (
           <p style={{ textAlign: 'center', color: '#999', padding: '40px 0' }}>Nenhum chamado nesta data.</p>
         ) : (
+          <div className="table-wrap">
           <table>
             <thead>
               <tr>
@@ -389,6 +395,7 @@ export default function ResumoDiaPage() {
               </tr>
             </tbody>
           </table>
+          </div>
         )}
 
         <div className="footer">

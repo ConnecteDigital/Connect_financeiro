@@ -10,6 +10,7 @@ import { osCardGross, osCardPending } from '@/lib/payments'
 import { localYmd } from '@/lib/tecnico-queue'
 import { periodOf, ptDate, type PeriodMode } from '@/lib/period'
 import PeriodNav from '@/components/PeriodNav'
+import { toastSuccess } from '@/components/Toast'
 
 // Comissões (dono da Rodrigues): mesmo jeito do painel de chamados —
 // escolhe Dia/Semana/Mês, toca no técnico e dá baixa só no que escolher.
@@ -148,6 +149,7 @@ export default function RodriguesComissoesBoard() {
         .update({ status: 'pago', paid_date: payDate }).in('id', toPay.map(e => e.id))
       if (error) throw error
       setReceipt({ name: selected.name, date: payDate, items: toPay, total: toPayTotal, periodLabel: period.label })
+      toastSuccess('Baixa registrada!')
       setConfirming(false)
       await load()
     } catch (e) {

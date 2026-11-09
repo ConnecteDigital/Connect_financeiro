@@ -47,6 +47,8 @@ export default function TecnicoCallView({ call, lock, onChanged }: {
   const name = call.client?.name ?? call.contact_name ?? 'Cliente'
   const time = call.scheduled_time ? String(call.scheduled_time).slice(0, 5) : null
   const day = call.scheduled_date ?? call.date
+  // Fim previsto = horário + duração (padrão 1h)
+  const endTime = time ? (() => { const [h, m] = time.split(':').map(Number); const t = h * 60 + m + (Number(call.duration_minutes) || 60); return `${String(Math.floor(t / 60) % 24).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}` })() : null
   const dateLabel = new Date(day + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })
   const service = call.service_category
     || [call.appliance_type, call.device_brand].filter(Boolean).join(' ')
@@ -93,7 +95,7 @@ export default function TecnicoCallView({ call, lock, onChanged }: {
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
             <CalendarClock className="w-3.5 h-3.5" /> Data e horário
           </p>
-          <p className="text-slate-800 font-medium mt-0.5 capitalize">{dateLabel}{time ? ` às ${time}` : ' · qualquer horário'}</p>
+          <p className="text-slate-800 font-medium mt-0.5 capitalize">{dateLabel}{time ? ` · ${time}${endTime ? ` às ${endTime}` : ''}` : ' · qualquer horário'}</p>
         </div>
 
         {service && (

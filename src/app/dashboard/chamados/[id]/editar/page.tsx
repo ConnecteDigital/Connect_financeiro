@@ -16,6 +16,8 @@ import { useCallOrigins } from '@/lib/use-call-origins'
 import { useTenant } from '@/lib/tenant-context'
 import { getServiceConfig, APPLIANCE_BRANDS, APPLIANCE_TYPES, rodriguesServiceLabel } from '@/lib/service-config'
 import RodriguesApplianceSection from '@/components/RodriguesApplianceSection'
+import ScheduleFields from '@/components/ScheduleFields'
+import { toastSuccess } from '@/components/Toast'
 import { mapsUrl } from '@/lib/maps'
 import { lookupCep } from '@/lib/cep'
 import { getRecentVisitFees, addRecentVisitFee } from '@/lib/recent-visit-fees'
@@ -99,6 +101,10 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const [contactName, setContactName] = useState('')
   const [contactPhone, setContactPhone] = useState('')
   const [scheduledDate, setScheduledDate] = useState('')
+  // Rodrigues não vê "Data do Chamado": ela acompanha a data do agendamento
+  useEffect(() => {
+    if (isRodrigues && scheduledDate) setCallDate(scheduledDate)
+  }, [isRodrigues, scheduledDate])
   const [scheduledTime, setScheduledTime] = useState('')
   const [callAddress, setCallAddress] = useState('')
   const [addressExtra, setAddressExtra] = useState({ number: '', complement: '', reference: '' })
@@ -166,6 +172,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const [originalServiceCategory, setOriginalServiceCategory] = useState('')
   const [deviceBrand, setDeviceBrand] = useState('')
   const [technicianId, setTechnicianId] = useState('')
+  const [durationMin, setDurationMin] = useState(60)
   const [callDriverName, setCallDriverName] = useState('')
   const [deviceBrandOther, setDeviceBrandOther] = useState('')
   const [deviceModel, setDeviceModel] = useState('')
@@ -203,6 +210,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
       setCallNeighborhood(call.call_neighborhood ?? '')
       setAddressExtra({ number: call.address_number ?? '', complement: call.address_complement ?? '', reference: call.address_reference ?? '' })
       setDeviceModel(call.device_model ?? '')
+      setDurationMin(Number(call.duration_minutes) || 60)
       setHadModel(!!call.device_model)
       if (call.device_brand) {
         setDeviceBrand(APPLIANCE_BRANDS.includes(call.device_brand) ? call.device_brand : 'Outra')
@@ -596,6 +604,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         ...(isRodrigues ? {
           device_brand: (deviceBrand === 'Outra' ? deviceBrandOther : deviceBrand) || null,
           appliance_type: applianceType || null,
+          duration_minutes: durationMin,
           ...(deviceModel.trim() || hadModel ? { device_model: deviceModel.trim() || null } : {}),
           visit_fee: visitFee > 0 ? visitFee : null,
           // Técnico não troca o responsável do chamado (só o dono)
@@ -727,6 +736,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         }
       }
 
+      if (isRodrigues) toastSuccess('Chamado atualizado!')
       router.push(`/dashboard/chamados/${id}`)
     } catch (err: any) {
       console.error(err)
@@ -789,8 +799,8 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
           )}
         </div>
 
-        {/* Data do chamado */}
-        <div className="sm:max-w-xs">
+        {/* Data do chamado (Rodrigues: acompanha a data do agendamento) */}
+        <div className={`sm:max-w-xs ${isRodrigues ? 'hidden' : ''}`}>
           <label className="block text-sm font-medium text-slate-700 mb-1.5">Data do Chamado *</label>
           <input type="date" required value={callDate} onChange={e => setCallDate(e.target.value)}
             className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
@@ -893,6 +903,10 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                 <input type="time" value={scheduledTime} onChange={e => setScheduledTime(e.target.value)}
                   className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white" />
               </div>
+              {isRodrigues && !isTecnico && (
+                <ScheduleFields auxiliaryId={technicianId || auxiliaryId} day={scheduledDate} time={scheduledTime}
+                  duration={durationMin} onDuration={setDurationMin} ignoreCallId={id} />
+              )}
               <div className="sm:col-span-2">
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Endereço do Serviço</label>
                 <input type="text" value={callAddress} onChange={e => setCallAddress(e.target.value)}

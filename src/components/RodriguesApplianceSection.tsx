@@ -63,9 +63,9 @@ export default function RodriguesApplianceSection(props: {
             </div>
           )}
 
-          {props.serviceNames.length > 0 && (
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1.5">Serviço <span className="text-slate-400 font-normal">(opcional)</span></label>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1.5">Serviço <span className="text-slate-400 font-normal">(opcional)</span></label>
+            {props.serviceNames.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {props.serviceNames.map(s => (
                   <button key={s} type="button" onClick={() => props.onServiceChange(service === s ? '' : s)} className={chip(service === s)}>
@@ -73,8 +73,12 @@ export default function RodriguesApplianceSection(props: {
                   </button>
                 ))}
               </div>
-            </div>
-          )}
+            )}
+            {/* Serviço que não está na lista: digita aqui (desmarca os chips) */}
+            <input type="text" value={props.serviceNames.includes(service) ? '' : service}
+              onChange={e => props.onServiceChange(e.target.value)}
+              placeholder="Outro serviço (digite)..." className={`${inputCls} mt-2`} />
+          </div>
 
           {props.showValues && line && (
             <div className="bg-white border border-orange-100 rounded-xl p-3 space-y-3">

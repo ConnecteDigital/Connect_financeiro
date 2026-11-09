@@ -8,6 +8,7 @@ import { useTenant } from '@/lib/tenant-context'
 import { getOpenVisit } from '@/lib/db/service-visits'
 import { formatDuration } from '@/lib/business-hours'
 import { useTecnicoQueue, compareQueue, localYmd, callKind, CALL_KIND_STYLE } from '@/lib/tecnico-queue'
+import { getBlocksForRange, blockLabel, type BlockOnDay } from '@/lib/db/schedule-blocks'
 
 const fmt = (v: number) => `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
 
@@ -49,6 +50,18 @@ export default function TecnicoHome() {
   const [now, setNow] = useState(() => Date.now())
   const { lockOf, visitsOf } = useTecnicoQueue(true)
   const [weekPending, setWeekPending] = useState<number | null>(null)
+  // Bloqueios de agenda do técnico hoje (ex.: "Lava-louças na loja 13h–16h")
+  const [todayBlocks, setTodayBlocks] = useState<BlockOnDay[]>([])
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) return
+      const { data: aux } = await supabase.from('auxiliaries').select('id').eq('profile_id', user.id).maybeSingle()
+      const day = localYmd()
+      const list = await getBlocksForRange(day, day, aux?.id ?? null).catch(() => [] as BlockOnDay[])
+      setTodayBlocks(list.filter(b => b.auxiliary_id === null || b.auxiliary_id === aux?.id))
+    })
+  }, [])
 
   // A receber nesta semana (sempre a semana atual)
   useEffect(() => {
@@ -149,10 +162,19 @@ export default function TecnicoHome() {
           <div className="p-4 space-y-2">
             {[...Array(2)].map((_, i) => <div key={i} className="h-12 bg-zinc-50 rounded-lg animate-pulse" />)}
           </div>
-        ) : today.length === 0 ? (
+        ) : today.length === 0 && todayBlocks.length === 0 ? (
           <p className="px-4 py-8 text-center text-sm text-zinc-400">Nenhum chamado agendado pra hoje</p>
         ) : (
           <div className="divide-y divide-zinc-50">
+            {todayBlocks.map((b, i) => (
+              <div key={`b${i}`} className="flex items-center gap-3 px-4 py-3 bg-zinc-100/70">
+                <Lock className="w-4 h-4 text-zinc-500 flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-zinc-700 truncate">{blockLabel(b)} · {b.reason || 'Agenda bloqueada'}</p>
+                  <p className="text-xs text-zinc-500">Sem atendimento nesse horário{b.repeat_weekly ? ' · toda semana' : ''}</p>
+                </div>
+              </div>
+            ))}
             {today.map(c => {
               const lock = lockOf(c)
               const time = c.scheduled_time ? String(c.scheduled_time).slice(0, 5) : null
