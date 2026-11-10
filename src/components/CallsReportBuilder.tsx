@@ -1,9 +1,9 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { FileBarChart, Loader2, FileDown, MessageSquare, X, Check } from 'lucide-react'
+import { FileBarChart, Loader2, FileDown, MessageSquare, X, Check, Table2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { channelsFor, CHANNEL_LABEL } from '@/lib/channels'
+import { channelsFor, channelLabel as chLabel } from '@/lib/channels'
 import { getOriginLabel } from '@/lib/use-call-origins'
 
 // Relatórios > Chamados (Novo Ambiental): escolhe período, canais,
@@ -93,6 +93,12 @@ export default function CallsReportBuilder({ tenant, origins, range }: {
   const channelOptions = [...channelsFor(tenant).map(c => ({ value: c.value, label: c.label })), { value: NONE, label: 'Sem canal' }]
   const originOptions = [...origins, { value: NONE, label: 'Sem origem' }]
 
+  // Planilha (igual ao Resumo do Dia) numa aba nova, com os filtros escolhidos
+  function openSheet() {
+    sessionStorage.setItem('relatorio_chamados', JSON.stringify({ start: range.start, end: range.end, channels, origins: originSel, statuses }))
+    window.open('/relatorio-chamados', '_blank')
+  }
+
   async function generate() {
     setLoading(true); setError('')
     try {
@@ -149,7 +155,7 @@ export default function CallsReportBuilder({ tenant, origins, range }: {
   }, [rows])
 
   const originLabel = (v: string) => v === NONE ? 'Sem origem' : (origins.find(o => o.value === v)?.label ?? getOriginLabel(v))
-  const channelLabel = (v: string) => v === NONE ? 'Sem canal' : (CHANNEL_LABEL[v] ?? v)
+  const channelLabel = (v: string) => v === NONE ? 'Sem canal' : chLabel(v, tenant)
   const statusLabel = (v: string) => STATUS_LABEL[v] ?? v
   const filtersText = [
     `Canal: ${channels.length ? channels.map(channelLabel).join(', ') : 'todos'}`,
@@ -260,11 +266,18 @@ export default function CallsReportBuilder({ tenant, origins, range }: {
         <Chips title="Status" options={REPORT_STATUSES} selected={statuses} onChange={setStatuses} />
         <p className="text-xs text-slate-400">Toque em mais de uma opção pra juntar. &quot;Todos&quot; = sem filtro.</p>
         {error && <p className="text-sm text-red-500">{error}</p>}
-        <button type="button" onClick={generate} disabled={loading}
-          className="w-full sm:w-auto flex items-center justify-center gap-2 btn-primary text-sm px-6 py-3">
-          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileBarChart className="w-4 h-4" />}
-          Gerar relatório
-        </button>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <button type="button" onClick={openSheet}
+            className="flex items-center justify-center gap-2 btn-primary text-sm px-6 py-3">
+            <Table2 className="w-4 h-4" />
+            Gerar relatório (planilha)
+          </button>
+          <button type="button" onClick={generate} disabled={loading}
+            className="flex items-center justify-center gap-2 text-sm font-semibold px-6 py-3 rounded-xl border border-slate-200 bg-white text-slate-700">
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileBarChart className="w-4 h-4" />}
+            Ver resumo aqui
+          </button>
+        </div>
       </div>
 
       {/* Resultado */}

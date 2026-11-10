@@ -156,7 +156,7 @@ export default function ChamadosPage() {
     const map: Record<string, number> = Object.fromEntries(ALL_CHANNELS.map(c => [c.value, 0]))
     for (const c of calls) {
       const ch = c.call_channel
-      if (ch && ch in map) map[ch]++
+      if (ch) map[ch] = (map[ch] ?? 0) + 1
     }
     return map
   }, [calls])

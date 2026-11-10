@@ -103,8 +103,14 @@ export async function getReportData(
   }))
 
   // Por canal de atendimento
-  const CHANNEL_LABELS = CHANNEL_LABEL
-  const KNOWN_CHANNELS = ALL_CHANNELS.map(c => c.value)
+  // Canais padrão + qualquer canal criado pela empresa que apareça nos chamados
+  const seenChannels = new Set<string>([
+    ...calls.map((c: any) => c.call_channel),
+    ...allOrders.map((o: any) => (o.call as any)?.call_channel),
+  ].filter(Boolean))
+  const humanize = (v: string) => v.replace(/_/g, ' ').replace(/\b\w/g, m => m.toUpperCase())
+  const CHANNEL_LABELS: Record<string, string> = new Proxy(CHANNEL_LABEL, { get: (t, k: string) => t[k] ?? humanize(String(k)) })
+  const KNOWN_CHANNELS = Array.from(new Set([...ALL_CHANNELS.map(c => c.value), ...seenChannels]))
   const channelMap: Record<string, { calls: number; revenue: number }> = {}
   KNOWN_CHANNELS.forEach(ch => { channelMap[ch] = { calls: 0, revenue: 0 } })
 
@@ -133,7 +139,7 @@ export async function getReportData(
   })
   // Google Maps só aparece se tiver chamado (é só da Novo Ambiental)
   const byChannel = KNOWN_CHANNELS
-    .filter(key => key !== 'google_maps' || channelMap[key].calls > 0)
+    .filter(key => ALL_CHANNELS.slice(0, 5).some(c => c.value === key) || channelMap[key].calls > 0)
     .map(key => ({
       channel: CHANNEL_LABELS[key],
       calls: channelMap[key].calls,

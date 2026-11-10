@@ -30,7 +30,7 @@ import { PaymentLine, paymentSummaryFields, paymentsFromOs, hasCard } from '@/li
 import AfterHoursToggle, { commissionPctFor } from '@/components/AfterHoursToggle'
 import { isAfterHours, localDateTime } from '@/lib/business-hours'
 import { getCallVisits } from '@/lib/db/service-visits'
-import { channelsFor, CHANNEL_LABEL } from '@/lib/channels'
+import { channelsFor, channelLabel } from '@/lib/channels'
 
 type ServiceType = 'proprio' | 'terceirizado_saida' | 'terceirizado_entrada'
 type PaymentStatus = 'pago' | 'pago_parcial' | 'pendente'
@@ -793,7 +793,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
           <div className="flex flex-wrap gap-2">
             {[...channelsFor(tenant),
               // Canal gravado que não está na lista desta conta continua aparecendo
-              ...(callChannel && !channelsFor(tenant).some(c => c.value === callChannel) ? [{ value: callChannel, label: CHANNEL_LABEL[callChannel] ?? callChannel }] : []),
+              ...(callChannel && !channelsFor(tenant).some(c => c.value === callChannel) ? [{ value: callChannel, label: channelLabel(callChannel, tenant) }] : []),
             ].map(ch => (
               <button key={ch.value} type="button" onClick={() => setCallChannel(prev => prev === ch.value ? '' : ch.value)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition ${callChannel === ch.value ? 'bg-orange-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>

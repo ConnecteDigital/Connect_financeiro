@@ -8,6 +8,7 @@ import { getAuxiliaries, createAuxiliary, updateAuxiliary, deleteAuxiliary } fro
 import { createClient } from '@/lib/supabase/client'
 import { useTenant } from '@/lib/tenant-context'
 import RodriguesCommissionSettings from '@/components/RodriguesCommissionSettings'
+import ChannelSettings from '@/components/ChannelSettings'
 
 const ORIGIN_PRESETS = [
   'Indicação', 'WhatsApp', 'Site', 'Instagram',
@@ -742,6 +743,8 @@ export default function ConfiguracoesPage() {
           </button>
         </div>
       </div>
+
+      <ChannelSettings />
 
       {/* Dados da empresa */}
       <div className="rounded-xl border p-6 space-y-4"
