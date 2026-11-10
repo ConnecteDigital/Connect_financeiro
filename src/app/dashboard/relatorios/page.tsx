@@ -12,6 +12,8 @@ import { useCallOrigins } from '@/lib/use-call-origins'
 import { useTenant } from '@/lib/tenant-context'
 import { createClient } from '@/lib/supabase/client'
 import { SERVICE_CATEGORIES } from '@/lib/service-config'
+import { channelsFor, isNovoAmbiental } from '@/lib/channels'
+import CallsReportBuilder from '@/components/CallsReportBuilder'
 
 const fmt = (v: number) => `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
 
@@ -55,6 +57,7 @@ export default function RelatoriosPage() {
   const { origins: tenantOrigins } = useCallOrigins()
   const { tenant } = useTenant()
   const isRodrigues = tenant?.call_form_config?.rodrigues_custom === true
+  const isNovo = isNovoAmbiental(tenant)
 
   function openImprimirPage(mode: 'pdf' | 'image') {
     const payload = { tab: mainTab, range, tenantName: tenant?.name, tenantCnpj: tenant?.cnpj, data, expData, ceData }
@@ -208,7 +211,7 @@ export default function RelatoriosPage() {
         </div>
         <div className="flex items-center gap-2">
           <DateRangePicker value={range} onChange={setRange} variant="card" />
-          <div className="relative no-print">
+          <div className={`relative no-print ${isNovo && mainTab === 'chamados' ? 'hidden' : ''}`}>
             <button
               onClick={() => setShowShareMenu(v => !v)}
               className="flex items-center gap-2 btn-primary text-sm px-4 py-2.5"
@@ -254,8 +257,13 @@ export default function RelatoriosPage() {
         ))}
       </div>
 
+      {/* ── CHAMADOS TAB — Novo Ambiental: montar relatório com filtros ── */}
+      {mainTab === 'chamados' && isNovo && (
+        <CallsReportBuilder tenant={tenant} origins={tenantOrigins} range={range} />
+      )}
+
       {/* ── CHAMADOS TAB ── */}
-      {mainTab === 'chamados' && (
+      {mainTab === 'chamados' && !isNovo && (
         <>
           {/* Filters */}
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-3 space-y-3">
@@ -288,11 +296,7 @@ export default function RelatoriosPage() {
               <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
                 {[
                   { v: 'todos', l: 'Todos' },
-                  { v: 'whatsapp', l: '💬 WhatsApp' },
-                  { v: 'ligacao', l: '📞 Ligação' },
-                  { v: 'cliente', l: '🏠 Cliente' },
-                  { v: 'indicacao', l: '🤝 Indicação' },
-                  { v: 'google', l: '🔍 Google' },
+                  ...channelsFor(tenant).map(c => ({ v: c.value, l: c.label })),
                 ].map(ch => (
                   <button key={ch.v} onClick={() => setChannelFilter(ch.v)}
                     className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold border transition ${channelFilter === ch.v ? 'text-white border-transparent' : 'text-slate-500 border-slate-200 hover:border-slate-400'}`}

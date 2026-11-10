@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client'
+import { ALL_CHANNELS, CHANNEL_LABEL } from '@/lib/channels'
 
 export async function getReportData(
   startDate: string,
@@ -102,8 +103,8 @@ export async function getReportData(
   }))
 
   // Por canal de atendimento
-  const CHANNEL_LABELS: Record<string, string> = { whatsapp: '💬 WhatsApp', ligacao: '📞 Ligação', cliente: '🏠 Cliente', indicacao: '🤝 Indicação', google: '🔍 Google' }
-  const KNOWN_CHANNELS = ['whatsapp', 'ligacao', 'cliente', 'indicacao', 'google']
+  const CHANNEL_LABELS = CHANNEL_LABEL
+  const KNOWN_CHANNELS = ALL_CHANNELS.map(c => c.value)
   const channelMap: Record<string, { calls: number; revenue: number }> = {}
   KNOWN_CHANNELS.forEach(ch => { channelMap[ch] = { calls: 0, revenue: 0 } })
 
@@ -130,11 +131,14 @@ export async function getReportData(
       }
     }
   })
-  const byChannel = KNOWN_CHANNELS.map(key => ({
-    channel: CHANNEL_LABELS[key],
-    calls: channelMap[key].calls,
-    revenue: channelMap[key].revenue,
-  }))
+  // Google Maps só aparece se tiver chamado (é só da Novo Ambiental)
+  const byChannel = KNOWN_CHANNELS
+    .filter(key => key !== 'google_maps' || channelMap[key].calls > 0)
+    .map(key => ({
+      channel: CHANNEL_LABELS[key],
+      calls: channelMap[key].calls,
+      revenue: channelMap[key].revenue,
+    }))
 
   // Por categoria de serviço
   const catMap: Record<string, { calls: number; revenue: number }> = {}

@@ -11,6 +11,7 @@ import RetornoModal from '@/components/RetornoModal'
 import { useTecnicoQueue, compareQueue, callDay, callKind, finishedDay, CALL_KIND_STYLE, FINISHED_TABS } from '@/lib/tecnico-queue'
 import { formatAddress } from '@/lib/address'
 import RodriguesDayBoard from '@/components/RodriguesDayBoard'
+import { ALL_CHANNELS, channelsFor } from '@/lib/channels'
 import ScheduleBlockModal from '@/components/ScheduleBlockModal'
 import DayPicker from '@/components/DayPicker'
 import { getBlocksForRange, type BlockOnDay } from '@/lib/db/schedule-blocks'
@@ -152,7 +153,7 @@ export default function ChamadosPage() {
 
   // Contagem por canal
   const channelCounts = useMemo(() => {
-    const map: Record<string, number> = { whatsapp: 0, ligacao: 0, cliente: 0, indicacao: 0, google: 0 }
+    const map: Record<string, number> = Object.fromEntries(ALL_CHANNELS.map(c => [c.value, 0]))
     for (const c of calls) {
       const ch = c.call_channel
       if (ch && ch in map) map[ch]++
@@ -354,11 +355,7 @@ export default function ChamadosPage() {
               <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
                 {([
                   { value: 'todos', label: 'Todos canais', count: calls.length },
-                  { value: 'whatsapp', label: '💬 WhatsApp', count: channelCounts.whatsapp },
-                  { value: 'ligacao', label: '📞 Ligação', count: channelCounts.ligacao },
-                  { value: 'cliente', label: '🏠 Cliente', count: channelCounts.cliente },
-                  { value: 'indicacao', label: '🤝 Indicação', count: channelCounts.indicacao },
-                  { value: 'google', label: '🔍 Google', count: channelCounts.google },
+                  ...channelsFor(tenant).map(c => ({ ...c, count: channelCounts[c.value] ?? 0 })),
                 ] as { value: string; label: string; count: number }[]).map(ch => (
                   <button key={ch.value} onClick={() => setChannelFilter(ch.value)}
                     className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
@@ -429,11 +426,7 @@ export default function ChamadosPage() {
             <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
               {([
                 { value: 'todos', label: 'Todos canais', count: calls.length },
-                { value: 'whatsapp', label: '💬 WhatsApp', count: channelCounts.whatsapp },
-                { value: 'ligacao', label: '📞 Ligação', count: channelCounts.ligacao },
-                { value: 'cliente', label: '🏠 Cliente', count: channelCounts.cliente },
-                { value: 'indicacao', label: '🤝 Indicação', count: channelCounts.indicacao },
-                { value: 'google', label: '🔍 Google', count: channelCounts.google },
+                ...channelsFor(tenant).map(c => ({ ...c, count: channelCounts[c.value] ?? 0 })),
               ] as { value: string; label: string; count: number }[]).map(ch => (
                 <button key={ch.value} onClick={() => setChannelFilter(ch.value)}
                   className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
