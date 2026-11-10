@@ -30,6 +30,7 @@ import { PaymentLine, paymentSummaryFields, paymentsFromOs, hasCard } from '@/li
 import AfterHoursToggle, { commissionPctFor } from '@/components/AfterHoursToggle'
 import { isAfterHours, localDateTime } from '@/lib/business-hours'
 import { getCallVisits } from '@/lib/db/service-visits'
+import { channelsFor, CHANNEL_LABEL } from '@/lib/channels'
 
 type ServiceType = 'proprio' | 'terceirizado_saida' | 'terceirizado_entrada'
 type PaymentStatus = 'pago' | 'pago_parcial' | 'pendente'
@@ -95,6 +96,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   // Chamado
   const [callDate, setCallDate] = useState('')
   const [origin, setOrigin] = useState('')
+  const [callChannel, setCallChannel] = useState('')
   const [callStatus, setCallStatus] = useState('agendado')
   const [callNotes, setCallNotes] = useState('')
   const [clientId, setClientId] = useState('')
@@ -198,6 +200,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
       // Preencher dados do chamado
       setCallDate(call.date)
       setOrigin(call.origin)
+      setCallChannel(call.call_channel ?? '')
       setCallStatus(call.status)
       setCallNotes(call.notes ?? '')
       setClientId(call.client_id ?? '')
@@ -593,6 +596,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         contact_name: contactName || null,
         contact_phone: contactPhone || null,
         origin,
+        call_channel: callChannel || null,
         status: callStatus,
         notes: callNotes || null,
         service_category: serviceCategoryText || null,
@@ -782,6 +786,22 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
             ))}
           </div>
         </div>}
+
+        {/* Canal (por onde o cliente chegou) */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">Canal</label>
+          <div className="flex flex-wrap gap-2">
+            {[...channelsFor(tenant),
+              // Canal gravado que não está na lista desta conta continua aparecendo
+              ...(callChannel && !channelsFor(tenant).some(c => c.value === callChannel) ? [{ value: callChannel, label: CHANNEL_LABEL[callChannel] ?? callChannel }] : []),
+            ].map(ch => (
+              <button key={ch.value} type="button" onClick={() => setCallChannel(prev => prev === ch.value ? '' : ch.value)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${callChannel === ch.value ? 'bg-orange-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                {ch.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {/* Status */}
         <div>
