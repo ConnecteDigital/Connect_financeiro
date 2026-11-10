@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { channelsFor, channelLabel as chLabel } from '@/lib/channels'
 import { getOriginLabel } from '@/lib/use-call-origins'
 
-// Relatórios > Chamados (Novo Ambiental): escolhe período, canais,
+// Relatórios > Chamados (Nova Ambiental): escolhe período, canais,
 // origens e status (pode marcar mais de um em cada) e gera o relatório.
 
 const fmt = (v: number) => `R$ ${Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`

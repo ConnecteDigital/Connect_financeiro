@@ -257,7 +257,7 @@ export default function RelatoriosPage() {
         ))}
       </div>
 
-      {/* ── CHAMADOS TAB — Novo Ambiental: montar relatório com filtros ── */}
+      {/* ── CHAMADOS TAB — Nova Ambiental: montar relatório com filtros ── */}
       {mainTab === 'chamados' && isNovo && (
         <CallsReportBuilder tenant={tenant} origins={tenantOrigins} range={range} />
       )}
