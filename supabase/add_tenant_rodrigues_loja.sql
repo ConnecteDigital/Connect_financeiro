@@ -24,7 +24,7 @@ where l.slug = 'rodrigues-loja' and r.slug = 'rodrigues-refrigeracao' and l.logo
 
 insert into profiles (id, tenant_id, name, role)
 select
-  'COLE_O_UID_AQUI'::uuid,   -- <<< UID do login novo
+  'aa0b8828-8142-45f0-8b35-59377a505cf1'::uuid,   -- loja@gmail.com
   t.id,
   t.name,
   'admin'
