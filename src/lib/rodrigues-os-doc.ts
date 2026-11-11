@@ -46,6 +46,7 @@ export function rodriguesOsDoc(tenant: any, call: any, so: any): RodriguesDocPro
     : so.has_guarantee_1y ? '1 ano'
     : so.has_guarantee_6m ? '6 meses'
     : so.has_guarantee_90 ? '90 dias'
+    : so.has_guarantee_60 ? '60 dias'
     : null
 
   return {
@@ -67,7 +68,9 @@ export function rodriguesOsDoc(tenant: any, call: any, so: any): RodriguesDocPro
     discount,
     payment: conditions ? { conditions } : null,
     guarantee,
-    extraInfo: null,
+    // Sem garantia: o motivo que o técnico escreveu sai em Observações
+    extraInfo: so.has_no_guarantee ? (String(so.no_guarantee_reason ?? '').trim() || 'Serviço sem garantia.') : null,
+    extraTitle: 'Observações',
     signatures: [header.name, clientName],
   }
 }

@@ -29,6 +29,7 @@ export interface RodriguesDocProps {
   payment?: { methods?: string; pix?: string; conditions?: string | null } | null
   guarantee?: string | null
   extraInfo?: string | null
+  extraTitle?: string
   photos?: string[]        // fotos do aparelho/etiqueta anexadas ao chamado
   signatures: string[]
 }
@@ -202,20 +203,6 @@ export default function RodriguesDocument(p: RodriguesDocProps) {
         </Section>
       )}
 
-      {/* ── Garantia ── */}
-      {p.guarantee && (
-        <Section title="Garantia">
-          <Field label="Período de garantia" value={p.guarantee} />
-        </Section>
-      )}
-
-      {/* ── Informações adicionais ── */}
-      {p.extraInfo && (
-        <Section title="Informações adicionais">
-          <div style={{ fontSize: 12, lineHeight: 1.4, whiteSpace: 'pre-wrap', marginBottom: 10 }}>{p.extraInfo}</div>
-        </Section>
-      )}
-
       {/* ── Fotos ── */}
       {p.photos && p.photos.length > 0 && (
         <Section title="Fotos">
@@ -225,6 +212,20 @@ export default function RodriguesDocument(p: RodriguesDocProps) {
               <img key={i} src={src} alt="" style={{ width: 'calc(33.33% - 6px)', height: 170, objectFit: 'contain', background: '#f7f7f7', border: '1px solid #e5e5e5', borderRadius: 4 }} />
             ))}
           </div>
+        </Section>
+      )}
+
+      {/* ── Garantia ── */}
+      {p.guarantee && (
+        <Section title="Garantia">
+          <Field label="Período de garantia" value={p.guarantee} />
+        </Section>
+      )}
+
+      {/* ── Informações adicionais ── */}
+      {p.extraInfo && (
+        <Section title={p.extraTitle ?? 'Informações adicionais'}>
+          <div style={{ fontSize: 12, lineHeight: 1.4, whiteSpace: 'pre-wrap', marginBottom: 10 }}>{p.extraInfo}</div>
         </Section>
       )}
 

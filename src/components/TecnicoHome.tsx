@@ -188,7 +188,7 @@ export default function TecnicoHome() {
               )
               if (lock.locked) {
                 return (
-                  <div key={c.id} className="flex items-center gap-3 px-4 py-3 bg-zinc-50/60">
+                  <Link key={c.id} href={`/dashboard/chamados/${c.id}`} className="flex items-center gap-3 px-4 py-3 bg-zinc-50/60 hover:bg-zinc-100 transition">
                     <Lock className="w-4 h-4 text-zinc-400 flex-shrink-0" />
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-zinc-600 truncate">{time && `${time} · `}{name}{tags}</p>
@@ -196,7 +196,7 @@ export default function TecnicoHome() {
                         {[c.service_category, lock.message].filter(Boolean).join(' · ')}
                       </p>
                     </div>
-                  </div>
+                  </Link>
                 )
               }
               return (

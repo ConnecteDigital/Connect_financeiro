@@ -72,3 +72,12 @@ export async function updateServiceVisit(id: string, values: { started_at?: stri
   const { error } = await supabase.from('service_visits').update(values).eq('id', id)
   if (error) throw error
 }
+
+// Técnico muda o resultado de um chamado já encerrado (orçamento →
+// aprovado, não aprovou por engano etc.)
+export async function tecnicoChangeOutcome(callId: string, status: 'aprovado' | 'orcamento' | 'nao_aprovou' | 'pagou_somente_visita') {
+  const supabase = createClient()
+  const { data, error } = await supabase.rpc('tecnico_change_outcome', { p_call_id: callId, p_status: status })
+  if (error) throw error
+  return data
+}

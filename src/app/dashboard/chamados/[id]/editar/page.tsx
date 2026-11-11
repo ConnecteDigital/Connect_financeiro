@@ -144,6 +144,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const [hasGuarantee6m, setHasGuarantee6m] = useState(false)
   const [hasGuarantee1y, setHasGuarantee1y] = useState(false)
   const [hasNoGuarantee, setHasNoGuarantee] = useState(false)
+  const [noGuaranteeReason, setNoGuaranteeReason] = useState('')
   const [teamId, setTeamId] = useState('')
   const [teamName, setTeamName] = useState('')
   const [driver, setDriver] = useState('')
@@ -266,6 +267,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         setHasGuarantee6m(so.has_guarantee_6m ?? false)
         setHasGuarantee1y(so.has_guarantee_1y ?? false)
         setHasNoGuarantee(so.has_no_guarantee ?? false)
+        setNoGuaranteeReason(so.no_guarantee_reason ?? '')
         getServiceOrderParts(so.id).then((parts: any[]) => {
           const lines = parts.map(p => ({
             stock_item_id: p.stock_item_id,
@@ -396,18 +398,21 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   useEffect(() => {
     if (!isRodrigues) return
     getCallVisits(id)
-      .then(v => setLastVisitStart(v.length ? v[v.length - 1].started_at : null))
+      .then(v => setLastVisitStart(v.length ? v[0].started_at : null))
       .catch(() => setLastVisitStart(null))
   }, [isRodrigues, id])
   useEffect(() => {
     if (!isRodrigues || afterHoursTouched || !callDate) return
     let date = callDate
     let time: string | null = null
-    if (lastVisitStart) {
+    // Vale o horário AGENDADO; sem horário, o início do 1º atendimento
+    if (scheduledTime) {
+      date = scheduledDate || callDate
+      time = scheduledTime
+    } else if (lastVisitStart) {
       ({ date, time } = localDateTime(lastVisitStart))
     } else if (scheduledDate) {
       date = scheduledDate
-      time = scheduledTime || null
     } else {
       const now = localDateTime(new Date().toISOString())
       if (now.date === callDate) time = now.time
@@ -658,6 +663,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
           has_guarantee_6m: hasGuarantee6m,
           has_guarantee_1y: hasGuarantee1y,
           has_no_guarantee: hasNoGuarantee,
+          ...(isRodrigues ? { has_guarantee_60: hasGuarantee60, no_guarantee_reason: hasNoGuarantee ? (noGuaranteeReason.trim() || null) : null } : {}),
           equipment_rental_value: equipmentRentalValue,
           subtotal,
           discount,
@@ -1482,6 +1488,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
             {isRodrigues ? (
               <div className="flex flex-wrap gap-2">
                 {[
+                  { label: '60 dias', val: hasGuarantee60, set: setHasGuarantee60 },
                   { label: '90 dias', val: hasGuarantee90, set: setHasGuarantee90 },
                   { label: '6 meses', val: hasGuarantee6m, set: setHasGuarantee6m },
                   { label: '1 ano', val: hasGuarantee1y, set: setHasGuarantee1y },
@@ -1489,13 +1496,18 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                 ].map(opt => (
                   <button key={opt.label} type="button"
                     onClick={() => {
-                      setHasGuarantee90(false); setHasGuarantee6m(false); setHasGuarantee1y(false); setHasNoGuarantee(false)
+                      setHasGuarantee60(false); setHasGuarantee90(false); setHasGuarantee6m(false); setHasGuarantee1y(false); setHasNoGuarantee(false)
                       opt.set(true)
                     }}
                     className={`px-3 py-2 rounded-xl text-sm font-medium border transition ${opt.val ? 'bg-orange-500 border-orange-500 text-white' : 'border-slate-200 bg-white text-slate-600 hover:border-orange-300'}`}>
                     {opt.label}
                   </button>
                 ))}
+                {hasNoGuarantee && (
+                  <textarea rows={2} value={noGuaranteeReason} onChange={e => setNoGuaranteeReason(e.target.value)}
+                    placeholder="Por que não tem garantia? (sai na OS, em Observações)"
+                    className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                )}
               </div>
             ) : (
               <div className="space-y-3">

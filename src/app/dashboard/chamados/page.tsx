@@ -593,7 +593,7 @@ export default function ChamadosPage() {
                 )
                 if (lock.locked) {
                   return (
-                    <div key={c.id} className="bg-zinc-50 rounded-2xl border border-zinc-100 p-4 flex items-start gap-3">
+                    <Link key={c.id} href={`/dashboard/chamados/${c.id}`} className="bg-zinc-50 rounded-2xl border border-zinc-100 p-4 flex items-start gap-3 active:scale-[0.99] transition">
                       <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-zinc-100">
                         <Lock className="w-5 h-5 text-zinc-400" />
                       </div>
@@ -602,7 +602,7 @@ export default function ChamadosPage() {
                         {c.service_category && <p className="text-xs text-zinc-500 mt-0.5">{c.service_category}</p>}
                         <p className="text-xs text-zinc-400 mt-1.5">{lock.message}</p>
                       </div>
-                    </div>
+                    </Link>
                   )
                 }
                 const address = formatAddress({

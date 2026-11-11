@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Lock, Navigation, CalendarClock, Wrench, CheckCircle, Printer, Edit, Paperclip, FileText } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import PhotoGallery from '@/components/PhotoGallery'
+import ChangeOutcome from '@/components/ChangeOutcome'
 import ServiceTimer from '@/components/ServiceTimer'
 import { mapsUrl } from '@/lib/maps'
 import { formatAddress, navigationAddress } from '@/lib/address'
@@ -33,7 +35,6 @@ export default function TecnicoCallView({ call, lock, onChanged }: {
   // Fotos/arquivos do chamado (os que o Rodrigues anexou e os do técnico)
   const [files, setFiles] = useState<{ name: string; url: string; image: boolean }[]>([])
   useEffect(() => {
-    if (lock.locked) return
     const storage = createClient().storage.from('chamados-anexos')
     storage.list(call.id, { sortBy: { column: 'created_at', order: 'asc' } })
       .then(({ data }) => setFiles((data ?? []).filter(f => f.name && !f.name.startsWith('.')).map(f => ({
@@ -42,7 +43,7 @@ export default function TecnicoCallView({ call, lock, onChanged }: {
         image: /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(f.name),
       }))))
       .catch(() => setFiles([]))
-  }, [call.id, lock.locked, so?.id])
+  }, [call.id, so?.id])
 
   const name = call.client?.name ?? call.contact_name ?? 'Cliente'
   const time = call.scheduled_time ? String(call.scheduled_time).slice(0, 5) : null
@@ -80,6 +81,8 @@ export default function TecnicoCallView({ call, lock, onChanged }: {
           <p className="text-sm text-slate-500">{lock.message}</p>
           <p className="text-xs text-slate-400">Endereço e início do serviço são liberados na ordem da agenda.</p>
         </div>
+        {/* Mesmo bloqueado, o técnico já pode ver as fotos do aparelho */}
+        <PhotoGallery files={files.filter(f => f.image)} title="Fotos do chamado" />
       </div>
     )
   }
@@ -128,25 +131,10 @@ export default function TecnicoCallView({ call, lock, onChanged }: {
         )}
       </div>
 
-      {files.length > 0 && (
-        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5 space-y-3">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
-            <Paperclip className="w-3.5 h-3.5" /> Fotos e arquivos
-          </p>
-          <div className="grid grid-cols-3 gap-2">
-            {files.map(f => (
-              <a key={f.url} href={f.url} target="_blank" rel="noopener noreferrer"
-                className="block rounded-lg overflow-hidden border border-slate-200 bg-slate-50">
-                {f.image
-                  // eslint-disable-next-line @next/next/no-img-element
-                  ? <img src={f.url} alt={f.name} className="w-full h-24 object-cover" />
-                  : <span className="h-24 flex flex-col items-center justify-center gap-1 text-slate-400 px-1">
-                      <FileText className="w-6 h-6" /><span className="text-[10px] truncate w-full text-center">{f.name}</span>
-                    </span>}
-              </a>
-            ))}
-          </div>
-        </div>
+      <PhotoGallery files={files} />
+
+      {['orcamento', 'nao_aprovou', 'pagou_somente_visita'].includes(call.status) && !so && (
+        <ChangeOutcome callId={call.id} status={call.status} onChanged={onChanged} />
       )}
 
       {(call.status === 'aprovado' || call.status === 'retorno') && !so && (

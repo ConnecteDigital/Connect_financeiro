@@ -12,6 +12,7 @@ import { useTenant } from '@/lib/tenant-context'
 import StockPartPicker from '@/components/StockPartPicker'
 import { toastSuccess } from '@/components/Toast'
 import PaymentLinesEditor from '@/components/PaymentLinesEditor'
+import GuaranteePicker, { guaranteeFromOs, guaranteeFields, type GuaranteeKey } from '@/components/GuaranteePicker'
 import { PaymentLine, paymentSummaryFields, paymentsFromOs, hasCard, cardGross, osCardGross } from '@/lib/payments'
 
 interface StockLine { stock_item_id: string; item_name: string; quantity: number; unit_value: number; total_value: number }
@@ -39,6 +40,8 @@ export default function FinalizarServicoPage({ params }: { params: Promise<{ id:
   const [paymentLines, setPaymentLines] = useState<PaymentLine[]>([])
   const [partsPaid, setPartsPaid] = useState(false)
   const [observations, setObservations] = useState('')
+  const [guarantee, setGuarantee] = useState<GuaranteeKey | ''>('90')
+  const [noGuaranteeReason, setNoGuaranteeReason] = useState('')
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
   const cameraRef = useRef<HTMLInputElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -62,6 +65,8 @@ export default function FinalizarServicoPage({ params }: { params: Promise<{ id:
         setPaymentLines(paymentsFromOs(existing))
         setPartsPaid(c.return_parts_paid ?? Number(existing.total_value ?? 0) > 0)
         setObservations(existing.observations ?? '')
+        setGuarantee(guaranteeFromOs(existing) || '90')
+        setNoGuaranteeReason(existing.no_guarantee_reason ?? '')
         setUberCost(Number(existing.uber_cost ?? 0))
         const parts = await getServiceOrderParts(existing.id)
         const lines = parts.map((p: any) => ({
@@ -107,6 +112,8 @@ export default function FinalizarServicoPage({ params }: { params: Promise<{ id:
   async function handleSave() {
     if (!isReturn && value <= 0) { setError('Informe o valor total recebido.'); return }
     if (isReturn && partsPaid && partsTotal <= 0) { setError('Lance a peça usada (ou marque que o cliente não pagou).'); return }
+    if (!isReturn && !guarantee) { setError('Escolha a garantia.'); return }
+    if (!isReturn && guarantee === 'none' && !noGuaranteeReason.trim()) { setError('Escreva por que o serviço não tem garantia.'); return }
     const lines = needsPayment ? paymentLines.filter(l => l.method) : []
     if (needsPayment && lines.length === 0) { setError('Escolha a forma de pagamento.'); return }
     setSaving(true); setError('')
@@ -130,6 +137,7 @@ export default function FinalizarServicoPage({ params }: { params: Promise<{ id:
         ...paymentSummaryFields(lines),
         card_net_value: keepConfirmed ? so.card_net_value : null,
         observations: observations || null,
+        ...(!isReturn ? guaranteeFields(guarantee, noGuaranteeReason) : {}),
         payment_status: cardPending ? 'pendente' : 'pago',
         amount_paid: cardPending ? 0 : chargedTotal,
         remaining_amount: cardPending ? chargedTotal : 0,
@@ -274,6 +282,13 @@ export default function FinalizarServicoPage({ params }: { params: Promise<{ id:
                 Pagamento em cartão: o Rodrigues vai confirmar o valor; sua comissão aparece depois disso.
               </p>
             )}
+          </div>
+        )}
+
+        {!isReturn && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Garantia *</label>
+            <GuaranteePicker value={guarantee} onChange={setGuarantee} reason={noGuaranteeReason} onReason={setNoGuaranteeReason} inputCls={inputCls} />
           </div>
         )}
 

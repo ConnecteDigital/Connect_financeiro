@@ -187,21 +187,24 @@ export default function RodriguesSaidas({ expenses, onToggle, onEdit, onDelete, 
 
       {header}
 
-      {/* Por tipo: chips com o total de cada um */}
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
-        <button type="button" onClick={() => setGroup('todas')}
-          className={`flex-shrink-0 px-3 py-2 rounded-xl text-xs font-semibold border transition ${group === 'todas' ? 'bg-zinc-800 text-white border-zinc-800' : 'bg-white text-zinc-600 border-zinc-200'}`}>
-          Todas <span className="opacity-70">{fmt(rows.reduce((s, r) => s + Number(r.e.amount), 0))}</span>
-        </button>
-        {GROUPS.filter(g => groupTotals[g.key].count > 0).map(g => {
+      {/* Por tipo: um quadradinho por categoria — toca pra ver só ela */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {[{ key: 'todas' as const, label: 'Todas', icon: MoreHorizontal, color: 'text-zinc-800', bg: '' }, ...GROUPS.filter(g => groupTotals[g.key].count > 0)].map(g => {
           const Icon = g.icon
           const active = group === g.key
+          const t = g.key === 'todas'
+            ? { total: rows.reduce((s, r) => s + Number(r.e.amount), 0), pending: rows.filter(r => r.e.status === 'pendente').reduce((s, r) => s + Number(r.e.amount), 0), count: rows.length }
+            : groupTotals[g.key]
           return (
-            <button key={g.key} type="button" onClick={() => setGroup(active ? 'todas' : g.key)}
-              className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition ${active ? 'bg-zinc-800 text-white border-zinc-800' : `${g.bg} ${g.color}`}`}>
-              <Icon className="w-3.5 h-3.5" /> {g.label}
-              <span className="opacity-80">{fmt(groupTotals[g.key].total)}</span>
-              {groupTotals[g.key].pending > 0 && <span className={`text-[10px] px-1.5 py-0.5 rounded-md ${active ? 'bg-white/20' : 'bg-amber-100 text-amber-700'}`}>{fmt(groupTotals[g.key].pending)} pend.</span>}
+            <button key={g.key} type="button" onClick={() => setGroup(active && g.key !== 'todas' ? 'todas' : g.key)}
+              className={`text-left rounded-2xl border px-3 py-2.5 transition ${active ? 'bg-white shadow-sm' : 'bg-white/70 border-zinc-100 hover:bg-white'}`}
+              style={active ? { borderColor: 'var(--primary)', boxShadow: '0 0 0 1px var(--primary)' } : {}}>
+              <p className={`text-sm font-semibold flex items-center gap-1.5 ${g.color}`}><Icon className="w-4 h-4" /> {g.label}</p>
+              <p className="text-base font-bold text-zinc-900 mt-0.5 whitespace-nowrap">{fmt(t.total)}</p>
+              <p className="text-[11px] text-zinc-500">
+                {t.count} lançamento{t.count !== 1 ? 's' : ''}
+                {t.pending > 0 && <span className="text-amber-600 font-semibold"> · {fmt(t.pending)} pend.</span>}
+              </p>
             </button>
           )
         })}
