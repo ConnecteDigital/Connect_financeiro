@@ -10,6 +10,8 @@ import DateRangePicker, { DateRange } from '@/components/DateRangePicker'
 import Link from 'next/link'
 import { useTenant } from '@/lib/tenant-context'
 import TecnicoHome from '@/components/TecnicoHome'
+import LojaHome from '@/components/LojaHome'
+import { isLojaMode } from '@/lib/loja'
 import { createClient } from '@/lib/supabase/client'
 import { osCardPending, osCardGross } from '@/lib/payments'
 
@@ -66,7 +68,8 @@ function SkeletonCard() {
 }
 
 export default function DashboardPage() {
-  const { isTecnico } = useTenant()
+  const { isTecnico, tenant } = useTenant()
+  if (isLojaMode(tenant)) return <LojaHome />
   return isTecnico ? <TecnicoHome /> : <OwnerDashboard />
 }
 

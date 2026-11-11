@@ -14,6 +14,7 @@ import { useTenant } from '@/lib/tenant-context'
 import { TenantProvider } from '@/lib/tenant-context'
 import { ToastProvider } from '@/components/Toast'
 import OnboardingWizard from '@/components/OnboardingWizard'
+import { isLojaMode, LOJA_ALLOWED_PREFIXES } from '@/lib/loja'
 
 const mainNav = [
   { href: '/dashboard',             label: 'Início',      icon: LayoutDashboard },
@@ -49,6 +50,14 @@ const tecnicoNav = [
   ESTOQUE_NAV_ITEM,
 ]
 
+// Nav da conta Loja (Rodrigues – Loja): só estoque, vendas e gastos
+const lojaNav = [
+  { href: '/dashboard',               label: 'Início',     icon: LayoutDashboard },
+  { href: '/dashboard/estoque',       label: 'Estoque',    icon: Package },
+  { href: '/dashboard/financeiro',    label: 'Financeiro', icon: Wallet },
+  { href: '/dashboard/configuracoes', label: 'Ajustes',    icon: Settings },
+]
+
 async function handleLogout() {
   const { createClient } = await import('@/lib/supabase/client')
   const supabase = createClient()
@@ -82,7 +91,8 @@ function TenantAvatar({ size = 36 }: { size?: number }) {
 /* ── Mobile bottom nav ───────────────────────────────────────── */
 function BottomNav({ onMoreClick, moreOpen, visible }: { onMoreClick: () => void; moreOpen: boolean; visible: boolean }) {
   const pathname = usePathname()
-  const { isTecnico } = useTenant()
+  const { isTecnico, tenant } = useTenant()
+  const simpleNav = isTecnico ? tecnicoNav : isLojaMode(tenant) ? lojaNav : null
 
   function isActive(href: string) {
     return href === '/dashboard'
@@ -90,7 +100,7 @@ function BottomNav({ onMoreClick, moreOpen, visible }: { onMoreClick: () => void
       : pathname.startsWith(href)
   }
 
-  if (isTecnico) {
+  if (simpleNav) {
     return (
       <nav
         className="lg:hidden fixed bottom-0 left-0 right-0 z-40 transition-transform duration-300 ease-out"
@@ -104,7 +114,7 @@ function BottomNav({ onMoreClick, moreOpen, visible }: { onMoreClick: () => void
               boxShadow: '0 8px 32px rgba(0,0,0,0.14), 0 0 0 0.5px var(--border)',
             }}>
             <div className="flex items-center justify-around px-1 py-2.5">
-              {tecnicoNav.map(({ href, label, icon: Icon }) => {
+              {simpleNav.map(({ href, label, icon: Icon }) => {
                 const active = isActive(href)
                 return (
                   <Link key={href} href={href}
@@ -276,7 +286,7 @@ function Sidebar({ theme, onToggleTheme, isMaster }: { theme: 'light' | 'dark'; 
   }
 
   const baseNav = isRodrigues ? [...allNav, ESTOQUE_NAV_ITEM, TEMPO_NAV_ITEM] : allNav
-  const sidebarNav = isTecnico ? tecnicoNav : isMaster
+  const sidebarNav = isTecnico ? tecnicoNav : isLojaMode(tenant) ? lojaNav : isMaster
     ? [...baseNav, { href: '/dashboard/master', label: 'Painel Master', icon: ShieldCheck }]
     : baseNav
 
@@ -352,7 +362,7 @@ function MobileHeader({ visible, theme, onToggleTheme }: { visible: boolean; the
   const { tenant, isTecnico } = useTenant()
   const pathname = usePathname()
 
-  const currentPage = [...allNav, ...tecnicoNav, ESTOQUE_NAV_ITEM, TEMPO_NAV_ITEM].find(n =>
+  const currentPage = [...(isLojaMode(tenant) ? lojaNav : []), ...allNav, ...tecnicoNav, ESTOQUE_NAV_ITEM, TEMPO_NAV_ITEM].find(n =>
     n.href === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(n.href)
   )
 
@@ -440,6 +450,15 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
     const m = pathname.match(/^\/dashboard\/chamados\/([^/]+)\/(editar|romaneio|nova-os)/)
     if (m) router.replace(`/dashboard/chamados/${m[1]}`)
   }, [isTecnico, pathname, router])
+
+  // Conta Loja: só Início, Estoque, Financeiro e Ajustes
+  const lojaMode = isLojaMode(tenant)
+  useEffect(() => {
+    if (!lojaMode) return
+    if (pathname !== '/dashboard' && !LOJA_ALLOWED_PREFIXES.some(p => pathname.startsWith(p))) {
+      router.replace('/dashboard')
+    }
+  }, [lojaMode, pathname, router])
 
   const isPrintPage = pathname.includes('/imprimir')
   // Documentos (OS, romaneio) são sempre claros, mesmo no modo escuro
@@ -574,7 +593,7 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
         </Link>
       )}
 
-      {showOnboarding && tenant && (
+      {showOnboarding && tenant && !isLojaMode(tenant) && (
         <OnboardingWizard
           tenantId={tenant.id}
           initialName={tenant.name}

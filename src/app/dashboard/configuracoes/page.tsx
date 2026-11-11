@@ -9,6 +9,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useTenant } from '@/lib/tenant-context'
 import RodriguesCommissionSettings from '@/components/RodriguesCommissionSettings'
 import ChannelSettings from '@/components/ChannelSettings'
+import { isLojaMode } from '@/lib/loja'
 
 const ORIGIN_PRESETS = [
   'Indicação', 'WhatsApp', 'Site', 'Instagram',
@@ -403,6 +404,7 @@ export default function ConfiguracoesPage() {
   const tecnicos = auxiliaries.filter(a => a.type === 'tecnico' || !a.type)
   const donos = auxiliaries.filter(a => a.type === 'dono')
   const auxiliaresPuros = auxiliaries.filter(a => a.type === 'auxiliar')
+  const lojaMode = isLojaMode(tenant)
 
   return (
     <div className="space-y-6 max-w-3xl mx-auto">
@@ -411,6 +413,8 @@ export default function ConfiguracoesPage() {
         <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>Gerencie equipes, tipos de serviço, auxiliares e preferências do sistema</p>
       </div>
 
+      {/* Conta Loja: só Dados da Empresa e Identidade Visual */}
+      {!lojaMode && (<>
       {/* Módulo de Comissões */}
       <div className="rounded-xl border p-6 space-y-3"
         style={{ background: 'var(--surface)', borderColor: 'var(--border)', boxShadow: 'var(--shadow-sm)' }}>
@@ -745,6 +749,7 @@ export default function ConfiguracoesPage() {
       </div>
 
       <ChannelSettings />
+      </>)}
 
       {/* Dados da empresa */}
       <div className="rounded-xl border p-6 space-y-4"
@@ -789,6 +794,7 @@ export default function ConfiguracoesPage() {
       </div>
 
 
+      {!lojaMode && (<>
       {/* Identidade por Origem */}
       <div className="rounded-xl border p-6 space-y-4"
         style={{ background: 'var(--surface)', borderColor: 'var(--border)', boxShadow: 'var(--shadow-sm)' }}>
@@ -873,6 +879,8 @@ export default function ConfiguracoesPage() {
           </button>
         </div>
       </div>
+
+      </>)}
 
       {/* Identidade Visual */}
       <div className="rounded-xl border p-6 space-y-4"

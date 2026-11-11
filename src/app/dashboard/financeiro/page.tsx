@@ -8,6 +8,7 @@ import DateRangePicker, { DateRange } from '@/components/DateRangePicker'
 import { format, startOfMonth, endOfMonth } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import RodriguesSaidas, { RODRIGUES_CATEGORIES } from '@/components/RodriguesSaidas'
+import { isLojaMode, LOJA_CATEGORIES } from '@/lib/loja'
 
 type Tab = 'saidas' | 'entradas' | 'boletos' | 'saldo'
 
@@ -97,7 +98,7 @@ export default function FinanceiroPage() {
   const [showBoletoForm, setShowBoletoForm] = useState(false)
   const [savingEntry, setSavingEntry] = useState(false)
 
-  const [newSaida, setNewSaida] = useState({ description: '', amount: '', category: tenant?.call_form_config?.rodrigues_custom === true ? 'Outros' : 'outros', type: 'avulso', due_date: new Date().toISOString().slice(0, 10), status: 'pendente' as string })
+  const [newSaida, setNewSaida] = useState({ description: '', amount: '', category: (tenant?.call_form_config?.rodrigues_custom === true || isLojaMode(tenant)) ? 'Outros' : 'outros', type: 'avulso', due_date: new Date().toISOString().slice(0, 10), status: 'pendente' as string })
   const [newEntrada, setNewEntrada] = useState({ description: '', amount: '', entry_type: 'avulso', due_date: new Date().toISOString().slice(0, 10), status: 'pendente' as string })
   const [newBoleto, setNewBoleto] = useState({ description: '', amount: '', direction: 'saida', boleto_bank: '', boleto_code: '', due_date: new Date().toISOString().slice(0, 10) })
 
@@ -114,7 +115,7 @@ export default function FinanceiroPage() {
     const supabase = createClient()
     supabase.from('expenses').select('category').then(({ data }) => {
       if (!data) return
-      const base = tenant.call_form_config?.rodrigues_custom === true ? RODRIGUES_CATEGORIES : STATIC_CATEGORIES
+      const base = isLojaMode(tenant) ? LOJA_CATEGORIES : tenant.call_form_config?.rodrigues_custom === true ? RODRIGUES_CATEGORIES : STATIC_CATEGORIES
       const cats = new Set<string>(base)
       data.forEach(r => { if (r.category) cats.add(r.category) })
       setAllCategories(Array.from(cats).sort((a, b) => a.localeCompare(b, 'pt-BR')))

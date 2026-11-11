@@ -5,6 +5,8 @@ import { Package, Plus, Trash2, Pencil, X, Check, Search } from 'lucide-react'
 import { useTenant } from '@/lib/tenant-context'
 import { getStockItems, createStockItem, updateStockItem, deleteStockItem } from '@/lib/db/stock'
 import { getAuxiliaries } from '@/lib/db/auxiliaries'
+import LojaEstoque from '@/components/LojaEstoque'
+import { isLojaMode } from '@/lib/loja'
 
 const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 
@@ -207,6 +209,8 @@ export default function EstoquePage() {
       </div>
     )
   }
+
+  if (isLojaMode(tenant)) return <LojaEstoque />
 
   if (!isRodrigues) {
     return (
