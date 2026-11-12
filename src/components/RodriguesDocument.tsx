@@ -14,7 +14,7 @@ const GRAY_SECTION = '#f2f2f2'
 const GRAY_TOTAL = '#e3e3e3'
 const PAD_X = 76
 
-export interface DocItem { description: string; unit?: string; unit_price: number; quantity: number }
+export interface DocItem { description: string; details?: string; unit?: string; unit_price: number; quantity: number }
 
 export interface RodriguesDocProps {
   header: DocHeader
@@ -24,7 +24,11 @@ export interface RodriguesDocProps {
   info: [string, string | null | undefined][]
   visit?: { date?: string; period?: string } | null
   items: DocItem[]
-  showPrices?: boolean
+  parts?: DocItem[]                        // peças (seção própria)
+  fees?: { label: string; value: number }[] // taxa de entrega, frete, outras
+  showPrices?: boolean                     // preço de cada linha
+  showTotals?: boolean                     // bloco de subtotal/total (padrão = showPrices)
+  showDetails?: boolean                    // detalhes embaixo de cada serviço
   discount?: number
   payment?: { methods?: string; pix?: string; conditions?: string | null } | null
   guarantee?: string | null
@@ -86,8 +90,12 @@ export default function RodriguesDocument(p: RodriguesDocProps) {
   const h = p.header
   const showPrices = p.showPrices !== false
   const services = p.items.reduce((s, it) => s + it.quantity * it.unit_price, 0)
+  const partsTotal = (p.parts ?? []).reduce((s, it) => s + it.quantity * it.unit_price, 0)
+  const fees = (p.fees ?? []).filter(f => Number(f.value) > 0)
   const discount = Number(p.discount || 0)
-  const total = services - discount
+  const total = services + partsTotal - discount + fees.reduce((s, f) => s + Number(f.value), 0)
+  const showTotals = p.showTotals ?? showPrices
+  const showDetails = p.showDetails !== false
   const info = p.info.filter(([, v]) => v != null && String(v).trim() !== '') as [string, string][]
   const small: CSSProperties = { fontSize: 10.5, lineHeight: 1.3, margin: '0 0 3.5px' }
 
@@ -149,46 +157,53 @@ export default function RodriguesDocument(p: RodriguesDocProps) {
         </Section>
       )}
 
-      {/* ── Serviços ── */}
-      <Section title="Serviços">
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-          <thead>
-            <tr style={{ color: '#666', fontSize: 10.5 }}>
-              <th style={{ textAlign: 'left', fontWeight: 700, padding: '0 0 8px', width: '50%' }}>Descrição</th>
-              <th style={{ textAlign: 'left', fontWeight: 700, padding: '0 0 8px' }}>Unidade</th>
-              {showPrices && <th style={{ textAlign: 'right', fontWeight: 700, padding: '0 0 8px' }}>Preço unitário</th>}
-              <th style={{ textAlign: 'right', fontWeight: 700, padding: '0 0 8px', width: 60 }}>Qtd.</th>
-              {showPrices && <th style={{ textAlign: 'right', fontWeight: 700, padding: '0 0 8px', width: 100 }}>Preço</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {p.items.map((it, i) => (
-              <tr key={i}>
-                <td style={{ fontWeight: 700, padding: '0 9px 9px 0', verticalAlign: 'top', whiteSpace: 'pre-wrap' }}>{it.description}</td>
-                <td style={{ padding: '0 0 8px', verticalAlign: 'top' }}>{it.unit ?? 'un.'}</td>
-                {showPrices && <td style={{ textAlign: 'right', padding: '0 0 8px', verticalAlign: 'top' }}>{BRL(it.unit_price)}</td>}
-                <td style={{ textAlign: 'right', padding: '0 0 8px', verticalAlign: 'top' }}>{it.quantity.toLocaleString('pt-BR')}</td>
-                {showPrices && <td style={{ textAlign: 'right', padding: '0 0 8px', verticalAlign: 'top' }}>{BRL(it.quantity * it.unit_price)}</td>}
+      {/* ── Serviços / Peças ── */}
+      {([['Serviços', p.items], ['Peças', p.parts ?? []]] as const).filter(([, list], i) => i === 0 || list.length > 0).map(([title, list], idx, arr) => (
+        <Section key={title} title={title}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead>
+              <tr style={{ color: '#666', fontSize: 10.5 }}>
+                <th style={{ textAlign: 'left', fontWeight: 700, padding: '0 0 8px', width: '50%' }}>Descrição</th>
+                <th style={{ textAlign: 'left', fontWeight: 700, padding: '0 0 8px' }}>Unidade</th>
+                {showPrices && <th style={{ textAlign: 'right', fontWeight: 700, padding: '0 0 8px' }}>Preço unitário</th>}
+                <th style={{ textAlign: 'right', fontWeight: 700, padding: '0 0 8px', width: 60 }}>Qtd.</th>
+                {showPrices && <th style={{ textAlign: 'right', fontWeight: 700, padding: '0 0 8px', width: 100 }}>Preço</th>}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {list.map((it, i) => (
+                <tr key={i}>
+                  <td style={{ padding: '0 9px 9px 0', verticalAlign: 'top', whiteSpace: 'pre-wrap' }}>
+                    <div style={{ fontWeight: 700 }}>{it.description}</div>
+                    {showDetails && it.details && <div style={{ fontSize: 10.5, color: '#555', marginTop: 2 }}>{it.details}</div>}
+                  </td>
+                  <td style={{ padding: '0 0 8px', verticalAlign: 'top' }}>{it.unit || 'un.'}</td>
+                  {showPrices && <td style={{ textAlign: 'right', padding: '0 0 8px', verticalAlign: 'top' }}>{BRL(it.unit_price)}</td>}
+                  <td style={{ textAlign: 'right', padding: '0 0 8px', verticalAlign: 'top' }}>{it.quantity.toLocaleString('pt-BR')}</td>
+                  {showPrices && <td style={{ textAlign: 'right', padding: '0 0 8px', verticalAlign: 'top' }}>{BRL(it.quantity * it.unit_price)}</td>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
 
-        {showPrices && (
-          <div style={{ marginLeft: '50%', marginRight: -6, marginTop: 2, fontSize: 12 }}>
-            {[
-              { l: 'Serviços', v: BRL(services) },
-              { l: 'Subtotal', v: BRL(services), bold: true },
-              ...(discount > 0 ? [{ l: 'Desconto sobre serviços', v: `- ${BRL(discount)}` }] : []),
-              { l: 'Total', v: BRL(total), bold: true, total: true },
-            ].map(r => (
-              <div key={r.l} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 6px', background: r.total ? GRAY_TOTAL : GRAY_SECTION, fontWeight: r.bold ? 700 : 400 }}>
-                <span>{r.l}</span><span>{r.v}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </Section>
+          {idx === arr.length - 1 && (showTotals || p.fees !== undefined) && (
+            <div style={{ marginLeft: '50%', marginRight: -6, marginTop: 2, fontSize: 12 }}>
+              {[
+                ...(showTotals ? [{ l: 'Serviços', v: BRL(services) }] : []),
+                ...(showTotals && partsTotal > 0 ? [{ l: 'Peças', v: BRL(partsTotal) }] : []),
+                ...(showTotals ? [{ l: 'Subtotal', v: BRL(services + partsTotal), bold: true }] : []),
+                ...(showTotals && discount > 0 ? [{ l: partsTotal > 0 || p.fees !== undefined ? 'Desconto' : 'Desconto sobre serviços', v: `- ${BRL(discount)}` }] : []),
+                ...(showTotals ? fees.map(f => ({ l: f.label, v: BRL(f.value) })) : []),
+                ...(showTotals || p.fees !== undefined ? [{ l: 'Total', v: BRL(total), bold: true, total: true }] : []),
+              ].map(r => (
+                <div key={r.l} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 6px', background: (r as any).total ? GRAY_TOTAL : GRAY_SECTION, fontWeight: (r as any).bold ? 700 : 400 }}>
+                  <span>{r.l}</span><span>{r.v}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Section>
+      ))}
 
       {/* ── Pagamento ── */}
       {p.payment && (p.payment.methods || p.payment.pix || p.payment.conditions) && (

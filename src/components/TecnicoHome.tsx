@@ -9,6 +9,7 @@ import { getOpenVisit } from '@/lib/db/service-visits'
 import { formatDuration } from '@/lib/business-hours'
 import { useTecnicoQueue, compareQueue, localYmd, callKind, CALL_KIND_STYLE } from '@/lib/tecnico-queue'
 import { getBlocksForRange, blockLabel, type BlockOnDay } from '@/lib/db/schedule-blocks'
+import { greeting } from '@/lib/greeting'
 
 const fmt = (v: number) => `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
 
@@ -42,7 +43,7 @@ interface Summary {
 // O resumo é sempre de UM mês (o atual por padrão): virou o mês, zera;
 // os meses anteriores ficam acessíveis pela seta.
 export default function TecnicoHome() {
-  const { tenant } = useTenant()
+  const { tenant, profileName } = useTenant()
   const [monthOffset, setMonthOffset] = useState(0)
   const [data, setData] = useState<Summary | null>(null)
   const [today, setToday] = useState<any[] | null>(null)
@@ -131,7 +132,7 @@ export default function TecnicoHome() {
     <div className="max-w-2xl mx-auto space-y-4">
       <div>
         <p className="text-sm text-zinc-500">{tenant?.name}</p>
-        <h1 className="text-2xl font-bold text-zinc-900">Olá!</h1>
+        <h1 className="text-2xl font-bold text-zinc-900">{greeting(profileName, tenant?.name)}</h1>
       </div>
 
       {openVisit && (

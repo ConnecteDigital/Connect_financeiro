@@ -12,6 +12,7 @@ import { useTenant } from '@/lib/tenant-context'
 import TecnicoHome from '@/components/TecnicoHome'
 import LojaHome from '@/components/LojaHome'
 import { isLojaMode } from '@/lib/loja'
+import { greeting } from '@/lib/greeting'
 import { createClient } from '@/lib/supabase/client'
 import { osCardPending, osCardGross } from '@/lib/payments'
 
@@ -82,7 +83,7 @@ function OwnerDashboard() {
   const [showFinance, setShowFinance] = useState(false)
   const [showStatus, setShowStatus] = useState(false)
   const [receivables, setReceivables] = useState<any[] | null>(null)
-  const { tenant } = useTenant()
+  const { tenant, profileName } = useTenant()
   const isRodrigues = tenant?.call_form_config?.rodrigues_custom === true
   const router = useRouter()
   const [cardsPending, setCardsPending] = useState<any[]>([])
@@ -125,6 +126,14 @@ function OwnerDashboard() {
 
   return (
     <div className="space-y-4 max-w-2xl mx-auto lg:max-w-7xl">
+
+      {/* Rodrigues: "Olá, Victor!" pro gestor */}
+      {tenant?.call_form_config?.rodrigues_custom === true && (
+        <div>
+          <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{tenant?.name}</p>
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>{greeting(profileName, tenant?.name)}</h1>
+        </div>
+      )}
 
       {/* ── Hero revenue card ─────────────────────────────────── */}
       <div className="rounded-3xl overflow-hidden relative"

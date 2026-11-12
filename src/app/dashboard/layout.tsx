@@ -53,6 +53,7 @@ const tecnicoNav = [
 // Nav da conta Loja (Rodrigues – Loja): só estoque, vendas e gastos
 const lojaNav = [
   { href: '/dashboard',               label: 'Início',     icon: LayoutDashboard },
+  { href: '/dashboard/pedidos',       label: 'Pedidos',    icon: FileText },
   { href: '/dashboard/estoque',       label: 'Estoque',    icon: Package },
   { href: '/dashboard/financeiro',    label: 'Financeiro', icon: Wallet },
   { href: '/dashboard/configuracoes', label: 'Ajustes',    icon: Settings },
@@ -118,7 +119,7 @@ function BottomNav({ onMoreClick, moreOpen, visible }: { onMoreClick: () => void
                 const active = isActive(href)
                 return (
                   <Link key={href} href={href}
-                    className="flex flex-col items-center gap-0.5 px-6 py-1 rounded-xl transition-all min-w-0"
+                    className={`flex flex-col items-center gap-0.5 ${simpleNav.length > 4 ? 'px-2' : 'px-6'} py-1 rounded-xl transition-all min-w-0`}
                     style={{ color: active ? 'var(--primary)' : '#8e8e93' }}>
                     <div className="w-10 h-7 flex items-center justify-center rounded-xl transition-all"
                       style={active ? { background: 'rgba(var(--primary-rgb),0.1)' } : {}}>

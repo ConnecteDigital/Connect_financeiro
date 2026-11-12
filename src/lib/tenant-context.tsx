@@ -34,6 +34,8 @@ interface TenantContextValue {
   updateTenant: (patch: Partial<Tenant>) => void
   profileRole: string | null
   isTecnico: boolean
+  /** Nome de quem está logado (profiles.name) */
+  profileName: string | null
 }
 
 const TenantContext = createContext<TenantContextValue>({
@@ -42,12 +44,14 @@ const TenantContext = createContext<TenantContextValue>({
   updateTenant: () => {},
   profileRole: null,
   isTecnico: false,
+  profileName: null,
 })
 
 export function TenantProvider({ children }: { children: React.ReactNode }) {
   const [tenant, setTenant] = useState<Tenant | null>(null)
   const [loading, setLoading] = useState(true)
   const [profileRole, setProfileRole] = useState<string | null>(null)
+  const [profileName, setProfileName] = useState<string | null>(null)
 
   useEffect(() => {
     const supabase = createClient()
@@ -55,12 +59,13 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       if (!user) { setLoading(false); return }
       supabase
         .from('profiles')
-        .select('tenant_id, role')
+        .select('tenant_id, role, name')
         .eq('id', user.id)
         .single()
         .then(({ data: profile }) => {
           if (!profile?.tenant_id) { setLoading(false); return }
           setProfileRole(profile.role ?? null)
+          setProfileName(profile.name ?? null)
           supabase
             .from('tenants')
             .select('id, slug, name, logo_url, primary_color, call_origins, enable_commissions, cnpj, phone, address, origin_branding, call_form_config')
@@ -79,7 +84,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <TenantContext.Provider value={{ tenant, loading, updateTenant, profileRole, isTecnico: profileRole === 'tecnico' }}>
+    <TenantContext.Provider value={{ tenant, loading, updateTenant, profileRole, isTecnico: profileRole === 'tecnico', profileName }}>
       {children}
     </TenantContext.Provider>
   )
