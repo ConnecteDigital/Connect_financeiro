@@ -92,8 +92,13 @@ export default function RodriguesComissoesBoard() {
     setCardWaiting((sos ?? []).filter((so: any) => osCardPending(so) && !one(so.call)?.return_of_call_id))
     const ids = Array.from(new Set(list.map(e => e.source_service_order_id).filter(Boolean))) as string[]
     if (ids.length) {
-      const { data } = await supabase.from('service_orders').select(OS_FIELDS).in('id', ids)
-      setOrders(Object.fromEntries((data ?? []).map((so: any) => [so.id, so])))
+      // return_service_value vem da migration_v34: busca à parte pra não quebrar se ela ainda não rodou
+      const [{ data }, ret] = await Promise.all([
+        supabase.from('service_orders').select(OS_FIELDS).in('id', ids),
+        supabase.from('service_orders').select('id, return_service_value').in('id', ids).gt('return_service_value', 0),
+      ])
+      const retMap: Record<string, number> = Object.fromEntries((ret.data ?? []).map((r: any) => [r.id, Number(r.return_service_value)]))
+      setOrders(Object.fromEntries((data ?? []).map((so: any) => [so.id, { ...so, return_service_value: retMap[so.id] ?? 0 }])))
     } else setOrders({})
     setLoading(false)
   }, [period.start, period.end])
@@ -294,7 +299,7 @@ export default function RodriguesComissoesBoard() {
                         </p>
                       </button>
                       <div className="text-right flex-shrink-0">
-                        <p className="text-sm font-bold text-zinc-800">{fmt(e.amount)}</p>
+                        <p className={`text-sm font-bold ${Number(e.amount) < 0 ? 'text-red-600' : 'text-zinc-800'}`}>{fmt(e.amount)}</p>
                         {pend ? (
                           <span className="text-[11px] font-semibold text-amber-600 flex items-center justify-end gap-1"><Clock className="w-3 h-3" /> Pendente</span>
                         ) : (
@@ -306,7 +311,7 @@ export default function RodriguesComissoesBoard() {
                       </div>
                       <ChevronDown className={`w-4 h-4 text-zinc-300 flex-shrink-0 transition ${open ? 'rotate-180' : ''}`} onClick={() => setOpenDetail(open ? null : e.id)} />
                     </div>
-                    {open && <Detail so={so} amount={Number(e.amount)} />}
+                    {open && <Detail so={so} amount={Number(e.amount)} description={e.description} />}
                   </div>
                 )
               })}
@@ -408,18 +413,20 @@ export default function RodriguesComissoesBoard() {
 }
 
 // Como a comissão foi calculada: (total − peças − Uber − taxa da maquininha) × %
-function Detail({ so, amount }: { so: any; amount: number }) {
-  if (!so) return <p className="px-4 pb-3 text-xs text-zinc-400">Sem ordem de serviço vinculada.</p>
+function Detail({ so, amount, description }: { so: any; amount: number; description?: string }) {
+  if (!so) return <p className="px-4 pb-3 text-xs text-zinc-500">{amount < 0 && description ? `${description}. Desconto gerado por uma devolução ao cliente.` : 'Sem ordem de serviço vinculada.'}</p>
   const total = Number(so.total_value || 0)
   const parts = Number(so.parts_cost || 0)
   const uber = Number(so.uber_cost || 0)
   const card = osCardGross(so)
   const fee = card > 0 && so.card_net_value != null ? Math.max(card - Number(so.card_net_value), 0) : 0
-  const base = Math.max(total - parts - uber - fee, 0)
+  // Retorno que virou serviço: a comissão é só sobre o serviço cobrado no retorno
+  const retService = Number(so.return_service_value || 0)
+  const base = retService > 0 ? Math.max(retService - uber - fee, 0) : Math.max(total - parts - uber - fee, 0)
   const pct = base > 0 ? (amount / base) * 100 : 0
   const rows: [string, string][] = [
-    ['Valor do serviço', fmt(total)],
-    ...(parts > 0 ? [['Peças', `− ${fmt(parts)}`] as [string, string]] : []),
+    [retService > 0 ? 'Serviço cobrado no retorno' : 'Valor do serviço', fmt(retService > 0 ? retService : total)],
+    ...(parts > 0 && !(retService > 0) ? [['Peças', `− ${fmt(parts)}`] as [string, string]] : []),
     ...(uber > 0 ? [['Uber', `− ${fmt(uber)}`] as [string, string]] : []),
     ...(fee > 0 ? [['Taxa da maquininha', `− ${fmt(fee)}`] as [string, string]] : []),
     ['Base', fmt(base)],

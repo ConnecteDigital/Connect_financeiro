@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { PhoneCall, CheckCircle, XCircle, Clock, Wallet, ChevronRight, ChevronLeft, CalendarDays, Timer, Lock } from 'lucide-react'
+import { PhoneCall, CheckCircle, XCircle, Clock, Wallet, ChevronRight, ChevronLeft, CalendarDays, Timer, Lock, Search, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useTenant } from '@/lib/tenant-context'
 import { getOpenVisit } from '@/lib/db/service-visits'
@@ -10,6 +10,7 @@ import { formatDuration } from '@/lib/business-hours'
 import { useTecnicoQueue, compareQueue, localYmd, callKind, CALL_KIND_STYLE } from '@/lib/tecnico-queue'
 import { getBlocksForRange, blockLabel, type BlockOnDay } from '@/lib/db/schedule-blocks'
 import { greeting } from '@/lib/greeting'
+import { Sheet } from '@/components/LojaModals'
 
 const fmt = (v: number) => `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
 
@@ -26,6 +27,53 @@ function currentWeekRange() {
   const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7))
   const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6)
   return { start: localYmd(monday), end: localYmd(sunday) }
+}
+
+const CALL_FIELDS = 'id, status, date, scheduled_date, scheduled_time, created_at, contact_name, service_category, call_address, address_number, call_neighborhood, return_of_call_id, client:clients(name)'
+
+const STATUS_PILL: Record<string, { label: string; cls: string }> = {
+  agendado: { label: 'Agendado', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+  aprovado: { label: 'Aprovado', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  retorno: { label: 'Retorno', cls: 'bg-violet-50 text-violet-700 border-violet-200' },
+  orcamento: { label: 'Orçamento', cls: 'bg-sky-50 text-sky-700 border-sky-200' },
+  nao_aprovou: { label: 'Não aprovou', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+  pagou_somente_visita: { label: 'Pagou a taxa', cls: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
+  cancelado: { label: 'Cancelado', cls: 'bg-red-50 text-red-600 border-red-200' },
+  nao_quis_visita: { label: 'Não quis visita', cls: 'bg-zinc-100 text-zinc-600 border-zinc-200' },
+}
+
+const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+const nameOf = (c: any) => c.client?.name ?? c.contact_name ?? 'Sem identificação'
+const dayOf = (c: any) => c.scheduled_date ?? c.date
+const addressOf = (c: any) => [[c.call_address, c.address_number].filter(Boolean).join(', '), c.call_neighborhood].filter(Boolean).join(' · ')
+
+// Linha de chamado nas listas (cards do resumo e busca). O endereço só
+// aparece em chamado já atendido: os agendados seguem a ordem da fila.
+function CallRow({ c }: { c: any }) {
+  const pill = STATUS_PILL[c.status]
+  const time = c.scheduled_time ? String(c.scheduled_time).slice(0, 5) : null
+  const date = new Date(dayOf(c) + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+  return (
+    <Link href={`/dashboard/chamados/${c.id}`} className="flex items-center gap-3 px-1 py-3 hover:bg-zinc-50 transition">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-zinc-800 truncate">{nameOf(c)}</p>
+        <p className="text-xs text-zinc-500 truncate mt-0.5">
+          {[`${date}${time ? ` ${time}` : ''}`, c.service_category].filter(Boolean).join(' · ')}
+        </p>
+        {c.status !== 'agendado' && addressOf(c) && <p className="text-xs text-zinc-400 truncate">{addressOf(c)}</p>}
+      </div>
+      {pill && <span className={`px-2 py-0.5 rounded-md text-[11px] font-semibold border flex-shrink-0 ${pill.cls}`}>{pill.label}</span>}
+      <ChevronRight className="w-4 h-4 text-zinc-300 flex-shrink-0" />
+    </Link>
+  )
+}
+
+type ListKey = 'total' | 'approved' | 'notApproved' | 'scheduled'
+const LIST_FILTER: Record<ListKey, (c: any) => boolean> = {
+  total: () => true,
+  approved: c => c.status === 'aprovado',
+  notApproved: c => c.status === 'nao_aprovou' || c.status === 'pagou_somente_visita',
+  scheduled: c => c.status === 'agendado',
 }
 
 interface Summary {
@@ -53,6 +101,21 @@ export default function TecnicoHome() {
   const [weekPending, setWeekPending] = useState<number | null>(null)
   // Bloqueios de agenda do técnico hoje (ex.: "Lava-louças na loja 13h–16h")
   const [todayBlocks, setTodayBlocks] = useState<BlockOnDay[]>([])
+  // Chamados do mês (pra abrir a lista ao tocar num card) e busca
+  const [monthCalls, setMonthCalls] = useState<any[]>([])
+  const [listKey, setListKey] = useState<ListKey | null>(null)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const [allCalls, setAllCalls] = useState<any[] | null>(null)
+
+  // Busca: carrega os chamados do técnico (último ano) na primeira vez que abre
+  useEffect(() => {
+    if (!searchOpen || allCalls) return
+    const since = new Date(); since.setFullYear(since.getFullYear() - 1)
+    createClient().from('calls').select(CALL_FIELDS)
+      .gte('date', localYmd(since)).order('date', { ascending: false }).limit(1500)
+      .then(({ data }) => setAllCalls(data ?? []))
+  }, [searchOpen, allCalls])
   useEffect(() => {
     const supabase = createClient()
     supabase.auth.getUser().then(async ({ data: { user } }) => {
@@ -101,12 +164,13 @@ export default function TecnicoHome() {
     Promise.all([
       supabase
         .from('calls')
-        .select('id, status')
+        .select(CALL_FIELDS)
         .or(`and(date.gte.${start},date.lte.${end}),and(scheduled_date.gte.${start},scheduled_date.lte.${end})`),
       supabase.from('expenses').select('amount, status, due_date').gte('due_date', start).lte('due_date', end),
     ]).then(([callsRes, expRes]) => {
       const calls = callsRes.data ?? []
       const expenses = expRes.data ?? []
+      setMonthCalls([...calls].sort((a: any, b: any) => `${dayOf(b)}${b.scheduled_time ?? ''}`.localeCompare(`${dayOf(a)}${a.scheduled_time ?? ''}`)))
       setData({
         total: calls.length,
         approved: calls.filter(c => c.status === 'aprovado').length,
@@ -121,18 +185,33 @@ export default function TecnicoHome() {
   const { label: monthLabel } = monthRange(monthOffset)
   const loading = data === null
 
-  const cards = [
-    { label: 'Chamados', value: data?.total, icon: PhoneCall, color: 'text-blue-600', bg: 'bg-blue-50' },
-    { label: 'Aprovados', value: data?.approved, icon: CheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { label: 'Não aprovados', value: data?.notApproved, icon: XCircle, color: 'text-amber-600', bg: 'bg-amber-50' },
-    { label: 'Agendados', value: data?.scheduled, icon: Clock, color: 'text-violet-600', bg: 'bg-violet-50' },
+  const cards: { key: ListKey; label: string; value?: number; icon: any; color: string; bg: string }[] = [
+    { key: 'total', label: 'Chamados', value: data?.total, icon: PhoneCall, color: 'text-blue-600', bg: 'bg-blue-50' },
+    { key: 'approved', label: 'Aprovados', value: data?.approved, icon: CheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    { key: 'notApproved', label: 'Não aprovados', value: data?.notApproved, icon: XCircle, color: 'text-amber-600', bg: 'bg-amber-50' },
+    { key: 'scheduled', label: 'Agendados', value: data?.scheduled, icon: Clock, color: 'text-violet-600', bg: 'bg-violet-50' },
   ]
+  const listCalls = listKey ? monthCalls.filter(LIST_FILTER[listKey]) : []
+
+  // Busca por nome do cliente ou endereço (endereço só de chamado já atendido)
+  const q = norm(query.trim())
+  const results = q.length < 2 ? [] : (allCalls ?? []).filter(c =>
+    norm(nameOf(c)).includes(q)
+    || norm(String(c.service_category ?? '')).includes(q)
+    || (c.status !== 'agendado' && norm(addressOf(c)).includes(q))
+  ).slice(0, 60)
 
   return (
     <div className="max-w-2xl mx-auto space-y-4">
-      <div>
-        <p className="text-sm text-zinc-500">{tenant?.name}</p>
-        <h1 className="text-2xl font-bold text-zinc-900">{greeting(profileName, tenant?.name)}</h1>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm text-zinc-500">{tenant?.name}</p>
+          <h1 className="text-2xl font-bold text-zinc-900 truncate">{greeting(profileName, tenant?.name)}</h1>
+        </div>
+        <button type="button" onClick={() => setSearchOpen(true)} aria-label="Buscar chamado"
+          className="w-11 h-11 rounded-full bg-white border border-zinc-200 shadow-sm flex items-center justify-center flex-shrink-0 active:scale-95 transition">
+          <Search className="w-5 h-5" style={{ color: 'var(--primary)' }} />
+        </button>
       </div>
 
       {openVisit && (
@@ -246,16 +325,58 @@ export default function TecnicoHome() {
 
       {/* Contagem de chamados do mês */}
       <div className="grid grid-cols-2 gap-3">
-        {cards.map(({ label, value, icon: Icon, color, bg }) => (
-          <div key={label} className="bg-white rounded-2xl border border-zinc-100 p-4 shadow-sm">
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${bg}`}>
-              <Icon className={`w-5 h-5 ${color}`} />
+        {cards.map(({ key, label, value, icon: Icon, color, bg }) => (
+          <button key={key} type="button" onClick={() => setListKey(key)} disabled={loading}
+            className="text-left bg-white rounded-2xl border border-zinc-100 p-4 shadow-sm active:scale-[0.98] transition">
+            <div className="flex items-center justify-between">
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${bg}`}>
+                <Icon className={`w-5 h-5 ${color}`} />
+              </div>
+              <ChevronRight className="w-4 h-4 text-zinc-300" />
             </div>
             <p className="text-2xl font-bold text-zinc-900 mt-2">{loading ? '—' : value}</p>
             <p className="text-xs text-zinc-500 font-medium">{label}</p>
-          </div>
+          </button>
         ))}
       </div>
+
+      {/* Lista do card tocado */}
+      {listKey && (
+        <Sheet title={`${cards.find(c => c.key === listKey)!.label} · ${monthLabel}`} onClose={() => setListKey(null)}>
+          {listCalls.length === 0 ? (
+            <p className="py-8 text-center text-sm text-zinc-400">Nenhum chamado aqui neste mês</p>
+          ) : (
+            <div className="divide-y divide-zinc-100 -mt-2">
+              {listCalls.map(c => <CallRow key={c.id} c={c} />)}
+            </div>
+          )}
+        </Sheet>
+      )}
+
+      {/* Busca por cliente ou endereço */}
+      {searchOpen && (
+        <Sheet title="Buscar chamado" onClose={() => { setSearchOpen(false); setQuery('') }}>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+            <input type="text" inputMode="search" autoFocus value={query} onChange={e => setQuery(e.target.value)} placeholder="Nome do cliente ou endereço..."
+              className="w-full pl-9 pr-9 py-3 bg-white border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" />
+            {query && <button type="button" onClick={() => setQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-zinc-400"><X className="w-4 h-4" /></button>}
+          </div>
+          <div className="min-h-[40dvh]">
+            {allCalls === null ? (
+              <div className="space-y-2">{[...Array(3)].map((_, i) => <div key={i} className="h-12 bg-zinc-50 rounded-lg animate-pulse" />)}</div>
+            ) : q.length < 2 ? (
+              <p className="py-8 text-center text-sm text-zinc-400">Digite o nome do cliente ou a rua pra achar o serviço e abrir a ordem.</p>
+            ) : results.length === 0 ? (
+              <p className="py-8 text-center text-sm text-zinc-400">Nenhum chamado encontrado</p>
+            ) : (
+              <div className="divide-y divide-zinc-100 -mt-2">
+                {results.map(c => <CallRow key={c.id} c={c} />)}
+              </div>
+            )}
+          </div>
+        </Sheet>
+      )}
     </div>
   )
 }

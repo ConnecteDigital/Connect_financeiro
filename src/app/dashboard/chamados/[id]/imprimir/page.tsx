@@ -10,7 +10,7 @@ import { createClient } from '@/lib/supabase/client'
 import RodriguesCertificado from '@/components/RodriguesCertificado'
 import RodriguesDocument, { DOC_WIDTH } from '@/components/RodriguesDocument'
 import ScaledSheet from '@/components/ScaledSheet'
-import { rodriguesOsDoc } from '@/lib/rodrigues-os-doc'
+import { rodriguesOsDoc, OS_DOC_KINDS } from '@/lib/rodrigues-os-doc'
 import { useSheetShare } from '@/lib/use-sheet-share'
 import { ArrowLeft, Share2, Loader2, FileImage, FileText } from 'lucide-react'
 
@@ -28,8 +28,11 @@ function ImprimirContent({ id }: { id: string }) {
   const isRodrigues = tenant?.call_form_config?.rodrigues_custom === true
   const [parts, setParts] = useState<any[]>([])
   const [tecnicoName, setTecnicoName] = useState('')
-  // Rodrigues: Ordem de serviço (modelo novo) ou o Certificado de garantia
-  const [docKind, setDocKind] = useState<'os' | 'certificado'>('os')
+  // Rodrigues: o mesmo serviço sai como Ordem de serviço, Orçamento ou
+  // Laudo técnico (modelo novo), ou como Certificado de garantia
+  const [docKind, setDocKind] = useState<'os' | 'orcamento' | 'laudo' | 'certificado'>('os')
+  const isSheet = docKind !== 'certificado'
+  const kindLabel = OS_DOC_KINDS.find(k => k.key === docKind)?.label ?? 'Ordem de Serviço'
   const docRef = useRef<HTMLDivElement>(null)
   // Fotos anexadas ao chamado, já baixadas (pra entrar no PDF)
   const [photos, setPhotos] = useState<string[]>([])
@@ -51,9 +54,10 @@ function ImprimirContent({ id }: { id: string }) {
     return () => { alive = false }
   }, [id, isRodrigues])
   const osNum = call?.service_orders?.[0]?.os_number ?? 'OS'
-  const osShare = useSheetShare(docRef, `OS-${osNum}`.replace(/[^a-zA-Z0-9._-]+/g, '_'), `Ordem de Serviço ${osNum}`,
-    JSON.stringify([call?.id, call?.service_orders?.[0]?.updated_at ?? call?.service_orders?.[0]?.total_value, tenant?.id, photos.length]),
-    isRodrigues && docKind === 'os' && !!call?.service_orders?.[0])
+  const osShare = useSheetShare(docRef,
+    `${docKind === 'os' ? 'OS' : docKind === 'orcamento' ? 'Orcamento' : 'Laudo'}-${osNum}`.replace(/[^a-zA-Z0-9._-]+/g, '_'), `${kindLabel} ${osNum}`,
+    JSON.stringify([call?.id, call?.service_orders?.[0]?.updated_at ?? call?.service_orders?.[0]?.total_value, tenant?.id, photos.length, docKind]),
+    isRodrigues && isSheet && !!call?.service_orders?.[0])
 
   useEffect(() => {
     getCall(id).then(setCall).catch(console.error).finally(() => setLoading(false))
@@ -75,7 +79,7 @@ function ImprimirContent({ id }: { id: string }) {
     if (isRodrigues) {
       const { buildSheetCanvas } = await import('@/lib/sheet-capture')
       // Ordem de serviço: folha A4 fixa, copiada fora da tela
-      if (docKind === 'os') return buildSheetCanvas(docRef.current!)
+      if (isSheet) return buildSheetCanvas(docRef.current!)
       // Certificado: sempre na largura de papel, mesmo gerado no celular
       return buildSheetCanvas(sheetRef.current!, { fixedWidth: 720 })
     }
@@ -195,10 +199,10 @@ function ImprimirContent({ id }: { id: string }) {
 
       {isRodrigues && (
         <div className="print:hidden max-w-3xl mx-auto px-3 pb-3">
-          <div className="flex bg-zinc-100 rounded-xl p-1">
-            {([['os', 'Ordem de serviço'], ['certificado', 'Certificado de garantia']] as const).map(([k, l]) => (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 bg-zinc-100 rounded-xl p-1">
+            {([['os', 'Ordem de serviço'], ['orcamento', 'Orçamento'], ['laudo', 'Laudo técnico'], ['certificado', 'Certificado de garantia']] as const).map(([k, l]) => (
               <button key={k} type="button" onClick={() => setDocKind(k)}
-                className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${docKind === k ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500'}`}>
+                className={`py-2 px-1 rounded-lg text-sm font-semibold transition ${docKind === k ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500'}`}>
                 {l}
               </button>
             ))}
@@ -206,13 +210,13 @@ function ImprimirContent({ id }: { id: string }) {
         </div>
       )}
 
-      {isRodrigues && docKind === 'os' ? (
+      {isRodrigues && docKind !== 'certificado' ? (
         <>
           <div className="max-w-3xl mx-auto px-3">
-            <ScaledSheet width={DOC_WIDTH}><RodriguesDocument {...rodriguesOsDoc(tenant, call, so)} photos={photos} /></ScaledSheet>
+            <ScaledSheet width={DOC_WIDTH}><RodriguesDocument {...rodriguesOsDoc(tenant, call, so, docKind)} photos={photos} /></ScaledSheet>
           </div>
           <div style={{ position: 'fixed', left: -10000, top: 0 }} aria-hidden>
-            <div ref={docRef}><RodriguesDocument {...rodriguesOsDoc(tenant, call, so)} photos={photos} /></div>
+            <div ref={docRef}><RodriguesDocument {...rodriguesOsDoc(tenant, call, so, docKind)} photos={photos} /></div>
           </div>
         </>
       ) : (
@@ -447,7 +451,7 @@ function ImprimirContent({ id }: { id: string }) {
       {(() => { const b = sharing ?? osShare.busy; return (
       <div className="print:hidden fixed bottom-6 inset-x-0 flex justify-center gap-3 z-50">
         <button
-          onClick={isRodrigues && docKind === 'os' ? () => osShare.send('png') : handleSharePng}
+          onClick={isRodrigues && isSheet ? () => osShare.send('png') : handleSharePng}
           disabled={!!b}
           className="flex items-center gap-2 text-white font-semibold px-6 py-3.5 rounded-2xl shadow-2xl transition active:scale-95 disabled:opacity-70"
           style={{ backgroundColor: '#16a34a', boxShadow: '0 8px 24px rgba(22,163,74,0.40)' }}>
@@ -455,7 +459,7 @@ function ImprimirContent({ id }: { id: string }) {
           {b === 'png' ? 'Gerando...' : 'Imagem'}
         </button>
         <button
-          onClick={isRodrigues && docKind === 'os' ? () => osShare.send('pdf') : handleSharePdf}
+          onClick={isRodrigues && isSheet ? () => osShare.send('pdf') : handleSharePdf}
           disabled={!!b}
           className="flex items-center gap-2 text-white font-semibold px-6 py-3.5 rounded-2xl shadow-2xl transition active:scale-95 disabled:opacity-70"
           style={{ backgroundColor: '#2563eb', boxShadow: '0 8px 24px rgba(37,99,235,0.40)' }}>

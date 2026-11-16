@@ -6,6 +6,7 @@ import { ArrowLeft, Lock, Navigation, CalendarClock, Wrench, CheckCircle, Printe
 import { createClient } from '@/lib/supabase/client'
 import PhotoGallery from '@/components/PhotoGallery'
 import ChangeOutcome from '@/components/ChangeOutcome'
+import OsRefunds from '@/components/OsRefunds'
 import ServiceTimer from '@/components/ServiceTimer'
 import { mapsUrl } from '@/lib/maps'
 import { formatAddress, navigationAddress } from '@/lib/address'
@@ -133,15 +134,24 @@ export default function TecnicoCallView({ call, lock, onChanged }: {
 
       <PhotoGallery files={files} />
 
-      {['orcamento', 'nao_aprovou', 'pagou_somente_visita'].includes(call.status) && !so && (
-        <ChangeOutcome callId={call.id} status={call.status} onChanged={onChanged} />
-      )}
-
       {(call.status === 'aprovado' || call.status === 'retorno') && !so && (
         <Link href={`/dashboard/chamados/${call.id}/finalizar`}
           className="flex items-center justify-center gap-2 py-3.5 rounded-xl text-base font-bold text-white"
           style={{ background: 'var(--primary)' }}>
           <CheckCircle className="w-5 h-5" /> Completar a OS
+        </Link>
+      )}
+
+      {/* Mudar o resultado (recusado, orçamento, ou aprovado por engano) enquanto não tem OS */}
+      {['orcamento', 'nao_aprovou', 'pagou_somente_visita', 'aprovado', 'retorno'].includes(call.status) && !so && (
+        <ChangeOutcome callId={call.id} status={call.status} onChanged={onChanged} />
+      )}
+
+      {/* Serviço que não foi fechado: relatório pro cliente / prestação de contas */}
+      {['orcamento', 'nao_aprovou', 'pagou_somente_visita'].includes(call.status) && !so && (
+        <Link href={`/dashboard/chamados/${call.id}/relatorio`}
+          className="flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold bg-white border border-slate-200 text-slate-700">
+          <FileText className="w-4 h-4" /> Gerar relatório do atendimento
         </Link>
       )}
 
@@ -158,7 +168,13 @@ export default function TecnicoCallView({ call, lock, onChanged }: {
           {call.return_of_call_id && (
             <div className="flex justify-between text-sm">
               <span className="text-slate-500">Cliente pagou a peça</span>
-              <span className="text-slate-700">{(call.return_parts_paid ?? Number(so.total_value) > 0) ? 'Sim' : 'Não'}</span>
+              <span className="text-slate-700">{(call.return_parts_paid ?? (Number(so.total_value) - Number(so.return_service_value ?? 0)) > 0) ? 'Sim' : 'Não'}</span>
+            </div>
+          )}
+          {Number(so.return_service_value ?? 0) > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-500">Serviço cobrado no retorno</span>
+              <span className="text-slate-700">{fmt(so.return_service_value)}</span>
             </div>
           )}
           {paymentsFromOs(so).length > 0 && (
@@ -182,6 +198,7 @@ export default function TecnicoCallView({ call, lock, onChanged }: {
               ))}
             </div>
           )}
+          <OsRefunds so={so} readOnly />
           {so.observations && (
             <div className="text-sm">
               <p className="text-slate-500">Descrição</p>

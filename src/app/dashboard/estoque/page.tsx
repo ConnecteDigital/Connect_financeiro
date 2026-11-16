@@ -188,8 +188,10 @@ export default function EstoquePage() {
     </div>
   )
 
-  async function load() {
-    setLoading(true)
+  // silent = recarrega sem trocar a lista pelo "carregando": a tela fica
+  // parada onde estava (editar/excluir uma peça lá embaixo não volta pro topo)
+  async function load(silent = false) {
+    if (!silent) setLoading(true)
     try {
       const [stockData, auxData] = await Promise.all([getStockItems(), getAuxiliaries()])
       setItems(stockData)
@@ -200,6 +202,7 @@ export default function EstoquePage() {
   }
 
   useEffect(() => { load() }, [])
+  const reload = () => { load(true) }
 
   if (tenantLoading || loading) {
     return (
@@ -230,7 +233,7 @@ export default function EstoquePage() {
           <p className="text-zinc-500 text-sm mt-0.5">Peças que você carrega para os serviços</p>
         </div>
         {searchBox}
-        <StockSection title="Minhas Peças" items={myItems} auxiliaryId={myItems[0]?.auxiliary_id ?? null} onChanged={load} query={query} />
+        <StockSection title="Minhas Peças" items={myItems} auxiliaryId={myItems[0]?.auxiliary_id ?? null} onChanged={reload} query={query} />
       </div>
     )
   }
@@ -250,10 +253,10 @@ export default function EstoquePage() {
 
       {searchBox}
 
-      <StockSection title="Estoque da Loja" items={storeItems} auxiliaryId={null} onChanged={load} query={query} />
+      <StockSection title="Estoque da Loja" items={storeItems} auxiliaryId={null} onChanged={reload} query={query} />
 
       {byTechnician.map(({ technician, items: techItems }) => (
-        <StockSection key={technician.id} title={`Estoque — ${technician.name}`} items={techItems} auxiliaryId={technician.id} onChanged={load} query={query} />
+        <StockSection key={technician.id} title={`Estoque — ${technician.name}`} items={techItems} auxiliaryId={technician.id} onChanged={reload} query={query} />
       ))}
 
       {technicians.length === 0 && (

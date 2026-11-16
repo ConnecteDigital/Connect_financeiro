@@ -10,6 +10,7 @@ import { useTenant } from '@/lib/tenant-context'
 import RodriguesCommissionSettings from '@/components/RodriguesCommissionSettings'
 import ChannelSettings from '@/components/ChannelSettings'
 import { isLojaMode } from '@/lib/loja'
+import AccountAccessCard from '@/components/AccountAccessCard'
 
 const ORIGIN_PRESETS = [
   'Indicação', 'WhatsApp', 'Site', 'Instagram',
@@ -412,6 +413,9 @@ export default function ConfiguracoesPage() {
         <h1 className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>Configurações</h1>
         <p className="text-sm mt-0.5" style={{ color: 'var(--text-secondary)' }}>Gerencie equipes, tipos de serviço, auxiliares e preferências do sistema</p>
       </div>
+
+      {/* Rodrigues (gestor e loja): trocar senha e sair, direto nas configurações */}
+      {(lojaMode || tenant?.call_form_config?.rodrigues_custom === true) && <AccountAccessCard />}
 
       {/* Conta Loja: só Dados da Empresa e Identidade Visual */}
       {!lojaMode && (<>

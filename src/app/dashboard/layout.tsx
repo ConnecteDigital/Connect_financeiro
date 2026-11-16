@@ -59,6 +59,10 @@ const lojaNav = [
   { href: '/dashboard/configuracoes', label: 'Ajustes',    icon: Settings },
 ]
 
+// Minha conta do técnico (trocar senha / sair): entra pelo ícone do topo
+// no celular e pela barra lateral no computador.
+const CONTA_NAV_ITEM = { href: '/dashboard/conta', label: 'Minha conta', icon: Settings }
+
 async function handleLogout() {
   const { createClient } = await import('@/lib/supabase/client')
   const supabase = createClient()
@@ -287,7 +291,7 @@ function Sidebar({ theme, onToggleTheme, isMaster }: { theme: 'light' | 'dark'; 
   }
 
   const baseNav = isRodrigues ? [...allNav, ESTOQUE_NAV_ITEM, TEMPO_NAV_ITEM] : allNav
-  const sidebarNav = isTecnico ? tecnicoNav : isLojaMode(tenant) ? lojaNav : isMaster
+  const sidebarNav = isTecnico ? [...tecnicoNav, CONTA_NAV_ITEM] : isLojaMode(tenant) ? lojaNav : isMaster
     ? [...baseNav, { href: '/dashboard/master', label: 'Painel Master', icon: ShieldCheck }]
     : baseNav
 
@@ -363,7 +367,7 @@ function MobileHeader({ visible, theme, onToggleTheme }: { visible: boolean; the
   const { tenant, isTecnico } = useTenant()
   const pathname = usePathname()
 
-  const currentPage = [...(isLojaMode(tenant) ? lojaNav : []), ...allNav, ...tecnicoNav, ESTOQUE_NAV_ITEM, TEMPO_NAV_ITEM].find(n =>
+  const currentPage = [...(isLojaMode(tenant) ? lojaNav : []), ...allNav, ...tecnicoNav, ESTOQUE_NAV_ITEM, TEMPO_NAV_ITEM, CONTA_NAV_ITEM].find(n =>
     n.href === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(n.href)
   )
 
@@ -403,13 +407,12 @@ function MobileHeader({ visible, theme, onToggleTheme }: { visible: boolean; the
             ? <Sun className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
             : <Moon className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />}
         </button>
-        {!isTecnico && (
-          <Link href="/dashboard/configuracoes"
-            className="w-9 h-9 rounded-full flex items-center justify-center transition"
-            style={{ background: 'var(--chip-bg)' }}>
-            <Settings className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
-          </Link>
-        )}
+        <Link href={isTecnico ? '/dashboard/conta' : '/dashboard/configuracoes'}
+          aria-label={isTecnico ? 'Minha conta' : 'Configurações'}
+          className="w-9 h-9 rounded-full flex items-center justify-center transition"
+          style={{ background: 'var(--chip-bg)' }}>
+          <Settings className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
+        </Link>
       </div>
     </header>
   )
@@ -435,7 +438,7 @@ function DashboardInner({ children }: { children: React.ReactNode }) {
 
   // Técnico não tem Financeiro/Clientes/etc. — manda ele pro Início se
   // cair em alguma rota fora da nav restrita dele.
-  const TECNICO_ALLOWED_PREFIXES = ['/dashboard/chamados', '/dashboard/comissao', '/dashboard/estoque']
+  const TECNICO_ALLOWED_PREFIXES = ['/dashboard/chamados', '/dashboard/comissao', '/dashboard/estoque', '/dashboard/conta']
   useEffect(() => {
     if (!isTecnico) return
     if (pathname !== '/dashboard' && !TECNICO_ALLOWED_PREFIXES.some(p => pathname.startsWith(p))) {

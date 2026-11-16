@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { Plus, Search, X, ChevronRight, CalendarClock, CheckCircle2 } from 'lucide-react'
 import { useTenant } from '@/lib/tenant-context'
 import { isLojaMode } from '@/lib/loja'
-import { getShopOrders, orderNumber, statusOf, ORDER_STATUSES, type ShopOrder } from '@/lib/db/shop-orders'
+import { getShopOrders, orderNumber, statusOf, ALL_ORDER_STATUSES, type ShopOrder } from '@/lib/db/shop-orders'
 import { ptDate } from '@/lib/period'
 
 const fmt = (v: number) => `R$ ${Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
@@ -57,7 +57,7 @@ export default function PedidosPage() {
       {/* Situações: toca pra ver só aquela */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {[{ value: 'todos', label: 'Todos', dot: 'bg-zinc-400', n: orders?.length ?? 0, total: (orders ?? []).reduce((s, o) => s + o.total, 0) },
-          ...ORDER_STATUSES.filter(s => counts[s.value]).map(s => ({ ...s, n: counts[s.value].n, total: counts[s.value].total }))].map(s => {
+          ...ALL_ORDER_STATUSES.filter(s => counts[s.value]).map(s => ({ ...s, n: counts[s.value].n, total: counts[s.value].total }))].map(s => {
           const active = status === s.value
           return (
             <button key={s.value} type="button" onClick={() => setStatus(active && s.value !== 'todos' ? 'todos' : s.value)}

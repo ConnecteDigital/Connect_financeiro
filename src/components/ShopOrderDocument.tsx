@@ -28,8 +28,8 @@ function Toggle({ label, value, onChange }: { label: string; value: boolean; onC
 }
 
 // Gerar documento do pedido: escolhe o tipo, o que mostrar, e compartilha
-export default function ShopOrderDocument({ order, tenant, photos, onClose }: { order: ShopOrder; tenant: any; photos: string[]; onClose: () => void }) {
-  const [kind, setKind] = useState<DocKind | null>(null)
+export default function ShopOrderDocument({ order, tenant, photos, onClose, initialKind }: { order: ShopOrder; tenant: any; photos: string[]; onClose: () => void; initialKind?: DocKind }) {
+  const [kind, setKind] = useState<DocKind | null>(initialKind ?? null)
   const [ready, setReady] = useState(false)
   const [showPrices, setShowPrices] = useState(true)
   const [showSubtotal, setShowSubtotal] = useState(true)

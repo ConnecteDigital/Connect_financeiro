@@ -46,18 +46,29 @@ export interface ShopOrder {
 
 export type ShopOrderInput = Omit<ShopOrder, 'id' | 'seq' | 'year' | 'cash_entry_id' | 'stock_applied' | 'created_at'>
 
+// Situações que a loja usa (as que aparecem pra escolher)
 export const ORDER_STATUSES: { value: string; label: string; dot: string; pill: string }[] = [
-  { value: 'pendente',             label: 'Pendente',             dot: 'bg-orange-400',  pill: 'bg-orange-50 text-orange-700 border-orange-200' },
+  { value: 'pendente',     label: 'Pendente',     dot: 'bg-orange-400',  pill: 'bg-orange-50 text-orange-700 border-orange-200' },
+  { value: 'aprovado',     label: 'Aprovado',     dot: 'bg-blue-500',    pill: 'bg-blue-50 text-blue-700 border-blue-200' },
+  { value: 'nao_aprovado', label: 'Não aprovado', dot: 'bg-red-500',     pill: 'bg-red-50 text-red-600 border-red-200' },
+  { value: 'enviado',      label: 'Entregue',     dot: 'bg-teal-500',    pill: 'bg-teal-50 text-teal-700 border-teal-200' },
+  { value: 'garantia',     label: 'Garantia',     dot: 'bg-violet-500',  pill: 'bg-violet-50 text-violet-700 border-violet-200' },
+]
+// Situações antigas: não dá mais pra escolher, mas pedido que já estava
+// numa delas continua aparecendo com o nome certo.
+const LEGACY_STATUSES: typeof ORDER_STATUSES = [
   { value: 'aguardando_aprovacao', label: 'Aguardando aprovação', dot: 'bg-amber-500',   pill: 'bg-amber-50 text-amber-700 border-amber-200' },
-  { value: 'aprovado',             label: 'Aprovado',             dot: 'bg-blue-500',    pill: 'bg-blue-50 text-blue-700 border-blue-200' },
   { value: 'em_andamento',         label: 'Em andamento',         dot: 'bg-indigo-500',  pill: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
   { value: 'aguardando_pagamento', label: 'Aguardando pagamento', dot: 'bg-sky-500',     pill: 'bg-sky-50 text-sky-700 border-sky-200' },
-  { value: 'enviado',              label: 'Entregue',             dot: 'bg-teal-500',    pill: 'bg-teal-50 text-teal-700 border-teal-200' },
   { value: 'concluido',            label: 'Concluído',            dot: 'bg-emerald-500', pill: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  { value: 'garantia',             label: 'Garantia',             dot: 'bg-violet-500',  pill: 'bg-violet-50 text-violet-700 border-violet-200' },
-  { value: 'cancelado',            label: 'Cancelado',            dot: 'bg-red-500',     pill: 'bg-red-50 text-red-600 border-red-200' },
+  { value: 'cancelado',            label: 'Cancelado',            dot: 'bg-zinc-400',    pill: 'bg-zinc-100 text-zinc-600 border-zinc-200' },
 ]
-export const statusOf = (v: string) => ORDER_STATUSES.find(s => s.value === v) ?? ORDER_STATUSES[0]
+export const ALL_ORDER_STATUSES = [...ORDER_STATUSES, ...LEGACY_STATUSES]
+// Pedido encerrado (não conta como "em aberto")
+export const CLOSED_STATUSES = ['enviado', 'concluido', 'nao_aprovado', 'cancelado']
+// Ainda esperando o cliente decidir sobre o orçamento
+export const isAwaitingApproval = (status: string) => status === 'pendente' || status === 'aguardando_aprovacao'
+export const statusOf = (v: string) => ALL_ORDER_STATUSES.find(s => s.value === v) ?? ORDER_STATUSES[0]
 
 export const PAYMENT_METHODS = ['PIX', 'Dinheiro', 'Cartão de crédito', 'Cartão de débito', 'Transferência bancária', 'Boleto', 'Link de pagamento', 'Cheque', 'Fiado']
 

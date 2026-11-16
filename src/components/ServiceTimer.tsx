@@ -11,10 +11,12 @@ import { useTenant } from '@/lib/tenant-context'
 
 const END_REASONS: { value: VisitOutcome; label: string; date: 'required' | 'optional' | 'none'; notes: boolean }[] = [
   { value: 'orcamento', label: 'Orçamento — cliente vai decidir', date: 'none', notes: false },
-  { value: 'remarcado', label: 'Faltou peça / remarcar', date: 'optional', notes: false },
-  { value: 'cliente_ausente', label: 'Cliente não estava em casa', date: 'optional', notes: false },
   { value: 'nao_aprovou', label: 'Cliente não aprovou', date: 'none', notes: false },
-  { value: 'pagou_somente_visita', label: 'Pagou somente a visita', date: 'none', notes: false },
+  { value: 'sem_conserto', label: 'Não tem conserto', date: 'none', notes: false },
+  { value: 'pagou_somente_visita', label: 'Pagou somente a taxa', date: 'none', notes: false },
+  { value: 'cliente_ausente', label: 'Cliente não estava em casa', date: 'optional', notes: false },
+  { value: 'remarcado', label: 'Cliente remarcou', date: 'optional', notes: false },
+  { value: 'faltou_peca', label: 'Faltou peça', date: 'optional', notes: false },
   { value: 'outro', label: 'Outro', date: 'optional', notes: true },
 ]
 
@@ -100,7 +102,7 @@ export default function ServiceTimer({ callId, status, onChanged }: {
       load()
       onChanged()
     } catch (e: any) {
-      setError(e?.message ?? 'Não foi possível encerrar o serviço.')
+      setError(/resultado inv/i.test(e?.message ?? '') ? 'Esse motivo é novo: rode a migration_v34.sql no Supabase.' : (e?.message ?? 'Não foi possível encerrar o serviço.'))
     } finally { setBusy(false) }
   }
 

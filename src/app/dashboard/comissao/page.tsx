@@ -36,8 +36,14 @@ export default function ComissaoPage() {
         // OS de cada comissão, pro detalhamento do cálculo
         const ids = Array.from(new Set(list.map((e: any) => e.source_service_order_id).filter(Boolean)))
         if (ids.length) {
-          const { data } = await createClient().from('service_orders').select(OS_FIELDS).in('id', ids)
-          setOrders(Object.fromEntries((data ?? []).map((so: any) => [so.id, so])))
+          const sb = createClient()
+          // return_service_value vem da migration_v34: busca à parte pra não quebrar se ela ainda não rodou
+          const [{ data }, ret] = await Promise.all([
+            sb.from('service_orders').select(OS_FIELDS).in('id', ids),
+            sb.from('service_orders').select('id, return_service_value').in('id', ids).gt('return_service_value', 0),
+          ])
+          const retMap: Record<string, number> = Object.fromEntries((ret.data ?? []).map((r: any) => [r.id, Number(r.return_service_value)]))
+          setOrders(Object.fromEntries((data ?? []).map((so: any) => [so.id, { ...so, return_service_value: retMap[so.id] ?? 0 }])))
         }
       })
       .catch(console.error)
@@ -169,7 +175,7 @@ export default function ComissaoPage() {
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0 ml-3">
                       <div className="text-right">
-                        <p className="text-sm font-bold text-zinc-800">{fmt(e.amount)}</p>
+                        <p className={`text-sm font-bold ${Number(e.amount) < 0 ? 'text-red-600' : 'text-zinc-800'}`}>{fmt(e.amount)}</p>
                         <span className={`text-xs font-semibold ${e.status === 'pago' ? 'text-emerald-600' : 'text-amber-600'}`}>
                           {e.status === 'pago' ? 'Pago' : 'Pendente'}
                         </span>
@@ -177,7 +183,7 @@ export default function ComissaoPage() {
                       <ChevronDown className={`w-4 h-4 text-zinc-300 transition ${open ? 'rotate-180' : ''}`} />
                     </div>
                   </button>
-                  {open && <CommissionDetail so={so} amount={Number(e.amount || 0)} />}
+                  {open && <CommissionDetail so={so} amount={Number(e.amount || 0)} description={e.description} />}
                 </div>
               )
             })}
@@ -189,18 +195,30 @@ export default function ComissaoPage() {
 }
 
 // Como a comissão foi calculada: (total − peças − Uber − taxa da maquininha) × %
-function CommissionDetail({ so, amount }: { so: any; amount: number }) {
+function CommissionDetail({ so, amount, description }: { so: any; amount: number; description?: string }) {
   if (!so) {
-    return <p className="px-4 pb-3 text-xs text-zinc-400">Sem ordem de serviço vinculada.</p>
+    // Desconto por devolução ao cliente (estorno): mostra o lançamento inteiro
+    return <p className="px-4 pb-3 text-xs text-zinc-500">{amount < 0 && description ? `${description}. O cliente recebeu uma devolução nesse serviço, e a parte da comissão referente foi descontada.` : 'Sem ordem de serviço vinculada.'}</p>
   }
   const total = Number(so.total_value || 0)
   const parts = Number(so.parts_cost || 0)
   const card = osCardGross(so)
   const fee = card > 0 && so.card_net_value != null ? Math.max(card - Number(so.card_net_value), 0) : 0
   const uber = Number(so.uber_cost || 0)
-  const base = Math.max(total - parts - uber - fee, 0)
+  // Retorno que virou serviço: a comissão é só sobre o serviço cobrado no retorno
+  const retService = Number(so.return_service_value || 0)
+  const base = retService > 0 ? Math.max(retService - uber - fee, 0) : Math.max(total - parts - uber - fee, 0)
   const pct = base > 0 ? (amount / base) * 100 : 0
-  const rows: [string, string][] = [
+  const rows: [string, string][] = retService > 0 ? [
+    ['Cliente', clientOf(so)],
+    ['OS', `${so.os_number ?? '—'} · ${fmtDate(so.date)}`],
+    ['Serviço cobrado no retorno', fmt(retService)],
+    ...(uber > 0 ? [['Uber (entrega de peça)', `− ${fmt(uber)}`] as [string, string]] : []),
+    ...(fee > 0 ? [['Taxa da maquininha', `− ${fmt(fee)}`] as [string, string]] : []),
+    ['Base da comissão', fmt(base)],
+    [`% aplicada (${so.after_hours ? 'fora do horário' : 'horário comercial'})`, `${pct.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`],
+    ['Valor da comissão', fmt(amount)],
+  ] : [
     ['Cliente', clientOf(so)],
     ['OS', `${so.os_number ?? '—'} · ${fmtDate(so.date)}`],
     ['Valor total', fmt(total)],

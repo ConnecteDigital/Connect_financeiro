@@ -3,12 +3,12 @@
 import { use, useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Pencil, Trash2, FileText, Phone, MapPin, CalendarClock, CheckCircle2, Wallet, Camera, Paperclip, Loader2, Undo2, MessageCircle } from 'lucide-react'
+import { ArrowLeft, Pencil, Trash2, FileText, Phone, MapPin, CalendarClock, CheckCircle2, Wallet, Camera, Paperclip, Loader2, Undo2, MessageCircle, XCircle, PackageCheck } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useTenant } from '@/lib/tenant-context'
 import {
   getShopOrder, updateShopOrder, deleteShopOrder, receiveOrderPayment, undoOrderPayment, applyOrderStock,
-  orderNumber, statusOf, linesTotal, ORDER_STATUSES, PAYMENT_METHODS, type ShopOrder, type OrderLine,
+  orderNumber, statusOf, linesTotal, ORDER_STATUSES, PAYMENT_METHODS, isAwaitingApproval, type ShopOrder, type OrderLine,
 } from '@/lib/db/shop-orders'
 import PhotoGallery, { type GalleryFile } from '@/components/PhotoGallery'
 import ShopOrderDocument from '@/components/ShopOrderDocument'
@@ -36,6 +36,7 @@ export default function PedidoPage({ params }: { params: Promise<{ id: string }>
   const [statusOpen, setStatusOpen] = useState(false)
   const [payOpen, setPayOpen] = useState(false)
   const [docOpen, setDocOpen] = useState(false)
+  const [docKind, setDocKind] = useState<'orcamento' | 'os' | 'laudo' | undefined>(undefined)
   const [busy, setBusy] = useState(false)
   const cameraRef = useRef<HTMLInputElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -71,7 +72,8 @@ export default function PedidoPage({ params }: { params: Promise<{ id: string }>
   }
 
   // Fotos já baixadas (pra entrar no PDF), só quando for gerar documento
-  async function openDocument() {
+  async function openDocument(kind?: 'orcamento' | 'os' | 'laudo') {
+    setDocKind(kind)
     const imgs = files.filter(f => f.image).slice(0, 6)
     const data = await Promise.all(imgs.map(async f => {
       try {
@@ -91,7 +93,7 @@ export default function PedidoPage({ params }: { params: Promise<{ id: string }>
       // Peças do estoque saem quando o aparelho é entregue/concluído e voltam se cancelar
       const done = ['enviado', 'concluido', 'garantia'].includes(status)
       if (done && !order.stock_applied) await applyOrderStock(order, true)
-      if (status === 'cancelado' && order.stock_applied) await applyOrderStock(order, false)
+      if (['cancelado', 'nao_aprovado'].includes(status) && order.stock_applied) await applyOrderStock(order, false)
       toastSuccess('Situação atualizada!')
       setStatusOpen(false)
       await load()
@@ -154,6 +156,47 @@ export default function PedidoPage({ params }: { params: Promise<{ id: string }>
         </div>
         <span className="text-sm font-semibold" style={{ color: 'var(--primary)' }}>Mudar</span>
       </button>
+
+      {/* Orçamento: o cliente aprovou ou não? Aprovado segue como ordem de serviço */}
+      {isAwaitingApproval(order.status) && (
+        <div className="bg-white rounded-2xl border border-zinc-100 shadow-sm p-4 space-y-3">
+          <div>
+            <p className="text-base font-bold text-zinc-900">O cliente aprovou o orçamento?</p>
+            <p className="text-xs text-zinc-500">Aprovado, o pedido segue como ordem de serviço.</p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" disabled={busy} onClick={() => changeStatus('aprovado')}
+              className="flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white bg-emerald-600 disabled:opacity-60">
+              <CheckCircle2 className="w-4 h-4" /> Aprovado
+            </button>
+            <button type="button" disabled={busy} onClick={() => changeStatus('nao_aprovado')}
+              className="flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-red-600 bg-red-50 border border-red-200 disabled:opacity-60">
+              <XCircle className="w-4 h-4" /> Não aprovado
+            </button>
+          </div>
+        </div>
+      )}
+      {order.status === 'aprovado' && (
+        <div className="bg-emerald-50 rounded-2xl border border-emerald-200 p-4 space-y-3">
+          <p className="text-sm font-semibold text-emerald-800 flex items-center gap-2"><CheckCircle2 className="w-5 h-5" /> Orçamento aprovado — agora é ordem de serviço</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" onClick={() => openDocument('os')}
+              className="flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-emerald-700 bg-white border border-emerald-200">
+              <FileText className="w-4 h-4" /> Gerar OS
+            </button>
+            <button type="button" disabled={busy} onClick={() => changeStatus('enviado')}
+              className="flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white bg-emerald-600 disabled:opacity-60">
+              <PackageCheck className="w-4 h-4" /> Entregue
+            </button>
+          </div>
+        </div>
+      )}
+      {order.status === 'nao_aprovado' && (
+        <div className="bg-red-50 rounded-2xl border border-red-200 px-4 py-3 flex items-center justify-between gap-2">
+          <p className="text-sm font-semibold text-red-700 flex items-center gap-2"><XCircle className="w-5 h-5" /> O cliente não aprovou o orçamento</p>
+          <button type="button" disabled={busy} onClick={() => changeStatus('aprovado')} className="text-xs font-semibold text-red-700 underline flex-shrink-0">Aprovou depois</button>
+        </div>
+      )}
 
       {/* Cliente */}
       <div className="bg-white rounded-2xl border border-zinc-100 shadow-sm p-4 space-y-2">
@@ -253,7 +296,7 @@ export default function PedidoPage({ params }: { params: Promise<{ id: string }>
 
       {/* Gerar documento fixo embaixo */}
       <div className="fixed left-0 right-0 z-30 px-4 lg:left-64" style={{ bottom: 'calc(var(--bottom-nav-height, 0px) + var(--safe-bottom, 0px) + 12px)' }}>
-        <button type="button" onClick={openDocument}
+        <button type="button" onClick={() => openDocument()}
           className="max-w-2xl mx-auto w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-base font-bold text-white shadow-lg" style={{ background: 'var(--primary)' }}>
           <FileText className="w-5 h-5" /> Gerar documento
         </button>
@@ -274,7 +317,7 @@ export default function PedidoPage({ params }: { params: Promise<{ id: string }>
       )}
 
       {payOpen && <PayModal order={order} onClose={() => setPayOpen(false)} onSaved={() => { setPayOpen(false); toastSuccess('Pagamento recebido!'); load() }} />}
-      {docOpen && <ShopOrderDocument order={order} tenant={tenant} photos={photoData} onClose={() => setDocOpen(false)} />}
+      {docOpen && <ShopOrderDocument order={order} tenant={tenant} photos={photoData} initialKind={docKind} onClose={() => setDocOpen(false)} />}
     </div>
   )
 }

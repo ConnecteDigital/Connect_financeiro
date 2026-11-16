@@ -24,6 +24,9 @@ export interface RodriguesDocProps {
   info: [string, string | null | undefined][]
   visit?: { date?: string; period?: string } | null
   items: DocItem[]
+  hideItems?: boolean                      // relatório sem tabela de serviços
+  // seções extras logo depois de "Informações básicas" (ex.: resultado do atendimento)
+  blocks?: { title: string; fields?: [string, string | null | undefined][]; text?: string | null }[]
   parts?: DocItem[]                        // peças (seção própria)
   fees?: { label: string; value: number }[] // taxa de entrega, frete, outras
   showPrices?: boolean                     // preço de cada linha
@@ -157,8 +160,20 @@ export default function RodriguesDocument(p: RodriguesDocProps) {
         </Section>
       )}
 
+      {/* ── Seções extras ── */}
+      {(p.blocks ?? []).map(b => { const fields = (b.fields ?? []).filter(([, v]) => v != null && String(v).trim() !== ''); return (
+        <Section key={b.title} title={b.title}>
+          {fields.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap' }}>
+              {fields.map(([l, v]) => <div key={l} style={half}><Field label={l} value={v} /></div>)}
+            </div>
+          )}
+          {b.text && <div style={{ fontSize: 12, lineHeight: 1.4, whiteSpace: 'pre-wrap', marginBottom: 10 }}>{b.text}</div>}
+        </Section>
+      ) })}
+
       {/* ── Serviços / Peças ── */}
-      {([['Serviços', p.items], ['Peças', p.parts ?? []]] as const).filter(([, list], i) => i === 0 || list.length > 0).map(([title, list], idx, arr) => (
+      {!p.hideItems && ([['Serviços', p.items], ['Peças', p.parts ?? []]] as const).filter(([, list], i) => i === 0 || list.length > 0).map(([title, list], idx, arr) => (
         <Section key={title} title={title}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>

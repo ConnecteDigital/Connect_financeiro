@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Check, Pencil, Trash2, Search, UserRound, Wrench, Car, CreditCard, Megaphone, Repeat, MoreHorizontal, Package } from 'lucide-react'
+import { Check, Pencil, Trash2, Search, UserRound, Wrench, Car, CreditCard, Megaphone, Repeat, MoreHorizontal, Package, Undo2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { getAuxiliaries } from '@/lib/db/auxiliaries'
 import { ptDate } from '@/lib/period'
@@ -29,13 +29,14 @@ export interface SaidaRow {
   source_service_order_id?: string | null
 }
 
-type GroupKey = 'comissao' | 'pecas' | 'uber' | 'maquininha' | 'ads' | 'fixas' | 'outras'
+type GroupKey = 'comissao' | 'pecas' | 'uber' | 'maquininha' | 'estorno' | 'ads' | 'fixas' | 'outras'
 
 const GROUPS: { key: GroupKey; label: string; icon: any; color: string; bg: string }[] = [
   { key: 'comissao',   label: 'Comissões',   icon: UserRound,  color: 'text-orange-700', bg: 'bg-orange-50 border-orange-200' },
   { key: 'pecas',      label: 'Peças',       icon: Package,    color: 'text-violet-700', bg: 'bg-violet-50 border-violet-200' },
   { key: 'uber',       label: 'Uber',        icon: Car,        color: 'text-zinc-700',   bg: 'bg-zinc-100 border-zinc-200' },
   { key: 'maquininha', label: 'Maquininha',  icon: CreditCard, color: 'text-sky-700',    bg: 'bg-sky-50 border-sky-200' },
+  { key: 'estorno',    label: 'Estornos',    icon: Undo2,      color: 'text-red-700',    bg: 'bg-red-50 border-red-200' },
   { key: 'ads',        label: 'Google Ads',  icon: Megaphone,  color: 'text-blue-700',   bg: 'bg-blue-50 border-blue-200' },
   { key: 'fixas',      label: 'Fixas',       icon: Repeat,     color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200' },
   { key: 'outras',     label: 'Outras',      icon: MoreHorizontal, color: 'text-zinc-600', bg: 'bg-white border-zinc-200' },
@@ -48,12 +49,13 @@ export function groupOf(e: SaidaRow): GroupKey {
   if (cat === 'peças' || cat === 'pecas') return 'pecas'
   if (cat === 'uber') return 'uber'
   if (cat === 'taxa maquininha' || cat === 'maquininha') return 'maquininha'
+  if (cat === 'estorno' || cat === 'devolução' || cat === 'devolucao') return 'estorno'
   if (cat.includes('google') || cat.includes('ads') || cat === 'marketing' || /google|ads\b|anúncio|anuncio/.test(desc)) return 'ads'
   if (e.type === 'fixo') return 'fixas'
   return 'outras'
 }
 
-export const RODRIGUES_CATEGORIES = ['Google Ads', 'Peças', 'Uber', 'Taxa Maquininha', 'Pessoal', 'Aluguel', 'Combustível', 'Ferramentas', 'Alimentação', 'Outros']
+export const RODRIGUES_CATEGORIES = ['Google Ads', 'Peças', 'Uber', 'Taxa Maquininha', 'Estorno', 'Pessoal', 'Aluguel', 'Combustível', 'Ferramentas', 'Alimentação', 'Outros']
 
 export default function RodriguesSaidas({ expenses, onToggle, onEdit, onDelete, header }: {
   expenses: SaidaRow[]
@@ -134,7 +136,7 @@ export default function RodriguesSaidas({ expenses, onToggle, onEdit, onDelete, 
   }, [rows, orders])
 
   const labelOf = (r: { e: SaidaRow; g: GroupKey }) => {
-    if (r.g === 'comissao') return `Comissão · ${auxNames[r.e.auxiliary_id ?? ''] ?? 'técnico'}`
+    if (r.g === 'comissao') return `${Number(r.e.amount) < 0 ? 'Desconto de comissão (estorno)' : 'Comissão'} · ${auxNames[r.e.auxiliary_id ?? ''] ?? 'técnico'}`
     return GROUPS.find(g => g.key === r.g)!.label
   }
 

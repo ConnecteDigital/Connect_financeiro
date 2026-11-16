@@ -39,6 +39,8 @@ export default function FinalizarServicoPage({ params }: { params: Promise<{ id:
   const [uberCost, setUberCost] = useState(0)
   const [paymentLines, setPaymentLines] = useState<PaymentLine[]>([])
   const [partsPaid, setPartsPaid] = useState(false)
+  // Retorno que virou serviço novo: valor de serviço cobrado (entra na comissão)
+  const [returnService, setReturnService] = useState(0)
   const [observations, setObservations] = useState('')
   const [guarantee, setGuarantee] = useState<GuaranteeKey | ''>('90')
   const [noGuaranteeReason, setNoGuaranteeReason] = useState('')
@@ -63,7 +65,8 @@ export default function FinalizarServicoPage({ params }: { params: Promise<{ id:
       if (existing) {
         setValue(Number(existing.total_value ?? 0))
         setPaymentLines(paymentsFromOs(existing))
-        setPartsPaid(c.return_parts_paid ?? Number(existing.total_value ?? 0) > 0)
+        setReturnService(Number(existing.return_service_value ?? 0))
+        setPartsPaid(c.return_parts_paid ?? (Number(existing.total_value ?? 0) - Number(existing.return_service_value ?? 0)) > 0)
         setObservations(existing.observations ?? '')
         setGuarantee(guaranteeFromOs(existing) || '90')
         setNoGuaranteeReason(existing.no_guarantee_reason ?? '')
@@ -105,15 +108,18 @@ export default function FinalizarServicoPage({ params }: { params: Promise<{ id:
   }
 
   const partsTotal = stockLines.reduce((s, l) => s + l.total_value, 0) + extraPartsCost
-  // Valor cobrado: no retorno é só a peça (se o cliente pagou)
-  const chargedTotal = isReturn ? (partsPaid ? partsTotal : 0) : value
+  // Valor cobrado: no retorno é a peça (se o cliente pagou) + o serviço
+  // novo, quando o retorno gerou um
+  const chargedTotal = isReturn ? (partsPaid ? partsTotal : 0) + (returnService || 0) : value
+  // Garantia: serviço normal ou retorno que virou serviço cobrado
+  const withGuarantee = !isReturn || returnService > 0
   const needsPayment = chargedTotal > 0
 
   async function handleSave() {
     if (!isReturn && value <= 0) { setError('Informe o valor total recebido.'); return }
     if (isReturn && partsPaid && partsTotal <= 0) { setError('Lance a peça usada (ou marque que o cliente não pagou).'); return }
-    if (!isReturn && !guarantee) { setError('Escolha a garantia.'); return }
-    if (!isReturn && guarantee === 'none' && !noGuaranteeReason.trim()) { setError('Escreva por que o serviço não tem garantia.'); return }
+    if (withGuarantee && !guarantee) { setError('Escolha a garantia.'); return }
+    if (withGuarantee && guarantee === 'none' && !noGuaranteeReason.trim()) { setError('Escreva por que o serviço não tem garantia.'); return }
     const lines = needsPayment ? paymentLines.filter(l => l.method) : []
     if (needsPayment && lines.length === 0) { setError('Escolha a forma de pagamento.'); return }
     setSaving(true); setError('')
@@ -137,7 +143,9 @@ export default function FinalizarServicoPage({ params }: { params: Promise<{ id:
         ...paymentSummaryFields(lines),
         card_net_value: keepConfirmed ? so.card_net_value : null,
         observations: observations || null,
-        ...(!isReturn ? guaranteeFields(guarantee, noGuaranteeReason) : {}),
+        ...(withGuarantee ? guaranteeFields(guarantee, noGuaranteeReason) : {}),
+        // Só manda a coluna nova quando é usada (ela vem da migration_v34)
+        ...(isReturn && (returnService > 0 || Number(so?.return_service_value ?? 0) > 0) ? { return_service_value: returnService || 0 } : {}),
         payment_status: cardPending ? 'pendente' : 'pago',
         amount_paid: cardPending ? 0 : chargedTotal,
         remaining_amount: cardPending ? chargedTotal : 0,
@@ -181,7 +189,7 @@ export default function FinalizarServicoPage({ params }: { params: Promise<{ id:
       router.push(`/dashboard/chamados/${id}`)
     } catch (e: any) {
       console.error(e)
-      setError(e?.message ? `Erro ao salvar: ${e.message}` : 'Erro ao salvar. Tente novamente.')
+      setError(/return_service_value/.test(e?.message ?? '') ? 'Pra cobrar serviço no retorno, rode a migration_v34.sql no Supabase.' : e?.message ? `Erro ao salvar: ${e.message}` : 'Erro ao salvar. Tente novamente.')
       setSaving(false)
     }
   }
@@ -213,9 +221,18 @@ export default function FinalizarServicoPage({ params }: { params: Promise<{ id:
 
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5 space-y-5">
         {isReturn ? (
-          <div className="rounded-lg bg-violet-50 border border-violet-100 px-3 py-2.5 text-sm text-violet-800">
-            Retorno de garantia: o serviço não é cobrado. Lance a peça usada e diga se o cliente pagou por ela.
-          </div>
+          <>
+            <div className="rounded-lg bg-violet-50 border border-violet-100 px-3 py-2.5 text-sm text-violet-800">
+              Retorno de garantia: normalmente o serviço não é cobrado. Lance a peça usada e diga se o cliente pagou por ela.
+              Se o retorno virou um serviço novo (defeito que não era da primeira visita), informe o valor abaixo.
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor do serviço cobrado no retorno (R$)</label>
+              <input type="number" min="0" step="0.01" value={returnService || ''} onChange={e => setReturnService(Number(e.target.value))}
+                className={inputCls} placeholder="0,00 — deixe em branco se foi só garantia" />
+              <p className="text-xs text-slate-400 mt-1">Esse valor entra na sua comissão (descontando Uber e taxa da maquininha).</p>
+            </div>
+          </>
         ) : (
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor total recebido (R$) *</label>
@@ -269,7 +286,12 @@ export default function FinalizarServicoPage({ params }: { params: Promise<{ id:
                 </button>
               ))}
             </div>
-            {partsPaid && <p className="text-xs text-slate-500 mt-1.5">Valor cobrado do cliente: R$ {partsTotal.toFixed(2)}</p>}
+            {chargedTotal > 0 && (
+              <p className="text-xs text-slate-500 mt-1.5">
+                Valor cobrado do cliente: R$ {chargedTotal.toFixed(2)}
+                {returnService > 0 && partsPaid && partsTotal > 0 ? ` (peça R$ ${partsTotal.toFixed(2)} + serviço R$ ${returnService.toFixed(2)})` : ''}
+              </p>
+            )}
           </div>
         )}
 
@@ -285,7 +307,7 @@ export default function FinalizarServicoPage({ params }: { params: Promise<{ id:
           </div>
         )}
 
-        {!isReturn && (
+        {withGuarantee && (
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">Garantia *</label>
             <GuaranteePicker value={guarantee} onChange={setGuarantee} reason={noGuaranteeReason} onReason={setNoGuaranteeReason} inputCls={inputCls} />

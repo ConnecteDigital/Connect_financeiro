@@ -17,6 +17,7 @@ import TecnicoCallView from '@/components/TecnicoCallView'
 import { useTecnicoQueue } from '@/lib/tecnico-queue'
 import { paymentsFromOs, formatPaymentLine, osCardPending, osCardGross } from '@/lib/payments'
 import { syncOsAutoExpenses } from '@/lib/db/service-orders'
+import OsRefunds from '@/components/OsRefunds'
 
 const statusConfig: Record<string, { label: string; color: string; bg: string; icon: React.ElementType }> = {
   agendado: { label: 'Agendado', color: 'text-blue-700', bg: 'bg-blue-100', icon: Clock },
@@ -265,6 +266,13 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
                 Compartilhar OS
               </Link>
             )}
+            {!so && ['nao_aprovou', 'pagou_somente_visita', 'orcamento'].includes(call.status) && (
+              <Link href={`/dashboard/chamados/${id}/relatorio`}
+                className="flex-1 flex items-center justify-center gap-1.5 bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold px-3 py-2.5 rounded-lg transition">
+                <FileText className="w-4 h-4" />
+                Relatório
+              </Link>
+            )}
             <div className="relative flex-shrink-0">
               <button onClick={() => setMoreOpen(o => !o)}
                 className="p-2.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 transition">
@@ -354,8 +362,11 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
               </p>
               {(call.return_parts_paid != null || call.service_orders?.[0]) && (
                 <p className="text-violet-700">Cliente pagou a peça: <span className="font-semibold">
-                  {(call.return_parts_paid ?? Number(call.service_orders[0].total_value || 0) > 0) ? 'Sim' : 'Não'}
+                  {(call.return_parts_paid ?? (Number(call.service_orders[0].total_value || 0) - Number(call.service_orders[0].return_service_value || 0)) > 0) ? 'Sim' : 'Não'}
                 </span></p>
+              )}
+              {Number(call.service_orders?.[0]?.return_service_value || 0) > 0 && (
+                <p className="text-violet-700">Serviço cobrado no retorno: <span className="font-semibold">{fmt(call.service_orders[0].return_service_value)}</span> (gera comissão pro técnico)</p>
               )}
             </div>
           )}
@@ -730,6 +741,9 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
               {cardError && <p className="text-xs text-red-600">{cardError}</p>}
             </div>
           )}
+
+          {/* Devolução / estorno ao cliente (Rodrigues) */}
+          {isRodrigues && <OsRefunds so={so} />}
 
           {/* Pagamento */}
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">

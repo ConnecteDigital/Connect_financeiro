@@ -38,7 +38,7 @@ interface TenantContextValue {
   profileName: string | null
 }
 
-const TenantContext = createContext<TenantContextValue>({
+export const TenantContext = createContext<TenantContextValue>({
   tenant: null,
   loading: true,
   updateTenant: () => {},

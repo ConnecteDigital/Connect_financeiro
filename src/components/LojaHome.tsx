@@ -10,7 +10,7 @@ import PeriodNav from '@/components/PeriodNav'
 import { SellModal, ReceiveModal } from '@/components/LojaModals'
 import { toastSuccess } from '@/components/Toast'
 import { greeting } from '@/lib/greeting'
-import { getShopOrders, orderNumber, ORDER_STATUSES, type ShopOrder } from '@/lib/db/shop-orders'
+import { getShopOrders, orderNumber, ALL_ORDER_STATUSES, CLOSED_STATUSES, type ShopOrder } from '@/lib/db/shop-orders'
 import { localYmd } from '@/lib/tecnico-queue'
 
 const fmt = (v: number) => `R$ ${Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
@@ -74,11 +74,11 @@ export default function LojaHome() {
 
       {/* Pedidos em aberto */}
       {(() => {
-        const open = orders.filter(o => !['concluido', 'cancelado', 'enviado'].includes(o.status))
+        const open = orders.filter(o => !CLOSED_STATUSES.includes(o.status))
         const today = localYmd()
-        const agenda = orders.filter(o => o.visit_date && o.visit_date >= today && o.status !== 'cancelado')
+        const agenda = orders.filter(o => o.visit_date && o.visit_date >= today && !['cancelado', 'nao_aprovado'].includes(o.status))
           .sort((a, b) => `${a.visit_date}${a.visit_time ?? ''}`.localeCompare(`${b.visit_date}${b.visit_time ?? ''}`)).slice(0, 3)
-        const byStatus = ORDER_STATUSES.map(s => ({ ...s, n: open.filter(o => o.status === s.value).length })).filter(s => s.n > 0)
+        const byStatus = ALL_ORDER_STATUSES.map(s => ({ ...s, n: open.filter(o => o.status === s.value).length })).filter(s => s.n > 0)
         return (
           <Link href="/dashboard/pedidos" className="block bg-white rounded-2xl border border-zinc-100 shadow-sm overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100">
