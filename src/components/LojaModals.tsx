@@ -1,5 +1,6 @@
 'use client'
 
+import Portal from '@/components/Portal'
 import { useState, type ReactNode } from 'react'
 import { X, Loader2, Search } from 'lucide-react'
 import { localYmd } from '@/lib/tecnico-queue'
@@ -11,6 +12,7 @@ const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCa
 
 export function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   return (
+    <Portal>
     <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)' }}>
       <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl max-h-[95dvh] overflow-y-auto">
         <div className="sticky top-0 bg-white flex items-center justify-between px-5 py-4 border-b border-zinc-100 z-10">
@@ -20,6 +22,7 @@ export function Sheet({ title, onClose, children }: { title: string; onClose: ()
         <div className="p-5 space-y-4" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 20px)' }}>{children}</div>
       </div>
     </div>
+    </Portal>
   )
 }
 

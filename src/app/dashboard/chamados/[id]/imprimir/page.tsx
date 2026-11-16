@@ -449,7 +449,8 @@ function ImprimirContent({ id }: { id: string }) {
 
       {/* Botões de compartilhar fixos no rodapé */}
       {(() => { const b = sharing ?? osShare.busy; return (
-      <div className="print:hidden fixed bottom-6 inset-x-0 flex justify-center gap-3 z-50">
+      <div className="print:hidden fixed bottom-6 inset-x-0 flex justify-center gap-3 z-50"
+        style={isRodrigues ? { bottom: 'calc(var(--bottom-nav-height, 0px) + var(--safe-bottom, 0px) + 12px)' } : undefined}>
         <button
           onClick={isRodrigues && isSheet ? () => osShare.send('png') : handleSharePng}
           disabled={!!b}

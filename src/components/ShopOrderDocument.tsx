@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react'
 import { X, FileDown, ImageIcon, Loader2, ArrowLeft } from 'lucide-react'
+import Portal from '@/components/Portal'
 import RodriguesDocument, { DOC_WIDTH, type RodriguesDocProps } from '@/components/RodriguesDocument'
 import ScaledSheet from '@/components/ScaledSheet'
 import { docHeaderOf } from '@/lib/rodrigues-doc'
@@ -81,6 +82,7 @@ export default function ShopOrderDocument({ order, tenant, photos, onClose, init
     JSON.stringify([order.id, kind, showPrices, showSubtotal, showDetails, withPhotos, photos.length]), ready && !!doc)
 
   return (
+    <Portal>
     <div className="fixed inset-0 z-[80] bg-zinc-100 overflow-y-auto">
       <div className="sticky top-0 z-10 bg-white border-b border-zinc-100 flex items-center justify-between px-4 py-3" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 12px)' }}>
         <button type="button" onClick={() => (ready ? setReady(false) : kind ? setKind(null) : onClose())} className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-500">
@@ -140,5 +142,6 @@ export default function ShopOrderDocument({ order, tenant, photos, onClose, init
         </div>
       )}
     </div>
+    </Portal>
   )
 }

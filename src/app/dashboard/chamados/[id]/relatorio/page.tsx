@@ -75,7 +75,9 @@ export default function RelatorioAtendimentoPage({ params }: { params: Promise<{
       {share.error && <p className="max-w-3xl mx-auto text-sm text-red-500 mt-2">{share.error}</p>}
 
       <div style={{ height: 96 }} />
-      <div className="fixed bottom-6 inset-x-0 flex justify-center gap-3 z-50">
+      {/* Acima do menu de baixo do celular (senão os botões ficam escondidos atrás dele) */}
+      <div className="fixed inset-x-0 flex justify-center gap-3 z-50 lg:left-64"
+        style={{ bottom: 'calc(var(--bottom-nav-height, 0px) + var(--safe-bottom, 0px) + 12px)' }}>
         <button onClick={() => share.send('png')} disabled={!!share.busy}
           className="flex items-center gap-2 text-white font-semibold px-6 py-3.5 rounded-2xl shadow-2xl transition active:scale-95 disabled:opacity-70"
           style={{ backgroundColor: '#16a34a', boxShadow: '0 8px 24px rgba(22,163,74,0.40)' }}>
