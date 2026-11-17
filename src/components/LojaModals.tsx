@@ -1,10 +1,10 @@
 'use client'
 
 import Portal from '@/components/Portal'
-import { useState, type ReactNode } from 'react'
-import { X, Loader2, Search } from 'lucide-react'
+import { useRef, useState, type ReactNode } from 'react'
+import { X, Loader2, Search, Plus, Camera, Video, Paperclip, Play } from 'lucide-react'
 import { localYmd } from '@/lib/tecnico-queue'
-import { sellItem, receiveItem, saveLojaItem, type LojaItem, type ItemKind } from '@/lib/db/loja'
+import { sellItem, receiveItem, saveLojaItem, saveLojaMedia, mediaUrl, isVideoFile, lojaErrorMessage, kindLabel, EQUIPMENT_TYPES, type LojaItem, type LojaMedia, type ItemKind } from '@/lib/db/loja'
 
 const fmt = (v: number) => `R$ ${Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
 export const input = 'w-full px-3 py-2.5 border border-zinc-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]'
@@ -42,8 +42,12 @@ function Actions({ busy, onClose, onSave, label, disabled }: { busy: boolean; on
   )
 }
 
-// Cadastrar / editar máquina ou peça
-export function ItemFormModal({ item, defaultKind, onClose, onSaved }: { item?: LojaItem | null; defaultKind: ItemKind; onClose: () => void; onSaved: () => void }) {
+// Cadastrar / editar equipamento ou peça
+interface PendingMedia { id: string; file: File; preview: string; video: boolean }
+
+export function ItemFormModal({ item, defaultKind, knownTypes = [], onClose, onSaved }: {
+  item?: LojaItem | null; defaultKind: ItemKind; knownTypes?: string[]; onClose: () => void; onSaved: (warning?: string) => void
+}) {
   const [kind, setKind] = useState<ItemKind>(item?.kind ?? defaultKind)
   const [name, setName] = useState(item?.name ?? '')
   const [brand, setBrand] = useState(item?.brand ?? '')
@@ -52,45 +56,191 @@ export function ItemFormModal({ item, defaultKind, onClose, onSaved }: { item?: 
   const [cost, setCost] = useState(item ? String(item.unit_value || '') : '')
   const [price, setPrice] = useState(item ? String(item.sale_value || '') : '')
   const [notes, setNotes] = useState(item?.notes ?? '')
+  const [eqType, setEqType] = useState(item?.equipment_type ?? '')
+  const [serial, setSerial] = useState(item?.serial_number ?? '')
+  // Tipos: os prontos + os que a loja já usou + os criados agora no "+"
+  const [extraTypes, setExtraTypes] = useState<string[]>([])
+  const [addingType, setAddingType] = useState(false)
+  const [newType, setNewType] = useState('')
+  // Fotos e vídeos: os já salvos (keep), os removidos e os novos
+  const [keep, setKeep] = useState<LojaMedia[]>(item?.media ?? [])
+  const [removed, setRemoved] = useState<LojaMedia[]>([])
+  const [pending, setPending] = useState<PendingMedia[]>([])
+  const photoRef = useRef<HTMLInputElement>(null)
+  const videoRef = useRef<HTMLInputElement>(null)
+  const galleryRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const isEquip = kind === 'maquina'
+
+  const types = Array.from(new Set([...EQUIPMENT_TYPES, ...knownTypes, ...extraTypes, ...(eqType ? [eqType] : [])].map(t => t.trim()).filter(Boolean)))
+
+  function confirmNewType() {
+    const t = newType.trim()
+    if (t) { setExtraTypes(prev => [...prev, t]); setEqType(t) }
+    setNewType(''); setAddingType(false)
+  }
+
+  function addFiles(list: FileList | null) {
+    if (!list?.length) return
+    setPending(prev => [...prev, ...Array.from(list).map(file => ({
+      id: `${Date.now()}${Math.random()}`, file, preview: URL.createObjectURL(file), video: isVideoFile(file),
+    }))])
+  }
 
   async function save() {
-    if (!name.trim()) { setError('Digite o nome.'); return }
+    const finalName = name.trim() || (isEquip ? eqType.trim() : '')
+    if (!finalName) { setError(isEquip ? 'Escolha o equipamento ou digite uma descrição.' : 'Digite o nome da peça.'); return }
     setBusy(true); setError('')
+    let id: string
     try {
-      await saveLojaItem({
-        kind, name: name.trim(), brand: brand.trim() || null, model: model.trim() || null, notes: notes.trim() || null,
-        quantity: Math.max(0, Number(quantity) || 0), unit_value: Number(cost) || 0, sale_value: Number(price) || 0,
+      id = await saveLojaItem({
+        kind, name: finalName, brand: brand.trim() || null, model: model.trim() || null, notes: notes.trim() || null,
+        quantity: Math.max(0, Math.round(Number(quantity) || 0)), unit_value: Number(cost) || 0, sale_value: Number(price) || 0,
+        equipment_type: isEquip ? (eqType.trim() || null) : null, serial_number: isEquip ? (serial.trim() || null) : null,
       }, item?.id)
-      onSaved()
     } catch (e: any) {
       console.error(e)
-      setError(String(e?.message ?? '').includes('kind') || String(e?.message ?? '').includes('sale_value') ? 'Rode a migration_v32.sql no Supabase.' : 'Não foi possível salvar.')
-    } finally { setBusy(false) }
+      setError(lojaErrorMessage(e, 'Não foi possível salvar.'))
+      setBusy(false)
+      return
+    }
+    // O item já está salvo; as fotos/vídeos vão depois
+    let warning: string | undefined
+    if (pending.length > 0 || removed.length > 0) {
+      try {
+        const failed = await saveLojaMedia(id, keep, removed, pending.map(p => p.file))
+        if (failed > 0) warning = `Item salvo, mas ${failed} arquivo${failed > 1 ? 's' : ''} não subi${failed > 1 ? 'ram' : 'u'} (vídeo muito grande ou sem internet). Edite o item pra tentar de novo.`
+      } catch (e: any) {
+        console.error(e)
+        warning = lojaErrorMessage(e, 'Item salvo, mas as fotos não foram gravadas.')
+      }
+    }
+    pending.forEach(p => URL.revokeObjectURL(p.preview))
+    onSaved(warning)
   }
+
+  const thumb = 'relative rounded-lg overflow-hidden border border-zinc-200 bg-zinc-100 h-20'
+  const removeBtn = 'absolute top-1 right-1 bg-black/60 text-white rounded-full p-1'
 
   return (
     <Sheet title={item ? 'Editar item' : 'Cadastrar item'} onClose={onClose}>
       <div className="flex bg-zinc-100 rounded-xl p-1">
-        {([['maquina', 'Máquina'], ['peca', 'Peça']] as const).map(([v, l]) => (
+        {([['maquina', 'Equipamento'], ['peca', 'Peça']] as const).map(([v, l]) => (
           <button key={v} type="button" onClick={() => setKind(v)}
             className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${kind === v ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500'}`}>{l}</button>
         ))}
       </div>
-      <Field label="Nome *"><input value={name} onChange={e => setName(e.target.value)} className={input} placeholder={kind === 'maquina' ? 'Ex: Geladeira Frost Free 400L' : 'Ex: Compressor 1/4 HP'} /></Field>
+
+      {isEquip && (
+        <Field label="Qual equipamento? *">
+          <div className="flex flex-wrap gap-2">
+            {types.map(t => (
+              <button key={t} type="button" onClick={() => setEqType(eqType === t ? '' : t)}
+                className={`px-3 py-2 rounded-xl text-sm font-semibold border transition ${eqType === t ? 'text-white border-transparent' : 'bg-white text-zinc-700 border-zinc-200'}`}
+                style={eqType === t ? { background: 'var(--primary)' } : {}}>{t}</button>
+            ))}
+            {!addingType && (
+              <button type="button" onClick={() => setAddingType(true)} aria-label="Adicionar equipamento"
+                className="px-3 py-2 rounded-xl text-sm font-semibold border border-dashed border-zinc-300 text-zinc-600 flex items-center gap-1">
+                <Plus className="w-4 h-4" /> Outro
+              </button>
+            )}
+          </div>
+          {addingType && (
+            <div className="flex gap-2 mt-2">
+              <input autoFocus value={newType} onChange={e => setNewType(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') confirmNewType() }}
+                className={input} placeholder="Ex: Lava-louças, Ar-condicionado..." />
+              <button type="button" onClick={confirmNewType} className="px-4 rounded-xl text-sm font-bold text-white flex-shrink-0" style={{ background: 'var(--primary)' }}>OK</button>
+            </div>
+          )}
+        </Field>
+      )}
+
+      <Field label={isEquip ? 'Descrição' : 'Nome *'}>
+        <input value={name} onChange={e => setName(e.target.value)} className={input}
+          placeholder={isEquip ? 'Ex: Frost Free 400L inox (opcional)' : 'Ex: Compressor 1/4 HP'} />
+      </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Marca"><input value={brand} onChange={e => setBrand(e.target.value)} className={input} placeholder="Ex: Brastemp" /></Field>
         <Field label="Modelo"><input value={model} onChange={e => setModel(e.target.value)} className={input} placeholder="Ex: BRM50" /></Field>
       </div>
+      {isEquip && (
+        <Field label="Número de série"><input value={serial} onChange={e => setSerial(e.target.value)} className={input} placeholder="Está na etiqueta do aparelho" /></Field>
+      )}
       <div className="grid grid-cols-3 gap-3">
-        <Field label="Quantidade"><input type="number" min="0" value={quantity} onChange={e => setQuantity(e.target.value)} className={input} /></Field>
-        <Field label="Custo (R$)"><input type="number" min="0" step="0.01" value={cost} onChange={e => setCost(e.target.value)} className={input} placeholder="0,00" /></Field>
-        <Field label="Venda (R$)"><input type="number" min="0" step="0.01" value={price} onChange={e => setPrice(e.target.value)} className={input} placeholder="0,00" /></Field>
+        <Field label="Quantidade"><input type="number" inputMode="numeric" min="0" value={quantity} onChange={e => setQuantity(e.target.value)} className={input} /></Field>
+        <Field label="Custo (R$)"><input type="number" inputMode="decimal" min="0" step="0.01" value={cost} onChange={e => setCost(e.target.value)} className={input} placeholder="0,00" /></Field>
+        <Field label="Venda (R$)"><input type="number" inputMode="decimal" min="0" step="0.01" value={price} onChange={e => setPrice(e.target.value)} className={input} placeholder="0,00" /></Field>
       </div>
       <Field label="Observação"><input value={notes} onChange={e => setNotes(e.target.value)} className={input} placeholder="Ex: usada, revisada, garantia 3 meses..." /></Field>
+
+      {isEquip && (
+        <Field label="Fotos e vídeos">
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => photoRef.current?.click()} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-medium bg-orange-50 border border-orange-200 text-orange-600"><Camera className="w-4 h-4" /> Foto</button>
+            <button type="button" onClick={() => videoRef.current?.click()} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-medium bg-orange-50 border border-orange-200 text-orange-600"><Video className="w-4 h-4" /> Vídeo</button>
+            <button type="button" onClick={() => galleryRef.current?.click()} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-medium bg-zinc-50 border border-zinc-200 text-zinc-600"><Paperclip className="w-4 h-4" /> Galeria</button>
+          </div>
+          <input ref={photoRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => { addFiles(e.target.files); e.target.value = '' }} />
+          <input ref={videoRef} type="file" accept="video/*" capture="environment" className="hidden" onChange={e => { addFiles(e.target.files); e.target.value = '' }} />
+          <input ref={galleryRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={e => { addFiles(e.target.files); e.target.value = '' }} />
+          {(keep.length > 0 || pending.length > 0) && (
+            <div className="grid grid-cols-3 gap-2 mt-2">
+              {keep.map(m => (
+                <div key={m.path} className={thumb}>
+                  <MediaThumb src={mediaUrl(m.path)} video={m.video} />
+                  <button type="button" onClick={() => { setKeep(k => k.filter(x => x.path !== m.path)); setRemoved(r => [...r, m]) }} className={removeBtn}><X className="w-3 h-3" /></button>
+                </div>
+              ))}
+              {pending.map(p => (
+                <div key={p.id} className={thumb}>
+                  <MediaThumb src={p.preview} video={p.video} />
+                  <button type="button" onClick={() => { URL.revokeObjectURL(p.preview); setPending(l => l.filter(x => x.id !== p.id)) }} className={removeBtn}><X className="w-3 h-3" /></button>
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="text-[11px] text-zinc-400 mt-1.5">Vídeo curto sobe melhor. As fotos e vídeos são enviados quando você tocar em Salvar.</p>
+        </Field>
+      )}
+
       {error && <p className="text-sm text-red-500">{error}</p>}
-      <Actions busy={busy} onClose={onClose} onSave={save} label="Salvar" />
+      <Actions busy={busy} onClose={onClose} onSave={save} label={busy && pending.length > 0 ? 'Enviando...' : 'Salvar'} />
+    </Sheet>
+  )
+}
+
+// Miniatura de foto ou vídeo (vídeo aparece com o símbolo de play)
+export function MediaThumb({ src, video }: { src: string; video: boolean }) {
+  if (!video) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={src} alt="" loading="lazy" className="w-full h-full object-cover" />
+  }
+  return (
+    <>
+      <video src={`${src}#t=0.1`} muted playsInline preload="metadata" className="w-full h-full object-cover bg-zinc-800" />
+      <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <span className="w-8 h-8 rounded-full bg-black/55 flex items-center justify-center"><Play className="w-4 h-4 text-white fill-white" /></span>
+      </span>
+    </>
+  )
+}
+
+// Ver as fotos e vídeos de um equipamento
+export function MediaSheet({ item, onClose }: { item: LojaItem; onClose: () => void }) {
+  return (
+    <Sheet title={item.name} onClose={onClose}>
+      <div className="space-y-3">
+        {item.media.map(m => m.video ? (
+          <video key={m.path} src={mediaUrl(m.path)} controls playsInline preload="metadata" className="w-full rounded-xl bg-black max-h-[70dvh]" />
+        ) : (
+          <a key={m.path} href={mediaUrl(m.path)} target="_blank" rel="noopener noreferrer" className="block">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={mediaUrl(m.path)} alt="" className="w-full rounded-xl border border-zinc-100" />
+          </a>
+        ))}
+      </div>
     </Sheet>
   )
 }
@@ -98,19 +248,19 @@ export function ItemFormModal({ item, defaultKind, onClose, onSaved }: { item?: 
 // Escolher o item (quando a venda/chegada começa pelo Início)
 export function ItemPicker({ items, onPick }: { items: LojaItem[]; onPick: (i: LojaItem) => void }) {
   const [q, setQ] = useState('')
-  const list = items.filter(i => norm([i.name, i.brand, i.model].filter(Boolean).join(' ')).includes(norm(q.trim())))
+  const list = items.filter(i => norm([i.name, i.equipment_type, i.brand, i.model, i.serial_number].filter(Boolean).join(' ')).includes(norm(q.trim())))
   return (
     <div className="space-y-2">
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-        <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar máquina ou peça..." className={`${input} pl-9`} />
+        <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar equipamento ou peça..." className={`${input} pl-9`} />
       </div>
       <div className="max-h-72 overflow-y-auto divide-y divide-zinc-50 border border-zinc-100 rounded-xl">
         {list.length === 0 ? <p className="px-3 py-4 text-sm text-zinc-400 text-center">Nada encontrado. Cadastre o item no Estoque.</p> : list.map(i => (
           <button key={i.id} type="button" onClick={() => onPick(i)} className="w-full text-left px-3 py-2.5 hover:bg-zinc-50 flex justify-between gap-2">
             <span className="min-w-0">
               <span className="block text-sm font-medium text-zinc-800 truncate">{i.name}</span>
-              <span className="block text-xs text-zinc-500 truncate">{[i.kind === 'maquina' ? 'Máquina' : 'Peça', i.brand, i.model].filter(Boolean).join(' · ')}</span>
+              <span className="block text-xs text-zinc-500 truncate">{[kindLabel(i.kind), i.brand, i.model].filter(Boolean).join(' · ')}</span>
             </span>
             <span className={`text-xs font-semibold flex-shrink-0 ${i.quantity > 0 ? 'text-zinc-500' : 'text-red-500'}`}>{i.quantity} un.</span>
           </button>
@@ -143,7 +293,7 @@ export function SellModal({ item, items, onClose, onSaved }: { item?: LojaItem |
     try {
       await sellItem(picked, { quantity: qty, unitPrice: Number(price), date, payment, client: client.trim(), received })
       onSaved()
-    } catch (e) { console.error(e); setError('Não foi possível registrar a venda.') }
+    } catch (e) { console.error(e); setError(lojaErrorMessage(e, 'Não foi possível registrar a venda.')) }
     finally { setBusy(false) }
   }
 
@@ -154,7 +304,7 @@ export function SellModal({ item, items, onClose, onSaved }: { item?: LojaItem |
           <div className="rounded-xl bg-zinc-50 border border-zinc-100 px-3 py-2.5 flex justify-between items-center gap-2">
             <div className="min-w-0">
               <p className="text-sm font-semibold text-zinc-800 truncate">{picked.name}</p>
-              <p className="text-xs text-zinc-500">{[picked.brand, picked.model].filter(Boolean).join(' · ') || (picked.kind === 'maquina' ? 'Máquina' : 'Peça')} · {picked.quantity} em estoque</p>
+              <p className="text-xs text-zinc-500">{[picked.brand, picked.model].filter(Boolean).join(' · ') || kindLabel(picked.kind)} · {picked.quantity} em estoque</p>
             </div>
             {!item && <button type="button" onClick={() => setPicked(null)} className="text-xs font-semibold" style={{ color: 'var(--primary)' }}>Trocar</button>}
           </div>
@@ -205,7 +355,7 @@ export function ReceiveModal({ item, items, onClose, onSaved }: { item?: LojaIte
     try {
       await receiveItem(picked, { quantity: qty, unitCost: Number(cost) || 0, date, launchExpense: launch, paid, supplier: supplier.trim() })
       onSaved()
-    } catch (e) { console.error(e); setError('Não foi possível registrar.') }
+    } catch (e) { console.error(e); setError(lojaErrorMessage(e, 'Não foi possível registrar.')) }
     finally { setBusy(false) }
   }
 

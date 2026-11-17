@@ -58,7 +58,7 @@ export default function LojaHome() {
         <button type="button" onClick={() => setModal('sell')} className="rounded-2xl bg-emerald-500 text-white p-3 text-left shadow-sm active:scale-[0.98] transition">
           <ShoppingCart className="w-5 h-5" />
           <p className="text-sm font-bold mt-1.5 leading-tight">Vendi</p>
-          <p className="text-[11px] opacity-90">máquina ou peça</p>
+          <p className="text-[11px] opacity-90">equipamento ou peça</p>
         </button>
         <button type="button" onClick={() => setModal('receive')} className="rounded-2xl bg-orange-500 text-white p-3 text-left shadow-sm active:scale-[0.98] transition">
           <PackagePlus className="w-5 h-5" />
@@ -139,7 +139,7 @@ export default function LojaHome() {
           <ChevronRight className="w-4 h-4 text-zinc-300" />
         </div>
         <div className="grid grid-cols-2 divide-x divide-zinc-100">
-          {([['Máquinas', machines, Refrigerator], ['Peças', parts, Package]] as const).map(([l, list, Icon]) => (
+          {([['Equipamentos', machines, Refrigerator], ['Peças', parts, Package]] as const).map(([l, list, Icon]) => (
             <div key={l} className="px-4 py-3">
               <p className="text-xs text-zinc-500 flex items-center gap-1"><Icon className="w-3.5 h-3.5" /> {l}</p>
               <p className="text-xl font-bold text-zinc-900">{units(list)} <span className="text-xs font-medium text-zinc-500">un.</span></p>

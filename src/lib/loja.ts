@@ -1,5 +1,5 @@
 // Modo "loja" (Rodrigues – Loja): conta só pra controlar estoque de
-// máquinas/peças, vendas e gastos. Ligado por call_form_config.loja_mode.
+// equipamentos/peças, vendas e gastos. Ligado por call_form_config.loja_mode.
 export function isLojaMode(tenant: { call_form_config?: any } | null | undefined): boolean {
   return tenant?.call_form_config?.loja_mode === true
 }
