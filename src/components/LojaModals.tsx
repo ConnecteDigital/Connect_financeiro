@@ -1,5 +1,6 @@
 'use client'
 
+import MoneyInput from '@/components/MoneyInput'
 import Portal from '@/components/Portal'
 import { useRef, useState, type ReactNode } from 'react'
 import { X, Loader2, Search, Plus, Camera, Video, Paperclip, Play } from 'lucide-react'
@@ -170,8 +171,8 @@ export function ItemFormModal({ item, defaultKind, knownTypes = [], onClose, onS
       )}
       <div className="grid grid-cols-3 gap-3">
         <Field label="Quantidade"><input type="number" inputMode="numeric" min="0" value={quantity} onChange={e => setQuantity(e.target.value)} className={input} /></Field>
-        <Field label="Custo (R$)"><input type="number" inputMode="decimal" min="0" step="0.01" value={cost} onChange={e => setCost(e.target.value)} className={input} placeholder="0,00" /></Field>
-        <Field label="Venda (R$)"><input type="number" inputMode="decimal" min="0" step="0.01" value={price} onChange={e => setPrice(e.target.value)} className={input} placeholder="0,00" /></Field>
+        <Field label="Custo (R$)"><MoneyInput inputMode="decimal" min="0" step="0.01" value={cost} onChange={e => setCost(e.target.value)} className={input} placeholder="0,00" /></Field>
+        <Field label="Venda (R$)"><MoneyInput inputMode="decimal" min="0" step="0.01" value={price} onChange={e => setPrice(e.target.value)} className={input} placeholder="0,00" /></Field>
       </div>
       <Field label="Observação"><input value={notes} onChange={e => setNotes(e.target.value)} className={input} placeholder="Ex: usada, revisada, garantia 3 meses..." /></Field>
 
@@ -311,7 +312,7 @@ export function SellModal({ item, items, onClose, onSaved }: { item?: LojaItem |
           {picked.quantity < qty && <p className="text-xs text-amber-600">Atenção: o estoque tem só {picked.quantity}. Ele vai ficar zerado.</p>}
           <div className="grid grid-cols-2 gap-3">
             <Field label="Quantidade"><input type="number" min="1" value={quantity} onChange={e => setQuantity(e.target.value)} className={input} /></Field>
-            <Field label="Valor unitário (R$) *"><input type="number" min="0" step="0.01" value={price} onChange={e => setPrice(e.target.value)} className={input} placeholder="0,00" /></Field>
+            <Field label="Valor unitário (R$) *"><MoneyInput min="0" step="0.01" value={price} onChange={e => setPrice(e.target.value)} className={input} placeholder="0,00" /></Field>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Data"><input type="date" value={date} onChange={e => setDate(e.target.value)} className={input} /></Field>
@@ -372,7 +373,7 @@ export function ReceiveModal({ item, items, onClose, onSaved }: { item?: LojaIte
           </div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Quantidade que chegou"><input type="number" min="1" value={quantity} onChange={e => setQuantity(e.target.value)} className={input} /></Field>
-            <Field label="Custo unitário (R$)"><input type="number" min="0" step="0.01" value={cost} onChange={e => setCost(e.target.value)} className={input} placeholder="0,00" /></Field>
+            <Field label="Custo unitário (R$)"><MoneyInput min="0" step="0.01" value={cost} onChange={e => setCost(e.target.value)} className={input} placeholder="0,00" /></Field>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Data"><input type="date" value={date} onChange={e => setDate(e.target.value)} className={input} /></Field>

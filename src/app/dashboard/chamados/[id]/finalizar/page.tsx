@@ -1,5 +1,6 @@
 'use client'
 
+import MoneyInput from '@/components/MoneyInput'
 import { use, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -228,7 +229,7 @@ export default function FinalizarServicoPage({ params }: { params: Promise<{ id:
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor do serviço cobrado no retorno (R$)</label>
-              <input type="number" min="0" step="0.01" value={returnService || ''} onChange={e => setReturnService(Number(e.target.value))}
+              <MoneyInput min="0" step="0.01" value={returnService || ''} onChange={e => setReturnService(Number(e.target.value))}
                 className={inputCls} placeholder="0,00 — deixe em branco se foi só garantia" />
               <p className="text-xs text-slate-400 mt-1">Esse valor entra na sua comissão (descontando Uber e taxa da maquininha).</p>
             </div>
@@ -236,7 +237,7 @@ export default function FinalizarServicoPage({ params }: { params: Promise<{ id:
         ) : (
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor total recebido (R$) *</label>
-            <input type="number" min="0" step="0.01" value={value || ''} onChange={e => setValue(Number(e.target.value))}
+            <MoneyInput min="0" step="0.01" value={value || ''} onChange={e => setValue(Number(e.target.value))}
               className={inputCls} placeholder="0,00" />
           </div>
         )}
@@ -264,12 +265,12 @@ export default function FinalizarServicoPage({ params }: { params: Promise<{ id:
           )}
           <div className="mt-3">
             <label className="block text-xs font-medium text-slate-600 mb-1">Outro custo de peça não cadastrada (R$)</label>
-            <input type="number" min="0" step="0.01" value={extraPartsCost || ''} onChange={e => setExtraPartsCost(Number(e.target.value))}
+            <MoneyInput min="0" step="0.01" value={extraPartsCost || ''} onChange={e => setExtraPartsCost(Number(e.target.value))}
               className={inputCls} placeholder="0,00" />
           </div>
           <div className="mt-3">
             <label className="block text-xs font-medium text-slate-600 mb-1">Custo de Uber pra trazer peça (R$)</label>
-            <input type="number" min="0" step="0.01" value={uberCost || ''} onChange={e => setUberCost(Number(e.target.value))}
+            <MoneyInput min="0" step="0.01" value={uberCost || ''} onChange={e => setUberCost(Number(e.target.value))}
               className={inputCls} placeholder="0,00 — deixe em branco se não teve" />
             <p className="text-xs text-slate-400 mt-1">É descontado do valor antes de calcular a comissão, igual à peça.</p>
           </div>

@@ -1,5 +1,6 @@
 'use client'
 
+import MoneyInput from '@/components/MoneyInput'
 import { useEffect, useState } from 'react'
 import { Package, Plus, Trash2, Pencil, X, Check, Search } from 'lucide-react'
 import { useTenant } from '@/lib/tenant-context'
@@ -96,7 +97,7 @@ function StockSection({ title, items: allItems, auxiliaryId, onChanged, query = 
           <div className="flex gap-2">
             <input type="number" min="0" value={quantity || ''} onChange={e => setQuantity(Number(e.target.value))} placeholder="Quantidade"
               className="flex-1 px-3 py-2 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" />
-            <input type="number" min="0" step="0.01" value={unitValue || ''} onChange={e => setUnitValue(Number(e.target.value))} placeholder="Valor unit. (R$)"
+            <MoneyInput min="0" step="0.01" value={unitValue || ''} onChange={e => setUnitValue(Number(e.target.value))} placeholder="Valor unit. (R$)"
               className="flex-1 px-3 py-2 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" />
           </div>
           <button onClick={handleAdd} disabled={saving || !name.trim()}
@@ -124,7 +125,7 @@ function StockSection({ title, items: allItems, auxiliaryId, onChanged, query = 
                 </div>
                 <div className="flex-1">
                   <label className="block text-xs font-medium text-zinc-500 mb-1">Valor unit. (R$)</label>
-                  <input type="number" min="0" step="0.01" value={editValue} onChange={e => setEditValue(Number(e.target.value))}
+                  <MoneyInput min="0" step="0.01" value={editValue} onChange={e => setEditValue(Number(e.target.value))}
                     className="w-full px-3 py-2 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" />
                 </div>
               </div>

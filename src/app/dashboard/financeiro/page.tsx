@@ -1,5 +1,6 @@
 'use client'
 
+import MoneyInput from '@/components/MoneyInput'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useTenant } from '@/lib/tenant-context'
@@ -475,7 +476,7 @@ export default function FinanceiroPage() {
                     </div>
                     <div>
                       <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Valor*</label>
-                      <input type="number" step="0.01" value={newSaida.amount} onChange={e => setNewSaida(p => ({ ...p, amount: e.target.value }))}
+                      <MoneyInput step="0.01" value={newSaida.amount} onChange={e => setNewSaida(p => ({ ...p, amount: e.target.value }))}
                         className="input-field py-2.5 text-sm" placeholder="0,00" />
                     </div>
                     <div>
@@ -774,7 +775,7 @@ export default function FinanceiroPage() {
                     </div>
                     <div>
                       <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Valor*</label>
-                      <input type="number" step="0.01" value={newEntrada.amount} onChange={e => setNewEntrada(p => ({ ...p, amount: e.target.value }))}
+                      <MoneyInput step="0.01" value={newEntrada.amount} onChange={e => setNewEntrada(p => ({ ...p, amount: e.target.value }))}
                         className="input-field py-2.5 text-sm" placeholder="0,00" />
                     </div>
                     <div>
@@ -880,7 +881,7 @@ export default function FinanceiroPage() {
                     </div>
                     <div>
                       <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Valor*</label>
-                      <input type="number" step="0.01" value={newBoleto.amount} onChange={e => setNewBoleto(p => ({ ...p, amount: e.target.value }))}
+                      <MoneyInput step="0.01" value={newBoleto.amount} onChange={e => setNewBoleto(p => ({ ...p, amount: e.target.value }))}
                         className="input-field py-2.5 text-sm" placeholder="0,00" />
                     </div>
                     <div>
@@ -1081,7 +1082,7 @@ export default function FinanceiroPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Valor*</label>
-                <input type="number" step="0.01" value={editExpenseForm.amount} onChange={e => setEditExpenseForm(p => ({ ...p, amount: e.target.value }))}
+                <MoneyInput step="0.01" value={editExpenseForm.amount} onChange={e => setEditExpenseForm(p => ({ ...p, amount: e.target.value }))}
                   className="input-field py-2.5 text-sm" />
               </div>
               <div>
@@ -1147,7 +1148,7 @@ export default function FinanceiroPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Valor*</label>
-                <input type="number" step="0.01" value={editCashEntryForm.amount} onChange={e => setEditCashEntryForm(p => ({ ...p, amount: e.target.value }))}
+                <MoneyInput step="0.01" value={editCashEntryForm.amount} onChange={e => setEditCashEntryForm(p => ({ ...p, amount: e.target.value }))}
                   className="input-field py-2.5 text-sm" />
               </div>
               <div>

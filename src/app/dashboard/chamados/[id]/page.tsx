@@ -1,5 +1,6 @@
 'use client'
 
+import MoneyInput from '@/components/MoneyInput'
 import { useEffect, useState, useRef } from 'react'
 import { ArrowLeft, Phone, CheckCircle, XCircle, Clock, Edit, DollarSign, User, FileText, Wrench, Paperclip, Upload, Trash2, Download, Printer, ClipboardList, Navigation, Copy, Check, MoreVertical, CalendarClock, Wallet, RotateCcw } from 'lucide-react'
 import Link from 'next/link'
@@ -730,7 +731,7 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
               <div className="flex flex-wrap items-end gap-2">
                 <div>
                   <label className="block text-xs font-medium text-amber-800 mb-1">Valor líquido que caiu (R$)</label>
-                  <input type="number" min="0" step="0.01" value={cardNet} onChange={e => setCardNet(e.target.value)}
+                  <MoneyInput min="0" step="0.01" value={cardNet} onChange={e => setCardNet(e.target.value)}
                     className="w-40 px-3 py-2 border border-amber-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400" />
                 </div>
                 <button onClick={() => confirmCard(so)} disabled={confirmingCard}

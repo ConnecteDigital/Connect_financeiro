@@ -1,5 +1,6 @@
 'use client'
 
+import MoneyInput from '@/components/MoneyInput'
 import { useEffect, useRef } from 'react'
 import { Plus, Trash2, AlertTriangle } from 'lucide-react'
 import { PAYMENT_METHOD_OPTIONS, PaymentLine, cardGross, paymentsSum } from '@/lib/payments'
@@ -64,7 +65,7 @@ export default function PaymentLinesEditor({ lines, onChange, total, showNet = f
           <div className="flex flex-wrap gap-3 items-end">
             <div className="w-36">
               <label className="block text-xs font-medium text-slate-600 mb-1">Valor (R$)</label>
-              <input type="number" min="0" step="0.01" value={l.amount || ''}
+              <MoneyInput min="0" step="0.01" value={l.amount || ''}
                 onChange={e => update(idx, { amount: Number(e.target.value) })} className={inputCls} />
             </div>
             {l.method === 'Cartão' && (
@@ -112,7 +113,7 @@ export default function PaymentLinesEditor({ lines, onChange, total, showNet = f
         <div className="p-3 rounded-lg border border-orange-100 bg-orange-50/50 grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Valor líquido que caiu (cartão)</label>
-            <input type="number" min="0" step="0.01" value={netValue ?? ''}
+            <MoneyInput min="0" step="0.01" value={netValue ?? ''}
               onChange={e => setNetValue(e.target.value === '' ? null : Number(e.target.value))}
               placeholder="O que caiu na conta" className={inputCls} />
           </div>

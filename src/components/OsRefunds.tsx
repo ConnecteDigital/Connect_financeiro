@@ -1,5 +1,6 @@
 'use client'
 
+import MoneyInput from '@/components/MoneyInput'
 import { useCallback, useEffect, useState } from 'react'
 import { Undo2, Loader2, Trash2, Plus } from 'lucide-react'
 import { getOsRefunds, registerOsRefund, undoOsRefund, type OsRefund } from '@/lib/db/service-visits'
@@ -122,7 +123,7 @@ export default function OsRefunds({ so, readOnly = false, onChanged }: { so: any
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-zinc-500 mb-1.5">Valor devolvido (R$) *</label>
-              <input type="number" inputMode="decimal" min="0" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} className={input} placeholder="0,00" autoFocus />
+              <MoneyInput inputMode="decimal" min="0" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} className={input} placeholder="0,00" autoFocus />
             </div>
             <div>
               <label className="block text-xs font-medium text-zinc-500 mb-1.5">Data</label>

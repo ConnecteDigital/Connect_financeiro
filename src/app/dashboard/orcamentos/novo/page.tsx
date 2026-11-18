@@ -1,5 +1,6 @@
 'use client'
 
+import MoneyInput from '@/components/MoneyInput'
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -272,7 +273,7 @@ function NovoOrcamentoForm() {
                   className="input-field py-2 text-sm text-center" />
               </div>
               <div className="col-span-4 sm:col-span-2">
-                <input type="number" min="0" step="0.01" value={item.unit_price || ''} onChange={e => updateItem(idx, 'unit_price', Number(e.target.value))}
+                <MoneyInput min="0" step="0.01" value={item.unit_price || ''} onChange={e => updateItem(idx, 'unit_price', Number(e.target.value))}
                   className="input-field py-2 text-sm text-right" placeholder="0,00" />
               </div>
               <div className="col-span-4 sm:col-span-1 text-right">
@@ -299,12 +300,12 @@ function NovoOrcamentoForm() {
           </div>
           <div className="flex items-center justify-between gap-4">
             <label className="text-sm flex-shrink-0" style={{ color: 'var(--text-secondary)' }}>Desconto (R$)</label>
-            <input type="number" min="0" step="0.01" value={discount} onChange={e => setDiscount(e.target.value)}
+            <MoneyInput min="0" step="0.01" value={discount} onChange={e => setDiscount(e.target.value)}
               className="input-field py-2 text-sm text-right w-32" placeholder="0,00" />
           </div>
           <div className="flex items-center justify-between gap-4">
             <label className="text-sm flex-shrink-0" style={{ color: 'var(--text-secondary)' }}>Impostos (R$)</label>
-            <input type="number" min="0" step="0.01" value={taxes} onChange={e => setTaxes(e.target.value)}
+            <MoneyInput min="0" step="0.01" value={taxes} onChange={e => setTaxes(e.target.value)}
               className="input-field py-2 text-sm text-right w-32" placeholder="0,00" />
           </div>
           <div className="flex items-center justify-between py-3 px-4 rounded-2xl"

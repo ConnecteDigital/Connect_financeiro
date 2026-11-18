@@ -1,5 +1,6 @@
 'use client'
 
+import MoneyInput from '@/components/MoneyInput'
 import { APPLIANCE_BRANDS, APPLIANCE_TYPES } from '@/lib/service-config'
 
 interface Line { flatValue?: number; notes: string }
@@ -84,7 +85,7 @@ export default function RodriguesApplianceSection(props: {
             <div className="bg-white border border-orange-100 rounded-xl p-3 space-y-3">
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Valor Total do Serviço (R$)</label>
-                <input type="number" min="0" step="0.01" value={line.flatValue || ''}
+                <MoneyInput min="0" step="0.01" value={line.flatValue || ''}
                   onChange={e => props.onLineChange({ flatValue: Number(e.target.value) })}
                   className={inputCls} />
               </div>

@@ -1,5 +1,6 @@
 'use client'
 
+import MoneyInput from '@/components/MoneyInput'
 import { useEffect, useState } from 'react'
 import { ArrowLeft, Save, Loader2, Plus, Trash2 } from 'lucide-react'
 import Link from 'next/link'
@@ -321,7 +322,7 @@ export default function NovaOSPage({ params }: { params: Promise<{ id: string }>
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-slate-600 mb-1">{cfg?.priceLabel ?? 'Valor (R$)'}</label>
-                      <input type="number" min="0" step="0.01" value={l.unitPrice || ''}
+                      <MoneyInput min="0" step="0.01" value={l.unitPrice || ''}
                         onChange={e => updateLine(l.category, l.sub, { unitPrice: Number(e.target.value) })}
                         className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
                     </div>
@@ -539,17 +540,17 @@ export default function NovaOSPage({ params }: { params: Promise<{ id: string }>
         <div className="flex justify-between text-sm"><span className="text-slate-600">Subtotal (serviços)</span><span className="font-medium">R$ {subtotal.toFixed(2)}</span></div>
         <div className="flex justify-between text-sm items-center">
           <span className="text-slate-600">Locação Equip. e M.O. (R$)</span>
-          <input type="number" min="0" step="0.01" value={equipmentRentalValue || ''} onChange={e => setEquipmentRentalValue(Number(e.target.value))}
+          <MoneyInput min="0" step="0.01" value={equipmentRentalValue || ''} onChange={e => setEquipmentRentalValue(Number(e.target.value))}
             className="w-24 px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-orange-400" />
         </div>
         <div className="flex justify-between text-sm items-center">
           <span className="text-slate-600">Descontos (R$)</span>
-          <input type="number" min="0" step="0.01" value={discount || ''} onChange={e => setDiscount(Number(e.target.value))}
+          <MoneyInput min="0" step="0.01" value={discount || ''} onChange={e => setDiscount(Number(e.target.value))}
             className="w-24 px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-orange-400" />
         </div>
         <div className="flex justify-between text-sm items-center">
           <span className="text-slate-600">Impostos (R$)</span>
-          <input type="number" min="0" step="0.01" value={taxes || ''} onChange={e => setTaxes(Number(e.target.value))}
+          <MoneyInput min="0" step="0.01" value={taxes || ''} onChange={e => setTaxes(Number(e.target.value))}
             className="w-24 px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-orange-400" />
         </div>
         <div className="flex justify-between text-base font-bold border-t border-slate-100 pt-2">
@@ -606,11 +607,11 @@ export default function NovaOSPage({ params }: { params: Promise<{ id: string }>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor Pago (R$)</label>
-              <input type="number" min="0" step="0.01" value={amountPaid || ''} onChange={e => setAmountPaid(Number(e.target.value))} className={inputCls} />
+              <MoneyInput min="0" step="0.01" value={amountPaid || ''} onChange={e => setAmountPaid(Number(e.target.value))} className={inputCls} />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor Restante (R$)</label>
-              <input type="number" min="0" step="0.01" value={remainingAmount || ''} onChange={e => setRemainingAmount(Number(e.target.value))} className={inputCls} />
+              <MoneyInput min="0" step="0.01" value={remainingAmount || ''} onChange={e => setRemainingAmount(Number(e.target.value))} className={inputCls} />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Data do Restante</label>

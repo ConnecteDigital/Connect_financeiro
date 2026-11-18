@@ -1,5 +1,6 @@
 ﻿'use client'
 
+import MoneyInput from '@/components/MoneyInput'
 import { useState, useEffect } from 'react'
 import { ArrowLeft, Save } from 'lucide-react'
 import Link from 'next/link'
@@ -91,7 +92,7 @@ export default function NovaSaidaPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor (R$) *</label>
-            <input type="number" required min="0" step="0.01" value={form.amount} onChange={e => set('amount', e.target.value)}
+            <MoneyInput required min="0" step="0.01" value={form.amount} onChange={e => set('amount', e.target.value)}
               className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
           </div>
         </div>

@@ -1,5 +1,6 @@
 'use client'
 
+import MoneyInput from '@/components/MoneyInput'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -61,7 +62,7 @@ function Money({ label, icon, value, onChange, negative }: { label: string; icon
     <Row icon={icon} label={label} value={Number(value) > 0 ? `${negative ? '− ' : ''}${fmt(Number(value))}` : undefined} onAdd={open ? undefined : () => setOpen(true)}>
       {open && (
         <div className="flex items-center gap-2 mt-2">
-          <input type="number" min="0" step="0.01" autoFocus={!Number(value)} value={value || ''} onChange={e => onChange(Number(e.target.value) || 0)} className={input} placeholder="0,00" />
+          <MoneyInput min="0" step="0.01" autoFocus={!Number(value)} value={value || ''} onChange={e => onChange(Number(e.target.value) || 0)} className={input} placeholder="0,00" />
           <button type="button" onClick={() => { onChange(0); setOpen(false) }} className="p-2 text-red-400"><Trash2 className="w-4 h-4" /></button>
         </div>
       )}
@@ -273,7 +274,7 @@ function LineForm({ initial, onAdd, saveLabel, catalogToggle }: { initial?: Part
       <F label="Detalhes (opcional)"><textarea rows={2} value={details} onChange={e => setDetails(e.target.value)} className={`${input} resize-none`} /></F>
       <div className="grid grid-cols-3 gap-3">
         <F label="Unidade"><input value={unit} onChange={e => setUnit(e.target.value)} className={input} /></F>
-        <F label="Preço unitário"><input type="number" min="0" step="0.01" value={price} onChange={e => setPrice(e.target.value)} className={input} placeholder="0,00" /></F>
+        <F label="Preço unitário"><MoneyInput min="0" step="0.01" value={price} onChange={e => setPrice(e.target.value)} className={input} placeholder="0,00" /></F>
         <F label="Quantidade"><input type="number" min="0" step="any" value={qty} onChange={e => setQty(e.target.value)} className={input} /></F>
       </div>
       <div className="flex justify-between items-center bg-zinc-100 rounded-xl px-4 py-3">

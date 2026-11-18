@@ -1,5 +1,6 @@
 'use client'
 
+import MoneyInput from '@/components/MoneyInput'
 import { useEffect, useState } from 'react'
 import { ArrowLeft, Save, Loader2, CalendarDays, Plus, Trash2, Navigation, X } from 'lucide-react'
 import Link from 'next/link'
@@ -894,7 +895,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         {isRodrigues && (isScheduled || callStatus === 'pagou_somente_visita') && (
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor da Visita (R$)</label>
-            <input type="number" min="0" step="0.01" value={visitFee || ''} onChange={e => setVisitFee(Number(e.target.value))}
+            <MoneyInput min="0" step="0.01" value={visitFee || ''} onChange={e => setVisitFee(Number(e.target.value))}
               placeholder="0,00"
               className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
             {recentVisitFees.length > 0 && (
@@ -1046,7 +1047,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                     {l.flatPrice ? (
                       <div>
                         <label className="block text-xs font-medium text-slate-600 mb-1">Valor Total do Serviço (R$)</label>
-                        <input type="number" min="0" step="0.01" value={l.flatValue || ''}
+                        <MoneyInput min="0" step="0.01" value={l.flatValue || ''}
                           onChange={e => updateLine(l.category, l.sub, { flatValue: Number(e.target.value) })}
                           className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
                         {(l.flatValue ?? 0) > 0 && (
@@ -1063,7 +1064,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-slate-600 mb-1">{cfg?.priceLabel ?? 'Valor (R$)'}</label>
-                          <input type="number" min="0" step="0.01" value={l.unitPrice || ''}
+                          <MoneyInput min="0" step="0.01" value={l.unitPrice || ''}
                             onChange={e => updateLine(l.category, l.sub, { unitPrice: Number(e.target.value) })}
                             className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
                         </div>
@@ -1341,7 +1342,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
               <>
                 <div className="sm:max-w-xs">
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Material (R$)</label>
-                  <input type="number" min="0" step="0.01" value={materialCost || ''} onChange={e => setMaterialCost(Number(e.target.value))}
+                  <MoneyInput min="0" step="0.01" value={materialCost || ''} onChange={e => setMaterialCost(Number(e.target.value))}
                     className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
                 </div>
                 <div>
@@ -1361,7 +1362,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                   ].map(f => (
                     <div key={f.label}>
                       <label className="block text-sm font-medium text-slate-700 mb-1.5">{f.label}</label>
-                      <input type="number" min="0" step="0.01" value={f.val || ''} onChange={e => f.set(Number(e.target.value))}
+                      <MoneyInput min="0" step="0.01" value={f.val || ''} onChange={e => f.set(Number(e.target.value))}
                         className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
                     </div>
                   ))}
@@ -1373,7 +1374,7 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                   </label>
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-slate-500">R$</span>
-                    <input type="number" min="0" step="0.01" value={otherServiceValue || ''} onChange={e => setOtherServiceValue(Number(e.target.value))}
+                    <MoneyInput min="0" step="0.01" value={otherServiceValue || ''} onChange={e => setOtherServiceValue(Number(e.target.value))}
                       className="w-36 px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
                   </div>
                 </div>
@@ -1402,12 +1403,12 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
             <div className="flex justify-between text-sm"><span className="text-slate-600">Subtotal (serviços)</span><span className="font-medium">R$ {subtotal.toFixed(2)}</span></div>
             <div className="flex justify-between text-sm items-center">
               <span className="text-slate-600">Locação Equip. e M.O. (R$)</span>
-              <input type="number" min="0" step="0.01" value={equipmentRentalValue || ''} onChange={e => setEquipmentRentalValue(Number(e.target.value))}
+              <MoneyInput min="0" step="0.01" value={equipmentRentalValue || ''} onChange={e => setEquipmentRentalValue(Number(e.target.value))}
                 className="w-24 px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-orange-400" />
             </div>
             <div className="flex justify-between text-sm items-center">
               <span className="text-slate-600">Descontos (R$)</span>
-              <input type="number" min="0" step="0.01" value={discount || ''} onChange={e => setDiscount(Number(e.target.value))}
+              <MoneyInput min="0" step="0.01" value={discount || ''} onChange={e => setDiscount(Number(e.target.value))}
                 className="w-24 px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-orange-400" />
             </div>
             {isRodrigues && (
@@ -1437,14 +1438,14 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                 )}
                 <div className="flex justify-between text-sm items-center pt-1 border-t border-orange-100">
                   <span className="text-slate-600">Outro custo de peça não cadastrada (R$)</span>
-                  <input type="number" min="0" step="0.01" value={partsCost || ''} onChange={e => setPartsCost(Number(e.target.value))}
+                  <MoneyInput min="0" step="0.01" value={partsCost || ''} onChange={e => setPartsCost(Number(e.target.value))}
                     className="w-24 px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-orange-400" />
                 </div>
               </div>
             )}
             <div className="flex justify-between text-sm items-center">
               <span className="text-slate-600">Impostos (R$)</span>
-              <input type="number" min="0" step="0.01" value={taxes || ''} onChange={e => setTaxes(Number(e.target.value))}
+              <MoneyInput min="0" step="0.01" value={taxes || ''} onChange={e => setTaxes(Number(e.target.value))}
                 className="w-24 px-2 py-1 border border-slate-200 rounded text-sm text-right focus:outline-none focus:ring-2 focus:ring-orange-400" />
             </div>
             <div className="flex justify-between text-base font-bold border-t border-slate-100 pt-2">
@@ -1575,12 +1576,12 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor Pago (R$)</label>
-                  <input type="number" min="0" step="0.01" value={amountPaid || ''} onChange={e => setAmountPaid(Number(e.target.value))}
+                  <MoneyInput min="0" step="0.01" value={amountPaid || ''} onChange={e => setAmountPaid(Number(e.target.value))}
                     className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor Restante (R$)</label>
-                  <input type="number" min="0" step="0.01" value={remainingAmount || ''} onChange={e => setRemainingAmount(Number(e.target.value))}
+                  <MoneyInput min="0" step="0.01" value={remainingAmount || ''} onChange={e => setRemainingAmount(Number(e.target.value))}
                     className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
                 </div>
                 <div>
