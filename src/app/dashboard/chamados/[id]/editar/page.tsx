@@ -1,5 +1,7 @@
 'use client'
 
+import PartsGuaranteeEditor from '@/components/PartsGuaranteeEditor'
+import { cleanPartsGuarantee, type PartGuarantee } from '@/lib/parts-guarantee'
 import MoneyInput from '@/components/MoneyInput'
 import { useEffect, useState } from 'react'
 import { ArrowLeft, Save, Loader2, CalendarDays, Plus, Trash2, Navigation, X } from 'lucide-react'
@@ -146,6 +148,9 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
   const [hasGuarantee1y, setHasGuarantee1y] = useState(false)
   const [hasNoGuarantee, setHasNoGuarantee] = useState(false)
   const [noGuaranteeReason, setNoGuaranteeReason] = useState('')
+  // Rodrigues: garantia de cada peça trocada (além da garantia da mão de obra)
+  const [partsGuarantee, setPartsGuarantee] = useState<PartGuarantee[]>([])
+  const [hadPartsGuarantee, setHadPartsGuarantee] = useState(false)
   const [teamId, setTeamId] = useState('')
   const [teamName, setTeamName] = useState('')
   const [driver, setDriver] = useState('')
@@ -269,6 +274,8 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
         setHasGuarantee1y(so.has_guarantee_1y ?? false)
         setHasNoGuarantee(so.has_no_guarantee ?? false)
         setNoGuaranteeReason(so.no_guarantee_reason ?? '')
+        setPartsGuarantee(cleanPartsGuarantee(so.parts_guarantee))
+        setHadPartsGuarantee(cleanPartsGuarantee(so.parts_guarantee).length > 0)
         getServiceOrderParts(so.id).then((parts: any[]) => {
           const lines = parts.map(p => ({
             stock_item_id: p.stock_item_id,
@@ -665,6 +672,8 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
           has_guarantee_1y: hasGuarantee1y,
           has_no_guarantee: hasNoGuarantee,
           ...(isRodrigues ? { has_guarantee_60: hasGuarantee60, no_guarantee_reason: hasNoGuarantee ? (noGuaranteeReason.trim() || null) : null } : {}),
+          // Garantia por peça (coluna da migration_v36): só vai quando tem ou quando já tinha
+          ...(isRodrigues && (cleanPartsGuarantee(partsGuarantee).length > 0 || hadPartsGuarantee) ? { parts_guarantee: cleanPartsGuarantee(partsGuarantee) } : {}),
           equipment_rental_value: equipmentRentalValue,
           subtotal,
           discount,
@@ -1509,6 +1518,12 @@ export default function EditarChamadoPage({ params }: { params: Promise<{ id: st
                     placeholder="Por que não tem garantia? (sai na OS, em Observações)"
                     className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-400" />
                 )}
+                <div className="w-full pt-3 mt-1 border-t border-slate-100">
+                  <p className="text-sm font-medium text-slate-700">Garantia das peças <span className="font-normal text-slate-400">(opcional)</span></p>
+                  <p className="text-xs text-slate-400 mb-2">A opção acima é a garantia da mão de obra. Se alguma peça tem prazo diferente (ex.: compressor, 6 meses), coloque aqui.</p>
+                  <PartsGuaranteeEditor value={partsGuarantee} onChange={setPartsGuarantee} suggestions={stockLines.map(l => l.item_name)}
+                    inputCls="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                </div>
               </div>
             ) : (
               <div className="space-y-3">

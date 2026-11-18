@@ -1,5 +1,6 @@
 'use client'
 
+import PartsGuaranteeEditor from '@/components/PartsGuaranteeEditor'
 import { APPLIANCE_BRANDS, APPLIANCE_TYPES } from '@/lib/service-config'
 import { QuoteDetails, VISIT_PERIODS } from '@/lib/rodrigues-doc'
 
@@ -71,6 +72,14 @@ export default function RodriguesQuoteFields({ value, onChange }: {
               className={`${input} mt-2`} placeholder="Ex: 14:00" />
           )}
         </div>
+      </div>
+
+      <div className="pt-1">
+        <label className={label} style={lStyle}>Garantia das peças (opcional)</label>
+        <p className="text-xs mb-2" style={{ color: 'var(--text-tertiary)' }}>
+          A garantia do serviço fica no campo &quot;Garantia&quot; lá embaixo. Aqui vai o prazo de cada peça, ex.: compressor, 6 meses.
+        </p>
+        <PartsGuaranteeEditor value={value.parts_guarantee ?? []} onChange={v => set({ parts_guarantee: v })} inputCls={`${input} !py-2`} />
       </div>
     </div>
   )

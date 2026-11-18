@@ -1,5 +1,6 @@
 'use client'
 
+import { cleanPartsGuarantee } from '@/lib/parts-guarantee'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Lock, Navigation, CalendarClock, Wrench, CheckCircle, Printer, Edit, Paperclip, FileText } from 'lucide-react'
@@ -196,6 +197,12 @@ export default function TecnicoCallView({ call, lock, onChanged }: {
               {parts.map(p => (
                 <p key={p.id} className="text-slate-700">{p.quantity}x {p.item_name}</p>
               ))}
+            </div>
+          )}
+          {cleanPartsGuarantee(so.parts_guarantee).length > 0 && (
+            <div className="text-sm">
+              <p className="text-slate-500">Garantia das peças</p>
+              {cleanPartsGuarantee(so.parts_guarantee).map((g, i) => <p key={i} className="text-slate-700">{g.part} — {g.period}</p>)}
             </div>
           )}
           <OsRefunds so={so} readOnly />

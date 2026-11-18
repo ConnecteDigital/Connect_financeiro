@@ -2,6 +2,7 @@ import type { RodriguesDocProps } from '@/components/RodriguesDocument'
 import { docHeaderOf } from '@/lib/rodrigues-doc'
 import { paymentsFromOs } from '@/lib/payments'
 import { serviceWithoutAppliance } from '@/lib/service-config'
+import { cleanPartsGuarantee } from '@/lib/parts-guarantee'
 
 const BRL = (v: number) => `R$ ${Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
@@ -176,6 +177,7 @@ export function rodriguesOsDoc(tenant: any, call: any, so: any, kind: OsDocKind 
     discount,
     payment: conditions ? { conditions } : null,
     guarantee,
+    partsGuarantee: cleanPartsGuarantee(so.parts_guarantee),
     // Sem garantia: o motivo que o técnico escreveu sai em Observações
     extraInfo: so.has_no_guarantee ? (String(so.no_guarantee_reason ?? '').trim() || 'Serviço sem garantia.') : null,
     extraTitle: 'Observações',

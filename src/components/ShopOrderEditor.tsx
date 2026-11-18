@@ -1,5 +1,6 @@
 'use client'
 
+import { PART_PERIODS } from '@/lib/parts-guarantee'
 import MoneyInput from '@/components/MoneyInput'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
@@ -126,7 +127,7 @@ export default function ShopOrderEditor({ order }: { order?: ShopOrder | null })
         <div key={i} className="flex items-center gap-2 bg-zinc-50 rounded-xl px-3 py-2">
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium text-zinc-800 truncate">{l.description}</p>
-            <p className="text-xs text-zinc-500">{l.quantity} {l.unit || 'un.'} × {fmt(l.unit_price)}{l.details ? ` · ${l.details}` : ''}</p>
+            <p className="text-xs text-zinc-500">{l.quantity} {l.unit || 'un.'} × {fmt(l.unit_price)}{l.details ? ` · ${l.details}` : ''}{l.guarantee ? ` · garantia ${l.guarantee}` : ''}</p>
           </div>
           <span className="text-sm font-bold text-zinc-800 flex-shrink-0">{fmt(l.quantity * l.unit_price)}</span>
           <button type="button" onClick={() => removeLine(k, i)} className="p-1.5 text-red-400"><Trash2 className="w-4 h-4" /></button>
@@ -260,13 +261,14 @@ function Tabs({ value, onChange, options }: { value: string; onChange: (v: strin
   )
 }
 
-function LineForm({ initial, onAdd, saveLabel, catalogToggle }: { initial?: Partial<OrderLine>; onAdd: (l: OrderLine, saveToCatalog: boolean) => void; saveLabel: string; catalogToggle?: boolean }) {
+function LineForm({ initial, onAdd, saveLabel, catalogToggle, partGuarantee }: { initial?: Partial<OrderLine>; onAdd: (l: OrderLine, saveToCatalog: boolean) => void; saveLabel: string; catalogToggle?: boolean; partGuarantee?: boolean }) {
   const [description, setDescription] = useState(initial?.description ?? '')
   const [details, setDetails] = useState(initial?.details ?? '')
   const [unit, setUnit] = useState(initial?.unit ?? 'un.')
   const [price, setPrice] = useState(initial?.unit_price ? String(initial.unit_price) : '')
   const [qty, setQty] = useState('1')
   const [toCatalog, setToCatalog] = useState(false)
+  const [guarantee, setGuarantee] = useState(initial?.guarantee ?? '')
   const value = (Number(price) || 0) * (Number(qty) || 0)
   return (
     <>
@@ -277,6 +279,17 @@ function LineForm({ initial, onAdd, saveLabel, catalogToggle }: { initial?: Part
         <F label="Preço unitário"><MoneyInput min="0" step="0.01" value={price} onChange={e => setPrice(e.target.value)} className={input} placeholder="0,00" /></F>
         <F label="Quantidade"><input type="number" min="0" step="any" value={qty} onChange={e => setQty(e.target.value)} className={input} /></F>
       </div>
+      {partGuarantee && (
+        <F label="Garantia desta peça (opcional)">
+          <div className="flex flex-wrap gap-2">
+            {PART_PERIODS.map(p => (
+              <button key={p} type="button" onClick={() => setGuarantee(guarantee === p ? '' : p)}
+                className={`px-3 py-2 rounded-xl text-xs font-semibold border transition ${guarantee === p ? 'text-white border-transparent' : 'bg-white text-zinc-600 border-zinc-200'}`}
+                style={guarantee === p ? { background: 'var(--primary)' } : {}}>{p}</button>
+            ))}
+          </div>
+        </F>
+      )}
       <div className="flex justify-between items-center bg-zinc-100 rounded-xl px-4 py-3">
         <span className="text-sm font-medium text-zinc-600">Valor</span><span className="font-bold text-zinc-900">{fmt(value)}</span>
       </div>
@@ -287,7 +300,7 @@ function LineForm({ initial, onAdd, saveLabel, catalogToggle }: { initial?: Part
         </label>
       )}
       <button type="button" disabled={!description.trim()}
-        onClick={() => onAdd({ description: description.trim(), details: details.trim() || undefined, unit: unit.trim() || 'un.', unit_price: Number(price) || 0, quantity: Number(qty) || 1, stock_item_id: initial?.stock_item_id ?? null }, toCatalog)}
+        onClick={() => onAdd({ description: description.trim(), details: details.trim() || undefined, unit: unit.trim() || 'un.', unit_price: Number(price) || 0, quantity: Number(qty) || 1, stock_item_id: initial?.stock_item_id ?? null, ...(partGuarantee && guarantee ? { guarantee } : {}) }, toCatalog)}
         className="w-full py-3 rounded-xl text-sm font-bold text-white disabled:opacity-50" style={{ background: 'var(--primary)' }}>{saveLabel}</button>
     </>
   )
@@ -346,7 +359,7 @@ function PartModal({ onClose, onAdd }: { onClose: () => void; onAdd: (l: OrderLi
     <Sheet title="Adicionar peça ao pedido" onClose={onClose}>
       <Tabs value={tab} onChange={t => { setTab(t); setPicked(null) }} options={[['estoque', 'Do estoque', Package], ['novo', 'Outra peça', Plus]]} />
       {tab === 'novo' || picked ? (
-        <LineForm key={picked?.id ?? 'novo'} saveLabel="Adicionar essa peça"
+        <LineForm key={picked?.id ?? 'novo'} saveLabel="Adicionar essa peça" partGuarantee
           initial={picked ? { description: [picked.name, picked.brand, picked.model].filter(Boolean).join(' '), unit: 'un.', unit_price: picked.sale_value || picked.unit_value, stock_item_id: picked.id } : undefined}
           onAdd={l => onAdd(l)} />
       ) : (

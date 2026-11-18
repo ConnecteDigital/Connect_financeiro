@@ -5,7 +5,7 @@ import { getMyTenantId } from '@/lib/db/tenant'
 // entrou pra orçamento/conserto. Vira Orçamento, Ordem de serviço ou
 // Laudo técnico na hora de gerar o documento.
 
-export interface OrderLine { description: string; details?: string; unit?: string; unit_price: number; quantity: number; stock_item_id?: string | null }
+export interface OrderLine { description: string; details?: string; unit?: string; unit_price: number; quantity: number; stock_item_id?: string | null; guarantee?: string /* garantia desta peça, ex.: "6 meses" */ }
 
 export interface ShopOrder {
   id: string

@@ -128,6 +128,7 @@ export default function PedidoPage({ params }: { params: Promise<{ id: string }>
             <div className="min-w-0">
               <p className="text-zinc-800">{l.quantity} {l.unit || 'un.'} · {l.description}</p>
               {l.details && <p className="text-xs text-zinc-500">{l.details}</p>}
+              {l.guarantee && <p className="text-xs font-medium text-emerald-700">Garantia da peça: {l.guarantee}</p>}
             </div>
             <span className="font-semibold text-zinc-800 flex-shrink-0">{fmt(l.quantity * l.unit_price)}</span>
           </div>

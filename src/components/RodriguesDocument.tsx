@@ -35,6 +35,7 @@ export interface RodriguesDocProps {
   discount?: number
   payment?: { methods?: string; pix?: string; conditions?: string | null } | null
   guarantee?: string | null
+  partsGuarantee?: { part: string; period: string }[]   // garantia de cada peça
   extraInfo?: string | null
   extraTitle?: string
   photos?: string[]        // fotos do aparelho/etiqueta anexadas ao chamado
@@ -246,9 +247,12 @@ export default function RodriguesDocument(p: RodriguesDocProps) {
       )}
 
       {/* ── Garantia ── */}
-      {p.guarantee && (
+      {(p.guarantee || (p.partsGuarantee?.length ?? 0) > 0) && (
         <Section title="Garantia">
-          <Field label="Período de garantia" value={p.guarantee} />
+          {p.guarantee && <Field label={p.partsGuarantee?.length ? 'Garantia da mão de obra' : 'Período de garantia'} value={p.guarantee} />}
+          {(p.partsGuarantee?.length ?? 0) > 0 && (
+            <Field label="Garantia das peças" value={<>{p.partsGuarantee!.map((g, i) => <div key={i}>{g.part} — {g.period}</div>)}</>} />
+          )}
         </Section>
       )}
 

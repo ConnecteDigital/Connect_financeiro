@@ -40,6 +40,7 @@ export interface QuoteDetails {
   visit_date?: string
   visit_period?: string
   payment_conditions?: string
+  parts_guarantee?: { part: string; period: string }[]   // garantia de cada peça
 }
 
 export const VISIT_PERIODS = ['Manhã (08:00 - 12:00)', 'Tarde (12:00 - 18:00)', 'Noite (19:00 - 22:00)']

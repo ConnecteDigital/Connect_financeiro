@@ -1,5 +1,7 @@
 'use client'
 
+import PartsGuaranteeEditor from '@/components/PartsGuaranteeEditor'
+import { cleanPartsGuarantee, type PartGuarantee } from '@/lib/parts-guarantee'
 import MoneyInput from '@/components/MoneyInput'
 import { use, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
@@ -45,6 +47,8 @@ export default function FinalizarServicoPage({ params }: { params: Promise<{ id:
   const [observations, setObservations] = useState('')
   const [guarantee, setGuarantee] = useState<GuaranteeKey | ''>('90')
   const [noGuaranteeReason, setNoGuaranteeReason] = useState('')
+  // Garantia de cada peça trocada (além da garantia da mão de obra)
+  const [partsGuarantee, setPartsGuarantee] = useState<PartGuarantee[]>([])
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
   const cameraRef = useRef<HTMLInputElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -71,6 +75,7 @@ export default function FinalizarServicoPage({ params }: { params: Promise<{ id:
         setObservations(existing.observations ?? '')
         setGuarantee(guaranteeFromOs(existing) || '90')
         setNoGuaranteeReason(existing.no_guarantee_reason ?? '')
+        setPartsGuarantee(cleanPartsGuarantee(existing.parts_guarantee))
         setUberCost(Number(existing.uber_cost ?? 0))
         const parts = await getServiceOrderParts(existing.id)
         const lines = parts.map((p: any) => ({
@@ -145,6 +150,8 @@ export default function FinalizarServicoPage({ params }: { params: Promise<{ id:
         card_net_value: keepConfirmed ? so.card_net_value : null,
         observations: observations || null,
         ...(withGuarantee ? guaranteeFields(guarantee, noGuaranteeReason) : {}),
+        // Garantia por peça (coluna da migration_v36): só vai quando tem ou quando já tinha
+        ...(cleanPartsGuarantee(partsGuarantee).length > 0 || cleanPartsGuarantee(so?.parts_guarantee).length > 0 ? { parts_guarantee: withGuarantee ? cleanPartsGuarantee(partsGuarantee) : [] } : {}),
         // Só manda a coluna nova quando é usada (ela vem da migration_v34)
         ...(isReturn && (returnService > 0 || Number(so?.return_service_value ?? 0) > 0) ? { return_service_value: returnService || 0 } : {}),
         payment_status: cardPending ? 'pendente' : 'pago',
@@ -190,7 +197,7 @@ export default function FinalizarServicoPage({ params }: { params: Promise<{ id:
       router.push(`/dashboard/chamados/${id}`)
     } catch (e: any) {
       console.error(e)
-      setError(/return_service_value/.test(e?.message ?? '') ? 'Pra cobrar serviço no retorno, rode a migration_v34.sql no Supabase.' : e?.message ? `Erro ao salvar: ${e.message}` : 'Erro ao salvar. Tente novamente.')
+      setError(/parts_guarantee/.test(e?.message ?? '') ? 'Pra salvar a garantia das peças, rode a migration_v36.sql no Supabase.' : /return_service_value/.test(e?.message ?? '') ? 'Pra cobrar serviço no retorno, rode a migration_v34.sql no Supabase.' : e?.message ? `Erro ao salvar: ${e.message}` : 'Erro ao salvar. Tente novamente.')
       setSaving(false)
     }
   }
@@ -312,6 +319,15 @@ export default function FinalizarServicoPage({ params }: { params: Promise<{ id:
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">Garantia *</label>
             <GuaranteePicker value={guarantee} onChange={setGuarantee} reason={noGuaranteeReason} onReason={setNoGuaranteeReason} inputCls={inputCls} />
+            <p className="text-xs text-slate-400 mt-1.5">Essa é a garantia da mão de obra.</p>
+          </div>
+        )}
+
+        {withGuarantee && (
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Garantia das peças <span className="font-normal text-slate-400">(opcional)</span></label>
+            <p className="text-xs text-slate-400 mb-2">Se alguma peça tem garantia diferente (ex.: compressor, 6 meses), coloque aqui. Sai na OS e no certificado.</p>
+            <PartsGuaranteeEditor value={partsGuarantee} onChange={setPartsGuarantee} suggestions={stockLines.map(l => l.item_name)} inputCls={inputCls} />
           </div>
         )}
 

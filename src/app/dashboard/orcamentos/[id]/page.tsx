@@ -1,5 +1,6 @@
 'use client'
 
+import { cleanPartsGuarantee } from '@/lib/parts-guarantee'
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -93,6 +94,7 @@ function rodriguesQuoteDoc(q: Quote, tenant: Tenant | null): RodriguesDocProps {
     discount: Number(q.discount || 0),
     payment: { methods: header.payment_methods, pix: header.pix, conditions: d.payment_conditions },
     guarantee: q.guarantee,
+    partsGuarantee: cleanPartsGuarantee(d.parts_guarantee),
     extraInfo: [q.service_description, q.notes].filter(Boolean).join('\n\n') || null,
     signatures: [header.name],
   }

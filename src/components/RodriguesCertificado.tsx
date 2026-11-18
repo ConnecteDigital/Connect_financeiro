@@ -1,5 +1,6 @@
 'use client'
 
+import { cleanPartsGuarantee, partGuaranteeLine } from '@/lib/parts-guarantee'
 import { Phone, MapPin } from 'lucide-react'
 import { formatAddress } from '@/lib/address'
 import type { Tenant } from '@/lib/tenant-context'
@@ -96,10 +97,14 @@ export default function RodriguesCertificado({
   // Garantia → caixas do papel
   const noGuarantee = !!so.has_no_guarantee
   const labor90 = !!(so.has_guarantee_90 || so.has_guarantee_6m || so.has_guarantee_1y)
-  const partsExtra = !!(so.has_guarantee_6m || so.has_guarantee_1y)
-  const partsExtraLabel = so.has_guarantee_1y
-    ? 'Garantia adicional sobre peças 1 ano'
-    : 'Garantia adicional sobre peças 6 meses'
+  // Garantia por peça lançada no serviço (ex.: Compressor — 6 meses)
+  const partsList = cleanPartsGuarantee(so.parts_guarantee)
+  const partsExtra = partsList.length > 0 || !!(so.has_guarantee_6m || so.has_guarantee_1y)
+  const partsExtraLabel = partsList.length > 0
+    ? `Garantia sobre peças: ${partsList.map(partGuaranteeLine).join('; ')}`
+    : so.has_guarantee_1y
+      ? 'Garantia adicional sobre peças 1 ano'
+      : 'Garantia adicional sobre peças 6 meses'
 
   const cell: React.CSSProperties = { border: LINE, padding: '3px 6px', fontSize: 11, height: 22 }
 

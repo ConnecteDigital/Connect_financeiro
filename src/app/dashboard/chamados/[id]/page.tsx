@@ -1,5 +1,6 @@
 'use client'
 
+import { cleanPartsGuarantee } from '@/lib/parts-guarantee'
 import MoneyInput from '@/components/MoneyInput'
 import { useEffect, useState, useRef } from 'react'
 import { ArrowLeft, Phone, CheckCircle, XCircle, Clock, Edit, DollarSign, User, FileText, Wrench, Paperclip, Upload, Trash2, Download, Printer, ClipboardList, Navigation, Copy, Check, MoreVertical, CalendarClock, Wallet, RotateCcw } from 'lucide-react'
@@ -653,6 +654,18 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
                 <span className="text-blue-600">{fmt(so.total_value)}</span>
               </div>
             </div>
+
+            {/* Garantia por peça (Rodrigues) */}
+            {isRodrigues && cleanPartsGuarantee(so.parts_guarantee).length > 0 && (
+              <div className="border-t border-slate-100 pt-4 mt-4">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Garantia das peças</p>
+                <div className="space-y-1 text-sm">
+                  {cleanPartsGuarantee(so.parts_guarantee).map((g, i) => (
+                    <div key={i} className="flex justify-between gap-3"><span className="text-slate-700">{g.part}</span><span className="font-medium text-slate-800">{g.period}</span></div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Custos lançados pelo técnico (Rodrigues) */}
             {isRodrigues && (Number(so.parts_cost) > 0 || Number(so.uber_cost) > 0) && (

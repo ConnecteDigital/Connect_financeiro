@@ -69,6 +69,7 @@ export default function ShopOrderDocument({ order, tenant, photos, onClose, init
       discount: order.discount,
       payment: { methods: order.payment_methods.join(', ') || undefined, pix: order.payment_methods.includes('PIX') ? header.pix : undefined, conditions: order.payment_conditions },
       guarantee: order.guarantee,
+      partsGuarantee: order.parts.filter(s => s.guarantee).map(s => ({ part: s.description, period: s.guarantee! })),
       extraInfo: kind !== 'laudo' ? order.observations : null,
       extraTitle: 'Observações',
       photos: withPhotos ? photos : [],
