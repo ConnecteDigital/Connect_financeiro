@@ -40,6 +40,7 @@ export interface RodriguesDocProps {
   extraTitle?: string
   photos?: string[]        // fotos do aparelho/etiqueta anexadas ao chamado
   signatures: string[]
+  clientSignature?: string | null   // assinatura do cliente (imagem), na 2ª linha de assinatura
 }
 
 const BRL = (v: number) => `R$ ${Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -265,12 +266,20 @@ export default function RodriguesDocument(p: RodriguesDocProps) {
 
       {/* ── Local, data e assinaturas ── */}
       <div style={{ textAlign: 'center', fontSize: 12, fontWeight: 700, marginTop: 14 }}>{h.city}, {p.date}</div>
-      <div style={{ display: 'flex', justifyContent: 'center', gap: 110, marginTop: 50 }}>
-        {p.signatures.map(s => (
-          <div key={s} style={{ width: p.signatures.length > 1 ? 240 : 320, borderTop: '1px solid #111', paddingTop: 2, textAlign: 'center', fontSize: 12, fontWeight: 700 }}>
-            {s}
-          </div>
-        ))}
+      <div style={{ display: 'flex', justifyContent: 'center', gap: 110, marginTop: 6 }}>
+        {p.signatures.map((s, i) => {
+          // 1ª linha: a empresa (já vem assinada, se tiver assinatura nas configurações); 2ª: o cliente
+          const img = i === 0 ? h.signature : i === 1 ? p.clientSignature : null
+          return (
+            <div key={s} style={{ width: p.signatures.length > 1 ? 240 : 320, textAlign: 'center' }}>
+              <div style={{ height: 46, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {img && <img src={img} alt="" style={{ maxHeight: 46, maxWidth: '92%', objectFit: 'contain', marginBottom: -3 }} />}
+              </div>
+              <div style={{ borderTop: '1px solid #111', paddingTop: 2, fontSize: 12, fontWeight: 700 }}>{s}</div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )

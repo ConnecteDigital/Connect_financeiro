@@ -11,6 +11,7 @@ export interface DocHeader {
   city: string
   pix: string
   payment_methods: string
+  signature?: string | null   // assinatura da empresa (imagem), já impressa nos documentos
 }
 
 export const RODRIGUES_DOC_HEADER: DocHeader = {
@@ -27,7 +28,9 @@ export const RODRIGUES_DOC_HEADER: DocHeader = {
 
 export function docHeaderOf(tenant: { call_form_config?: any } | null | undefined): DocHeader {
   const o = tenant?.call_form_config?.document_header ?? {}
-  return { ...RODRIGUES_DOC_HEADER, ...o }
+  // Assinatura da empresa: desenhada uma vez em Configurações; sai em todo documento
+  const signature = tenant?.call_form_config?.document_signature?.image ?? null
+  return { ...RODRIGUES_DOC_HEADER, ...o, signature }
 }
 
 // Campos extras do orçamento da Rodrigues (quotes.details)

@@ -54,13 +54,14 @@ function FieldLine({ label, value, width }: { label: string; value: string; widt
 }
 
 export default function RodriguesCertificado({
-  tenant, call, so, parts, tecnicoName,
+  tenant, call, so, parts, tecnicoName, clientSignature,
 }: {
   tenant: Tenant | null
   call: any
   so: any
   parts: any[]
   tecnicoName: string
+  clientSignature?: string | null
 }) {
   const client = call.client
   const clientName = client?.name ?? call.contact_name ?? ''
@@ -239,9 +240,13 @@ export default function RodriguesCertificado({
       </p>
 
       {/* ── Assinaturas ── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 60, marginTop: 34, padding: '0 6px' }}>
-        {[{ label: 'Cliente', name: clientName }, { label: 'Técnico', name: tecnicoName }].map(s => (
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 60, marginTop: 4, padding: '0 6px' }}>
+        {[{ label: 'Cliente', name: clientName, img: clientSignature }, { label: 'Técnico', name: tecnicoName, img: null }].map(s => (
           <div key={s.label} style={{ flex: 1, textAlign: 'center' }}>
+            <div style={{ height: 34, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              {s.img && <img src={s.img} alt="" style={{ maxHeight: 34, maxWidth: '90%', objectFit: 'contain', marginBottom: -2 }} />}
+            </div>
             <div style={{ borderTop: LINE, paddingTop: 2, fontWeight: 700, fontSize: 11 }}>{s.label}</div>
             {s.name && <div style={{ fontSize: 9, color: '#444', marginTop: 1 }}>{s.name}</div>}
           </div>

@@ -1,5 +1,7 @@
 'use client'
 
+import SignaturePad from '@/components/SignaturePad'
+import { getOsSignature, saveOsSignature, deleteOsSignature, type OsSignature } from '@/lib/db/signatures'
 import { useEffect, useState, useRef } from 'react'
 import { use } from 'react'
 import Link from 'next/link'
@@ -12,7 +14,7 @@ import RodriguesDocument, { DOC_WIDTH } from '@/components/RodriguesDocument'
 import ScaledSheet from '@/components/ScaledSheet'
 import { rodriguesOsDoc, OS_DOC_KINDS } from '@/lib/rodrigues-os-doc'
 import { useSheetShare } from '@/lib/use-sheet-share'
-import { ArrowLeft, Share2, Loader2, FileImage, FileText } from 'lucide-react'
+import { ArrowLeft, Share2, Loader2, FileImage, FileText, PenLine, CheckCircle2 } from 'lucide-react'
 
 const BRL = (v: number | string) =>
   `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
@@ -54,9 +56,38 @@ function ImprimirContent({ id }: { id: string }) {
     return () => { alive = false }
   }, [id, isRodrigues])
   const osNum = call?.service_orders?.[0]?.os_number ?? 'OS'
+  // Rodrigues: assinatura do cliente (feita com o dedo, na hora) — sai na OS e no certificado
+  const soId: string | undefined = call?.service_orders?.[0]?.id
+  const [signature, setSignature] = useState<OsSignature | null>(null)
+  const [signing, setSigning] = useState(false)
+  const [signError, setSignError] = useState('')
+  useEffect(() => {
+    if (!isRodrigues || !soId) return
+    getOsSignature(soId).then(sig => {
+      setSignature(sig)
+      // Veio do botão "Assinatura do cliente" do chamado: já abre pra assinar
+      if (!sig && new URLSearchParams(window.location.search).get('assinar') === '1') setSigning(true)
+    })
+  }, [isRodrigues, soId])
+  async function saveSignature(png: string) {
+    if (!soId || !tenant?.id) return
+    setSignError('')
+    try {
+      setSignature(await saveOsSignature(soId, tenant.id, png))
+      setSigning(false)
+    } catch (e: any) {
+      console.error(e)
+      setSigning(false)
+      setSignError(/os_signatures|schema cache/i.test(e?.message ?? '') ? 'Pra salvar a assinatura, rode a migration_v37.sql no Supabase.' : `Não foi possível salvar a assinatura.${e?.message ? ` (${e.message})` : ''}`)
+    }
+  }
+  async function removeSignature() {
+    if (!soId || !confirm('Remover a assinatura do cliente desta OS?')) return
+    try { await deleteOsSignature(soId); setSignature(null) } catch (e) { console.error(e); alert('Não foi possível remover.') }
+  }
   const osShare = useSheetShare(docRef,
     `${docKind === 'os' ? 'OS' : docKind === 'orcamento' ? 'Orcamento' : 'Laudo'}-${osNum}`.replace(/[^a-zA-Z0-9._-]+/g, '_'), `${kindLabel} ${osNum}`,
-    JSON.stringify([call?.id, call?.service_orders?.[0]?.updated_at ?? call?.service_orders?.[0]?.total_value, tenant?.id, photos.length, docKind]),
+    JSON.stringify([call?.id, call?.service_orders?.[0]?.updated_at ?? call?.service_orders?.[0]?.total_value, tenant?.id, photos.length, docKind, signature?.signed_at ?? '']),
     isRodrigues && isSheet && !!call?.service_orders?.[0])
 
   useEffect(() => {
@@ -210,13 +241,41 @@ function ImprimirContent({ id }: { id: string }) {
         </div>
       )}
 
+      {/* Assinatura do cliente: aparece na Ordem de serviço e no Certificado */}
+      {isRodrigues && (docKind === 'os' || docKind === 'certificado') && (
+        <div className="print:hidden max-w-3xl mx-auto px-3 pb-3">
+          {signature ? (
+            <div className="flex items-center justify-between gap-3 rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-2.5">
+              <p className="text-sm font-semibold text-emerald-800 flex items-center gap-2 min-w-0">
+                <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+                <span className="truncate">Assinado pelo cliente · {new Date(signature.signed_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+              </p>
+              <div className="flex items-center gap-3 flex-shrink-0 text-xs font-semibold">
+                <button type="button" onClick={() => setSigning(true)} className="text-emerald-800 underline">Refazer</button>
+                <button type="button" onClick={removeSignature} className="text-red-600 underline">Remover</button>
+              </div>
+            </div>
+          ) : (
+            <button type="button" onClick={() => setSigning(true)}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white shadow-sm" style={{ background: 'var(--primary)' }}>
+              <PenLine className="w-4 h-4" /> Cliente assinar
+            </button>
+          )}
+          {signError && <p className="text-sm text-red-600 mt-2">{signError}</p>}
+        </div>
+      )}
+      {signing && (
+        <SignaturePad title="Assinatura do cliente" onClose={() => setSigning(false)} onSave={saveSignature}
+          subtitle={undefined} />
+      )}
+
       {isRodrigues && docKind !== 'certificado' ? (
         <>
           <div className="max-w-3xl mx-auto px-3">
-            <ScaledSheet width={DOC_WIDTH}><RodriguesDocument {...rodriguesOsDoc(tenant, call, so, docKind)} photos={photos} /></ScaledSheet>
+            <ScaledSheet width={DOC_WIDTH}><RodriguesDocument {...rodriguesOsDoc(tenant, call, so, docKind)} photos={photos} clientSignature={signature?.image} /></ScaledSheet>
           </div>
           <div style={{ position: 'fixed', left: -10000, top: 0 }} aria-hidden>
-            <div ref={docRef}><RodriguesDocument {...rodriguesOsDoc(tenant, call, so, docKind)} photos={photos} /></div>
+            <div ref={docRef}><RodriguesDocument {...rodriguesOsDoc(tenant, call, so, docKind)} photos={photos} clientSignature={signature?.image} /></div>
           </div>
         </>
       ) : (
@@ -227,7 +286,7 @@ function ImprimirContent({ id }: { id: string }) {
         style={{ maxWidth: 720, fontFamily: 'Arial, sans-serif', fontSize: 11, color: '#000', padding: 16 }}
       >
         {isRodrigues ? (
-          <RodriguesCertificado tenant={tenant} call={call} so={so} parts={parts} tecnicoName={tecnicoName} />
+          <RodriguesCertificado tenant={tenant} call={call} so={so} parts={parts} tecnicoName={tecnicoName} clientSignature={signature?.image} />
         ) : (<>
         {/* ── Header ── */}
         <div style={{ display: 'flex', border: B, marginBottom: 0 }}>

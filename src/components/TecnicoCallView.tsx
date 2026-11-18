@@ -3,7 +3,7 @@
 import { cleanPartsGuarantee } from '@/lib/parts-guarantee'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Lock, Navigation, CalendarClock, Wrench, CheckCircle, Printer, Edit, Paperclip, FileText } from 'lucide-react'
+import { ArrowLeft, Lock, Navigation, CalendarClock, Wrench, CheckCircle, Printer, Edit, Paperclip, FileText, PenLine } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import PhotoGallery from '@/components/PhotoGallery'
 import ChangeOutcome from '@/components/ChangeOutcome'
@@ -212,7 +212,11 @@ export default function TecnicoCallView({ call, lock, onChanged }: {
               <p className="text-slate-700 whitespace-pre-line">{so.observations}</p>
             </div>
           )}
-          <div className="grid grid-cols-2 gap-2 pt-1">
+          <Link href={`/dashboard/chamados/${call.id}/imprimir?assinar=1`}
+            className="flex items-center justify-center gap-1.5 py-3 rounded-lg text-sm font-bold text-white" style={{ background: 'var(--primary)' }}>
+            <PenLine className="w-4 h-4" /> Assinatura do cliente
+          </Link>
+          <div className="grid grid-cols-2 gap-2">
             <Link href={`/dashboard/chamados/${call.id}/finalizar`}
               className="flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-semibold border border-slate-200 text-slate-600 hover:bg-slate-50 transition">
               <Edit className="w-4 h-4" /> Corrigir

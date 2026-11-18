@@ -11,6 +11,7 @@ import RodriguesCommissionSettings from '@/components/RodriguesCommissionSetting
 import ChannelSettings from '@/components/ChannelSettings'
 import { isLojaMode } from '@/lib/loja'
 import AccountAccessCard from '@/components/AccountAccessCard'
+import DocumentSignatureSettings from '@/components/DocumentSignatureSettings'
 
 const ORIGIN_PRESETS = [
   'Indicação', 'WhatsApp', 'Site', 'Instagram',
@@ -416,6 +417,7 @@ export default function ConfiguracoesPage() {
 
       {/* Rodrigues (gestor e loja): trocar senha e sair, direto nas configurações */}
       {(lojaMode || tenant?.call_form_config?.rodrigues_custom === true) && <AccountAccessCard />}
+      {(lojaMode || tenant?.call_form_config?.rodrigues_custom === true) && <DocumentSignatureSettings />}
 
       {/* Conta Loja: só Dados da Empresa e Identidade Visual */}
       {!lojaMode && (<>
