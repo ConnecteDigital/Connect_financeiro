@@ -42,7 +42,39 @@ export interface ShopOrder {
   cash_entry_id: string | null
   stock_applied: boolean
   created_at: string
+  // Venda / revenda (migration_v38)
+  kind: OrderKind
+  client_cpf: string | null
+  owner_name: string | null      // revenda: dono do produto
+  owner_phone: string | null
+  owner_amount: number           // revenda: quanto repassar pro dono
+  card_fee_pct: number           // taxa da maquininha (%)
+  sale_received: boolean         // o dinheiro da venda já entrou
 }
+
+// servico = conserto/orçamento · venda = produto da loja · revenda = produto de um cliente vendido pela loja
+export type OrderKind = 'servico' | 'venda' | 'revenda'
+export const isSale = (o: { kind?: string | null }) => o.kind === 'venda' || o.kind === 'revenda'
+export const orderTitle = (o: { kind?: string | null }) => o.kind === 'venda' ? 'Venda' : o.kind === 'revenda' ? 'Revenda' : 'Pedido'
+// Situação com o nome certo pra venda ("Entregue" vira "Vendido")
+export function statusLabelOf(o: { kind?: string | null; status: string }) {
+  if (isSale(o)) return o.status === 'cancelado' ? 'Cancelada' : o.status === 'garantia' ? 'Garantia' : 'Vendido'
+  return statusOf(o.status).label
+}
+export const SALE_STATUSES = [
+  { value: 'enviado', label: 'Vendido', dot: 'bg-teal-500' },
+  { value: 'garantia', label: 'Garantia', dot: 'bg-violet-500' },
+  { value: 'cancelado', label: 'Cancelada', dot: 'bg-zinc-400' },
+]
+const SALE_FIELDS = ['kind', 'client_cpf', 'owner_name', 'owner_phone', 'owner_amount', 'card_fee_pct', 'sale_received'] as const
+// Pedido de serviço não manda os campos de venda (assim salva mesmo se a v38 ainda não rodou)
+function forDb<T extends Record<string, any>>(values: T): T {
+  if (isSale(values as any)) return values
+  const out: Record<string, any> = { ...values }
+  for (const f of SALE_FIELDS) delete out[f]
+  return out as T
+}
+export const cardFeeOf = (o: Pick<ShopOrder, 'total' | 'card_fee_pct'>) => Math.round(Number(o.total || 0) * Number(o.card_fee_pct || 0)) / 100
 
 export type ShopOrderInput = Omit<ShopOrder, 'id' | 'seq' | 'year' | 'cash_entry_id' | 'stock_applied' | 'created_at'>
 
@@ -86,6 +118,9 @@ const norm = (o: any): ShopOrder => ({
   payment_methods: Array.isArray(o.payment_methods) ? o.payment_methods : [],
   discount: Number(o.discount || 0), delivery_fee: Number(o.delivery_fee || 0), freight: Number(o.freight || 0),
   other_fees: Number(o.other_fees || 0), total: Number(o.total || 0),
+  kind: o.kind === 'venda' || o.kind === 'revenda' ? o.kind : 'servico',
+  client_cpf: o.client_cpf ?? null, owner_name: o.owner_name ?? null, owner_phone: o.owner_phone ?? null,
+  owner_amount: Number(o.owner_amount || 0), card_fee_pct: Number(o.card_fee_pct || 0), sale_received: o.sale_received !== false,
 })
 
 export async function getShopOrders(): Promise<ShopOrder[]> {
@@ -111,7 +146,7 @@ export async function createShopOrder(values: ShopOrderInput): Promise<ShopOrder
       .order('seq', { ascending: false }).limit(1).maybeSingle()
     const seq = (last?.seq ?? 0) + 1
     const { data, error } = await supabase.from('shop_orders')
-      .insert({ ...values, total: orderTotal(values), tenant_id, year, seq }).select().single()
+      .insert({ ...forDb(values), total: orderTotal(values), tenant_id, year, seq }).select().single()
     if (!error) return norm(data)
     if (error.code !== '23505') throw error
   }
@@ -119,7 +154,7 @@ export async function createShopOrder(values: ShopOrderInput): Promise<ShopOrder
 }
 
 export async function updateShopOrder(id: string, values: Partial<ShopOrderInput>) {
-  const patch: Record<string, unknown> = { ...values, updated_at: new Date().toISOString() }
+  const patch: Record<string, unknown> = { ...forDb(values), updated_at: new Date().toISOString() }
   if (values.services && values.parts) patch.total = orderTotal(values as ShopOrderInput)
   const { error } = await createClient().from('shop_orders').update(patch).eq('id', id)
   if (error) throw error
@@ -169,6 +204,103 @@ export async function applyOrderStock(order: ShopOrder, apply: boolean) {
     await supabase.from('stock_items').update({ quantity: next }).eq('id', p.stock_item_id)
   }
   await supabase.from('shop_orders').update({ stock_applied: apply }).eq('id', order.id)
+}
+
+// ── Venda / revenda ─────────────────────────────────────────────────
+// A venda já nasce concluída: o produto sai do estoque e o dinheiro entra
+// no caixa como VENDA (não como serviço). No cartão, a taxa da maquininha
+// vira uma saída; na revenda, o valor do dono vira uma saída a pagar.
+
+const saleProducts = (o: ShopOrder) => o.parts.map(p => `${p.quantity}x ${p.description}`).join(', ')
+
+async function postSaleMoney(order: ShopOrder) {
+  const supabase = createClient()
+  const tenant_id = await getMyTenantId()
+  const method = order.payment_methods[0] ?? ''
+  const tag = `pedido:${order.id}`
+  const num = orderNumber(order)
+  const paid = order.sale_received
+  const { data, error } = await supabase.from('cash_entries').insert({
+    tenant_id,
+    description: `${orderTitle(order)} ${num} — ${order.client_name}${order.parts.length ? ` (${saleProducts(order)})` : ''}`.slice(0, 240),
+    amount: order.total,
+    direction: 'entrada',
+    entry_type: 'venda',
+    status: paid ? 'pago' : 'pendente',
+    due_date: order.date,
+    paid_date: paid ? order.date : null,
+    notes: [method ? `Pagamento: ${method}` : '', tag].filter(Boolean).join(' · '),
+  }).select('id').single()
+  if (error) throw error
+  await supabase.from('shop_orders').update({ cash_entry_id: data.id }).eq('id', order.id)
+
+  const fee = cardFeeOf(order)
+  if (fee > 0) {
+    const { error: e2 } = await supabase.from('expenses').insert({
+      tenant_id, description: `Taxa da maquininha — ${orderTitle(order).toLowerCase()} ${num} (${order.card_fee_pct}%)`, category: 'Taxa Maquininha',
+      amount: fee, type: 'avulso', status: paid ? 'pago' : 'pendente', due_date: order.date, paid_date: paid ? order.date : null, notes: tag,
+    })
+    if (e2) throw e2
+  }
+  if (order.kind === 'revenda' && order.owner_amount > 0) {
+    const { error: e3 } = await supabase.from('expenses').insert({
+      tenant_id, description: `Repasse da revenda ${num} — ${order.owner_name || 'dono do produto'}`, category: 'Repasse de revenda',
+      amount: order.owner_amount, type: 'avulso', status: 'pendente', due_date: order.date, notes: tag,
+    })
+    if (e3) throw e3
+  }
+}
+
+async function clearSaleMoney(order: ShopOrder) {
+  const supabase = createClient()
+  if (order.cash_entry_id) await supabase.from('cash_entries').delete().eq('id', order.cash_entry_id)
+  await supabase.from('expenses').delete().like('notes', `%pedido:${order.id}%`)
+  await supabase.from('shop_orders').update({ cash_entry_id: null }).eq('id', order.id)
+}
+
+// Salva a venda (nova ou corrigida): estoque e caixa são refeitos do zero
+export async function saveSale(values: ShopOrderInput, existing?: ShopOrder | null): Promise<string> {
+  let order: ShopOrder
+  if (existing) {
+    if (existing.stock_applied) await applyOrderStock(existing, false)
+    await clearSaleMoney(existing)
+    await updateShopOrder(existing.id, { ...values, status: existing.status })
+    order = { ...existing, ...values, status: existing.status, total: orderTotal(values), stock_applied: false, cash_entry_id: null }
+  } else {
+    order = await createShopOrder({ ...values, status: 'enviado' })
+  }
+  if (order.status !== 'cancelado') {
+    await applyOrderStock(order, true)
+    await postSaleMoney(order)
+  }
+  return order.id
+}
+
+// Cancelar devolve o produto pro estoque e tira a venda do caixa; voltar atrás refaz tudo
+export async function setSaleStatus(order: ShopOrder, status: string) {
+  await updateShopOrder(order.id, { status })
+  if (status === 'cancelado') {
+    if (order.stock_applied) await applyOrderStock(order, false)
+    await clearSaleMoney(order)
+  } else if (order.status === 'cancelado') {
+    await applyOrderStock({ ...order, stock_applied: false }, true)
+    await postSaleMoney({ ...order, status })
+  }
+}
+
+// Venda que estava "a receber": marca o dinheiro como recebido
+export async function markSaleReceived(order: ShopOrder, date: string) {
+  const supabase = createClient()
+  if (order.cash_entry_id) await supabase.from('cash_entries').update({ status: 'pago', paid_date: date }).eq('id', order.cash_entry_id)
+  await supabase.from('expenses').update({ status: 'pago', paid_date: date }).like('notes', `%pedido:${order.id}%`).eq('category', 'Taxa Maquininha')
+  await supabase.from('shop_orders').update({ sale_received: true }).eq('id', order.id)
+}
+
+// Excluir a venda: desfaz estoque e caixa antes
+export async function deleteSale(order: ShopOrder) {
+  if (order.stock_applied) await applyOrderStock(order, false)
+  await clearSaleMoney(order)
+  await deleteShopOrder(order.id)
 }
 
 // Catálogo de serviços

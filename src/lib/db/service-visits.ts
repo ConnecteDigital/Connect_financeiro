@@ -1,9 +1,10 @@
 import { createClient } from '@/lib/supabase/client'
 
-export type VisitOutcome = 'aprovado' | 'orcamento' | 'remarcado' | 'faltou_peca' | 'cliente_ausente' | 'nao_aprovou' | 'sem_conserto' | 'pagou_somente_visita' | 'outro'
+export type VisitOutcome = 'aprovado' | 'aprovado_reagendado' | 'orcamento' | 'remarcado' | 'faltou_peca' | 'cliente_ausente' | 'nao_aprovou' | 'sem_conserto' | 'pagou_somente_visita' | 'outro'
 
 export const VISIT_OUTCOME_LABEL: Record<string, string> = {
   aprovado: 'Serviço aprovado',
+  aprovado_reagendado: 'Aprovado — vai fazer em outro horário',
   orcamento: 'Orçamento — cliente vai decidir',
   remarcado: 'Cliente remarcou',
   faltou_peca: 'Faltou peça',
@@ -57,13 +58,15 @@ export async function startServiceVisit(callId: string) {
   return data
 }
 
-export async function finishServiceVisit(callId: string, outcome: VisitOutcome, notes?: string, newDate?: string) {
+export async function finishServiceVisit(callId: string, outcome: VisitOutcome, notes?: string, newDate?: string, newTime?: string) {
   const supabase = createClient()
   const { data, error } = await supabase.rpc('finish_service_visit', {
     p_call_id: callId,
     p_outcome: outcome,
     p_notes: notes || null,
     p_new_date: newDate || null,
+    // p_new_time vem da migration_v38: só vai quando é usado
+    ...(newTime ? { p_new_time: newTime } : {}),
   })
   if (error) throw error
   return data

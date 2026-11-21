@@ -54,7 +54,7 @@ function FieldLine({ label, value, width }: { label: string; value: string; widt
 }
 
 export default function RodriguesCertificado({
-  tenant, call, so, parts, tecnicoName, clientSignature,
+  tenant, call, so, parts, tecnicoName, clientSignature, tecnicoSignature,
 }: {
   tenant: Tenant | null
   call: any
@@ -62,6 +62,7 @@ export default function RodriguesCertificado({
   parts: any[]
   tecnicoName: string
   clientSignature?: string | null
+  tecnicoSignature?: string | null
 }) {
   const client = call.client
   const clientName = client?.name ?? call.contact_name ?? ''
@@ -241,7 +242,7 @@ export default function RodriguesCertificado({
 
       {/* ── Assinaturas ── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 60, marginTop: 4, padding: '0 6px' }}>
-        {[{ label: 'Cliente', name: clientName, img: clientSignature }, { label: 'Técnico', name: tecnicoName, img: null }].map(s => (
+        {[{ label: 'Cliente', name: clientName, img: clientSignature }, { label: 'Técnico', name: tecnicoName, img: tecnicoSignature }].map(s => (
           <div key={s.label} style={{ flex: 1, textAlign: 'center' }}>
             <div style={{ height: 34, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}

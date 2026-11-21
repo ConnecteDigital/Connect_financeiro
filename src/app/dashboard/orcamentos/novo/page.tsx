@@ -50,6 +50,9 @@ function NovoOrcamentoForm() {
 
   // Display option
   const [showTotal, setShowTotal] = useState(true)
+  // Rodrigues: orçamento só com o valor total (lista o que vai ser feito, sem preço por item)
+  const [totalOnly, setTotalOnly] = useState(true)
+  const [totalValue, setTotalValue] = useState(0)
   const isRodrigues = tenant?.call_form_config?.rodrigues_custom === true
   const [details, setDetails] = useState<QuoteDetails>({ validity_days: '7', payment_conditions: 'À vista.' })
 
@@ -95,7 +98,8 @@ function NovoOrcamentoForm() {
       .finally(() => setLoadingCall(false))
   }, [fromCallId])
 
-  const subtotal = items.reduce((s, it) => s + it.quantity * it.unit_price, 0)
+  const onlyTotal = isRodrigues && totalOnly
+  const subtotal = onlyTotal ? totalValue : items.reduce((s, it) => s + it.quantity * it.unit_price, 0)
   const total = subtotal - Number(discount || 0) + Number(taxes || 0)
 
   function addItem() {
@@ -139,7 +143,7 @@ function NovoOrcamentoForm() {
         client_city: clientCity.trim() || null,
         origin: origin || null,
         valid_until: validUntil || null,
-        items: items.filter(it => it.description.trim()),
+        items: items.filter(it => it.description.trim()).map(it => onlyTotal ? { ...it, quantity: 1, unit_price: 0 } : it),
         service_description: serviceDescription.trim() || null,
         guarantee: guarantee.trim() || null,
         subtotal,
@@ -150,7 +154,7 @@ function NovoOrcamentoForm() {
         status: 'pendente',
         show_total: showTotal,
         call_id: callId || null,
-        ...(isRodrigues ? { details: Object.fromEntries(Object.entries(details).map(([k, v]) => [k, typeof v === 'string' ? v.trim() : v]).filter(([, v]) => v)) } : {}),
+        ...(isRodrigues ? { details: Object.fromEntries(Object.entries({ ...details, total_only: onlyTotal }).map(([k, v]) => [k, typeof v === 'string' ? v.trim() : v]).filter(([, v]) => v)) } : {}),
       }).select().single()
 
       if (error) {
@@ -255,7 +259,17 @@ function NovoOrcamentoForm() {
         </div>
 
         <div className="space-y-3">
-          <div className="hidden sm:grid grid-cols-12 gap-2 text-xs font-medium px-1" style={{ color: 'var(--text-tertiary)' }}>
+          {isRodrigues && (
+            <div className="flex bg-zinc-100 rounded-xl p-1">
+              {([[true, 'Só o valor total'], [false, 'Valor por item']] as const).map(([v, l]) => (
+                <button key={l} type="button" onClick={() => setTotalOnly(v)}
+                  className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${totalOnly === v ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500'}`}>{l}</button>
+              ))}
+            </div>
+          )}
+          {onlyTotal && <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Liste o que vai ser feito (troca de óleo, filtro, limpeza...). O cliente vê a lista e só o valor total.</p>}
+
+          <div className={`${onlyTotal ? 'hidden' : 'hidden sm:grid'} grid-cols-12 gap-2 text-xs font-medium px-1`} style={{ color: 'var(--text-tertiary)' }}>
             <span className="col-span-6">Descrição</span>
             <span className="col-span-2 text-center">Qtd</span>
             <span className="col-span-2 text-right">Val. Unit.</span>
@@ -264,19 +278,19 @@ function NovoOrcamentoForm() {
 
           {items.map((item, idx) => (
             <div key={idx} className="grid grid-cols-12 gap-2 items-center">
-              <div className="col-span-12 sm:col-span-6">
+              <div className={onlyTotal ? 'col-span-11' : 'col-span-12 sm:col-span-6'}>
                 <input type="text" value={item.description} onChange={e => updateItem(idx, 'description', e.target.value)}
                   className="input-field py-2 text-sm" placeholder="Descrição do serviço..." />
               </div>
-              <div className="col-span-3 sm:col-span-2">
+              <div className={onlyTotal ? 'hidden' : 'col-span-3 sm:col-span-2'}>
                 <input type="number" min="0.001" step="any" value={item.quantity} onChange={e => updateItem(idx, 'quantity', Number(e.target.value))}
                   className="input-field py-2 text-sm text-center" />
               </div>
-              <div className="col-span-4 sm:col-span-2">
+              <div className={onlyTotal ? 'hidden' : 'col-span-4 sm:col-span-2'}>
                 <MoneyInput min="0" step="0.01" value={item.unit_price || ''} onChange={e => updateItem(idx, 'unit_price', Number(e.target.value))}
                   className="input-field py-2 text-sm text-right" placeholder="0,00" />
               </div>
-              <div className="col-span-4 sm:col-span-1 text-right">
+              <div className={onlyTotal ? 'hidden' : 'col-span-4 sm:col-span-1 text-right'}>
                 <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
                   {fmt(item.quantity * item.unit_price)}
                 </span>
@@ -294,10 +308,18 @@ function NovoOrcamentoForm() {
 
         {/* Totals */}
         <div className="border-t pt-4 space-y-3" style={{ borderColor: 'var(--border)' }}>
-          <div className="flex items-center justify-between">
-            <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Subtotal</span>
-            <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{fmt(subtotal)}</span>
-          </div>
+          {onlyTotal ? (
+            <div className="flex items-center justify-between gap-4">
+              <label className="text-sm font-semibold flex-shrink-0" style={{ color: 'var(--text-primary)' }}>Valor do orçamento (R$) *</label>
+              <MoneyInput min="0" step="0.01" value={totalValue || ''} onChange={e => setTotalValue(Number(e.target.value))}
+                className="input-field py-2 text-sm text-right w-36" placeholder="0,00" />
+            </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>Subtotal</span>
+              <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{fmt(subtotal)}</span>
+            </div>
+          )}
           <div className="flex items-center justify-between gap-4">
             <label className="text-sm flex-shrink-0" style={{ color: 'var(--text-secondary)' }}>Desconto (R$)</label>
             <MoneyInput min="0" step="0.01" value={discount} onChange={e => setDiscount(e.target.value)}

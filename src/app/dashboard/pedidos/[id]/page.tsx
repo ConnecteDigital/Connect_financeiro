@@ -9,6 +9,7 @@ import { useTenant } from '@/lib/tenant-context'
 import {
   getShopOrder, updateShopOrder, deleteShopOrder, receiveOrderPayment, undoOrderPayment, applyOrderStock,
   orderNumber, statusOf, linesTotal, ORDER_STATUSES, PAYMENT_METHODS, isAwaitingApproval, type ShopOrder, type OrderLine,
+  isSale, orderTitle, statusLabelOf, cardFeeOf, setSaleStatus, markSaleReceived, deleteSale, SALE_STATUSES,
 } from '@/lib/db/shop-orders'
 import PhotoGallery, { type GalleryFile } from '@/components/PhotoGallery'
 import ShopOrderDocument from '@/components/ShopOrderDocument'
@@ -89,6 +90,15 @@ export default function PedidoPage({ params }: { params: Promise<{ id: string }>
     if (!order) return
     setBusy(true)
     try {
+      if (isSale(order)) {
+        // Venda: cancelar devolve o produto pro estoque e tira a venda do caixa
+        if (status === 'cancelado' && !confirm('Cancelar esta venda? O produto volta pro estoque e a entrada sai do caixa.')) { setBusy(false); return }
+        await setSaleStatus(order, status)
+        toastSuccess(status === 'cancelado' ? 'Venda cancelada' : 'Situação atualizada!')
+        setStatusOpen(false)
+        await load()
+        return
+      }
       await updateShopOrder(order.id, { status })
       // Peças do estoque saem quando o aparelho é entregue/concluído e voltam se cancelar
       const done = ['enviado', 'concluido', 'garantia'].includes(status)
@@ -102,7 +112,15 @@ export default function PedidoPage({ params }: { params: Promise<{ id: string }>
   }
 
   async function remove() {
-    if (!order || !confirm(`Excluir o pedido ${orderNumber(order)}? Isso não pode ser desfeito.`)) return
+    if (!order) return
+    if (isSale(order)) {
+      if (!confirm(`Excluir a ${orderTitle(order).toLowerCase()} ${orderNumber(order)}? O produto volta pro estoque e a venda sai do caixa.`)) return
+      await deleteSale(order)
+      toastSuccess('Venda excluída')
+      router.push('/dashboard/pedidos')
+      return
+    }
+    if (!confirm(`Excluir o pedido ${orderNumber(order)}? Isso não pode ser desfeito.`)) return
     if (order.stock_applied) await applyOrderStock(order, false).catch(console.error)
     await deleteShopOrder(order.id)
     toastSuccess('Pedido excluído')
@@ -118,6 +136,8 @@ export default function PedidoPage({ params }: { params: Promise<{ id: string }>
   )
 
   const st = statusOf(order.status)
+  const sale = isSale(order)
+  const fee = cardFeeOf(order)
   const phoneDigits = (order.client_phone ?? '').replace(/\D/g, '')
   const lines = (title: string, list: OrderLine[]) => list.length === 0 ? null : (
     <div>
@@ -142,7 +162,7 @@ export default function PedidoPage({ params }: { params: Promise<{ id: string }>
       <div className="flex items-start gap-3">
         <Link href="/dashboard/pedidos" className="p-2 hover:bg-zinc-100 rounded-lg text-zinc-500 mt-0.5"><ArrowLeft className="w-5 h-5" /></Link>
         <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-bold text-zinc-900">Pedido n. {orderNumber(order)}</h1>
+          <h1 className="text-xl font-bold text-zinc-900">{orderTitle(order)} n. {orderNumber(order)}</h1>
           <p className="text-sm text-zinc-500">{ptDate(order.date)}</p>
         </div>
         <Link href={`/dashboard/pedidos/${order.id}/editar`} className="p-2.5 rounded-xl bg-white border border-zinc-200 text-zinc-600"><Pencil className="w-4 h-4" /></Link>
@@ -152,8 +172,8 @@ export default function PedidoPage({ params }: { params: Promise<{ id: string }>
       {/* Situação */}
       <button type="button" onClick={() => setStatusOpen(true)} className="w-full bg-white rounded-2xl border border-zinc-100 shadow-sm px-4 py-3 flex items-center justify-between">
         <div className="text-left">
-          <p className="text-xs font-medium text-zinc-400">Situação do pedido</p>
-          <p className="text-base font-bold text-zinc-900 flex items-center gap-2"><span className={`w-2.5 h-2.5 rounded-full ${st.dot}`} />{st.label}</p>
+          <p className="text-xs font-medium text-zinc-400">{sale ? 'Situação da venda' : 'Situação do pedido'}</p>
+          <p className="text-base font-bold text-zinc-900 flex items-center gap-2"><span className={`w-2.5 h-2.5 rounded-full ${sale ? (order.status === 'cancelado' ? 'bg-zinc-400' : 'bg-emerald-500') : st.dot}`} />{statusLabelOf(order)}</p>
         </div>
         <span className="text-sm font-semibold" style={{ color: 'var(--primary)' }}>Mudar</span>
       </button>
@@ -199,9 +219,11 @@ export default function PedidoPage({ params }: { params: Promise<{ id: string }>
         </div>
       )}
 
-      {/* Cliente */}
+      {/* Cliente / comprador */}
       <div className="bg-white rounded-2xl border border-zinc-100 shadow-sm p-4 space-y-2">
+        {sale && <p className="text-xs font-medium text-zinc-400">Comprador</p>}
         <p className="text-base font-bold text-zinc-900">{order.client_name}</p>
+        {order.client_cpf && <p className="text-sm text-zinc-600">CPF {order.client_cpf}</p>}
         {(order.client_address || order.client_city) && (
           <p className="text-sm text-zinc-600 flex items-start gap-1.5"><MapPin className="w-4 h-4 text-zinc-400 mt-0.5 flex-shrink-0" />{[order.client_address, order.client_city, order.client_cep ? `CEP ${order.client_cep}` : ''].filter(Boolean).join(' · ')}</p>
         )}
@@ -216,8 +238,18 @@ export default function PedidoPage({ params }: { params: Promise<{ id: string }>
         )}
       </div>
 
-      {/* Informações básicas */}
-      <div className="bg-white rounded-2xl border border-zinc-100 shadow-sm p-4 space-y-3">
+      {/* Revenda: de quem é o produto e quanto repassar */}
+      {order.kind === 'revenda' && (order.owner_name || order.owner_amount > 0) && (
+        <div className="bg-white rounded-2xl border border-zinc-100 shadow-sm p-4 space-y-1">
+          <p className="text-xs font-medium text-zinc-400">Dono do produto (revenda)</p>
+          <p className="text-base font-bold text-zinc-900">{order.owner_name || 'Não informado'}</p>
+          {order.owner_phone && <p className="text-sm text-zinc-600">{order.owner_phone}</p>}
+          {order.owner_amount > 0 && <p className="text-sm text-zinc-600">Repassar pro dono: <b className="text-zinc-900">{fmt(order.owner_amount)}</b> · fica pra loja: <b className="text-emerald-700">{fmt(order.total - order.owner_amount - fee)}</b></p>}
+        </div>
+      )}
+
+      {/* Informações básicas (só no serviço) */}
+      {!sale && <div className="bg-white rounded-2xl border border-zinc-100 shadow-sm p-4 space-y-3">
         <p className="text-base font-bold text-zinc-900">Informações básicas</p>
         <div className="grid grid-cols-2 gap-3">
           <Info label="Aparelho" value={order.appliance} />
@@ -232,14 +264,14 @@ export default function PedidoPage({ params }: { params: Promise<{ id: string }>
             <CalendarClock className="w-4 h-4" /> {ptDate(order.visit_date)}{order.visit_time ? ` às ${order.visit_time.slice(0, 5)}` : ''}{order.visit_notes ? ` · ${order.visit_notes}` : ''}
           </p>
         )}
-      </div>
+      </div>}
 
       {/* Pedido */}
       <div className="bg-white rounded-2xl border border-zinc-100 shadow-sm p-4 space-y-3">
-        <p className="text-base font-bold text-zinc-900">Pedido</p>
-        {order.services.length === 0 && order.parts.length === 0 && <p className="text-sm text-zinc-400">Nenhum serviço ou peça lançado ainda.</p>}
+        <p className="text-base font-bold text-zinc-900">{sale ? 'Produto vendido' : 'Pedido'}</p>
+        {order.services.length === 0 && order.parts.length === 0 && <p className="text-sm text-zinc-400">{sale ? 'Nenhum produto lançado.' : 'Nenhum serviço ou peça lançado ainda.'}</p>}
         {lines('Serviços', order.services)}
-        {lines('Peças', order.parts)}
+        {lines(sale ? 'Produtos' : 'Peças', order.parts)}
         <div className="border-t border-zinc-100 pt-2 space-y-1 text-sm">
           {(order.services.length > 0 && order.parts.length > 0) && <div className="flex justify-between text-zinc-500"><span>Subtotal</span><span>{fmt(linesTotal(order.services) + linesTotal(order.parts))}</span></div>}
           {order.discount > 0 && <div className="flex justify-between text-zinc-500"><span>Desconto</span><span>− {fmt(order.discount)}</span></div>}
@@ -252,7 +284,27 @@ export default function PedidoPage({ params }: { params: Promise<{ id: string }>
 
       {/* Financeiro */}
       <div className="bg-white rounded-2xl border border-zinc-100 shadow-sm p-4">
-        {order.cash_entry_id ? (
+        {sale ? (
+          order.status === 'cancelado' ? (
+            <p className="text-sm font-semibold text-zinc-500">Venda cancelada — nada lançado no caixa.</p>
+          ) : (
+            <div className="space-y-2">
+              {order.sale_received ? (
+                <p className="text-sm font-semibold text-emerald-700 flex items-center gap-2"><CheckCircle2 className="w-5 h-5" /> Venda recebida · {fmt(order.total)}{order.payment_methods[0] ? ` · ${order.payment_methods[0]}` : ''}</p>
+              ) : (
+                <>
+                  <p className="text-sm font-semibold text-amber-700">A receber · {fmt(order.total)}{order.payment_methods[0] ? ` · ${order.payment_methods[0]}` : ''}</p>
+                  <button type="button" disabled={busy} onClick={async () => { setBusy(true); try { await markSaleReceived(order, localYmd()); toastSuccess('Venda recebida!'); await load() } finally { setBusy(false) } }}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white bg-emerald-600 disabled:opacity-60">
+                    <Wallet className="w-4 h-4" /> Marcar como recebida
+                  </button>
+                </>
+              )}
+              {fee > 0 && <p className="text-xs text-zinc-500">Taxa da maquininha ({order.card_fee_pct}%): − {fmt(fee)} · líquido {fmt(order.total - fee)}</p>}
+              <p className="text-xs text-zinc-400">Lançada no Financeiro como venda.</p>
+            </div>
+          )
+        ) : order.cash_entry_id ? (
           <div className="flex items-center justify-between gap-2">
             <p className="text-sm font-semibold text-emerald-700 flex items-center gap-2"><CheckCircle2 className="w-5 h-5" /> Pagamento recebido · {fmt(order.total)}</p>
             <button type="button" onClick={async () => { if (confirm('Desfazer o recebimento? A entrada sai do Financeiro.')) { await undoOrderPayment(order); toastSuccess('Recebimento desfeito'); load() } }}
@@ -267,11 +319,12 @@ export default function PedidoPage({ params }: { params: Promise<{ id: string }>
       </div>
 
       {/* Detalhes */}
-      {(order.payment_conditions || order.payment_methods.length > 0 || order.guarantee || order.notes) && (
+      {(order.payment_conditions || (!sale && order.payment_methods.length > 0) || order.guarantee || order.notes || (sale && order.observations)) && (
         <div className="bg-white rounded-2xl border border-zinc-100 shadow-sm p-4 space-y-3">
           <p className="text-base font-bold text-zinc-900">Detalhes</p>
           <Info label="Condições de pagamento" value={order.payment_conditions} />
-          <Info label="Meios de pagamento" value={order.payment_methods.join(', ')} />
+          {!sale && <Info label="Meios de pagamento" value={order.payment_methods.join(', ')} />}
+          {sale && <Info label="Observações" value={order.observations} />}
           <Info label="Garantia" value={order.guarantee} />
           <Info label="Anotações (internas)" value={order.notes} />
         </div>
@@ -299,14 +352,14 @@ export default function PedidoPage({ params }: { params: Promise<{ id: string }>
       <div className="fixed left-0 right-0 z-30 px-4 lg:left-64" style={{ bottom: 'calc(var(--bottom-nav-height, 0px) + var(--safe-bottom, 0px) + 12px)' }}>
         <button type="button" onClick={() => openDocument()}
           className="max-w-2xl mx-auto w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-base font-bold text-white shadow-lg" style={{ background: 'var(--primary)' }}>
-          <FileText className="w-5 h-5" /> Gerar documento
+          <FileText className="w-5 h-5" /> {sale ? 'Gerar recibo' : 'Gerar documento'}
         </button>
       </div>
 
       {statusOpen && (
-        <Sheet title="Qual é a situação do pedido?" onClose={() => setStatusOpen(false)}>
+        <Sheet title={sale ? 'Qual é a situação da venda?' : 'Qual é a situação do pedido?'} onClose={() => setStatusOpen(false)}>
           <div className="space-y-1.5">
-            {ORDER_STATUSES.map(s => (
+            {(sale ? SALE_STATUSES : ORDER_STATUSES).map(s => (
               <button key={s.value} type="button" disabled={busy} onClick={() => changeStatus(s.value)}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-left transition ${order.status === s.value ? 'bg-zinc-100 text-zinc-900' : 'text-zinc-700 hover:bg-zinc-50'}`}>
                 <span className={`w-2.5 h-2.5 rounded-full ${s.dot}`} />{s.label}

@@ -48,6 +48,8 @@ const tecnicoNav = [
   { href: '/dashboard/chamados', label: 'Chamados', icon: PhoneCall },
   { href: '/dashboard/comissao', label: 'Comissão',  icon: Wallet },
   ESTOQUE_NAV_ITEM,
+  // Assinatura, trocar senha e sair
+  { href: '/dashboard/conta',    label: 'Ajustes',   icon: Settings },
 ]
 
 // Nav da conta Loja (Rodrigues – Loja): só estoque, vendas e gastos
@@ -61,7 +63,7 @@ const lojaNav = [
 
 // Minha conta do técnico (trocar senha / sair): entra pelo ícone do topo
 // no celular e pela barra lateral no computador.
-const CONTA_NAV_ITEM = { href: '/dashboard/conta', label: 'Minha conta', icon: Settings }
+const CONTA_NAV_ITEM = { href: '/dashboard/conta', label: 'Ajustes', icon: Settings }
 
 async function handleLogout() {
   const { createClient } = await import('@/lib/supabase/client')
@@ -291,7 +293,7 @@ function Sidebar({ theme, onToggleTheme, isMaster }: { theme: 'light' | 'dark'; 
   }
 
   const baseNav = isRodrigues ? [...allNav, ESTOQUE_NAV_ITEM, TEMPO_NAV_ITEM] : allNav
-  const sidebarNav = isTecnico ? [...tecnicoNav, CONTA_NAV_ITEM] : isLojaMode(tenant) ? lojaNav : isMaster
+  const sidebarNav = isTecnico ? tecnicoNav : isLojaMode(tenant) ? lojaNav : isMaster
     ? [...baseNav, { href: '/dashboard/master', label: 'Painel Master', icon: ShieldCheck }]
     : baseNav
 

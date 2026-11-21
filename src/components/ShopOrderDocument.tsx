@@ -7,10 +7,10 @@ import RodriguesDocument, { DOC_WIDTH, type RodriguesDocProps } from '@/componen
 import ScaledSheet from '@/components/ScaledSheet'
 import { docHeaderOf } from '@/lib/rodrigues-doc'
 import { useSheetShare } from '@/lib/use-sheet-share'
-import { orderNumber, type ShopOrder } from '@/lib/db/shop-orders'
+import { orderNumber, isSale, type ShopOrder } from '@/lib/db/shop-orders'
 import { ptDate } from '@/lib/period'
 
-type DocKind = 'orcamento' | 'os' | 'laudo'
+type DocKind = 'orcamento' | 'os' | 'laudo' | 'recibo'
 const KINDS: { key: DocKind; label: string; title: string }[] = [
   { key: 'orcamento', label: 'Orçamento', title: 'Orçamento' },
   { key: 'os', label: 'Ordem de serviço', title: 'Ordem de serviço' },
@@ -30,7 +30,9 @@ function Toggle({ label, value, onChange }: { label: string; value: boolean; onC
 
 // Gerar documento do pedido: escolhe o tipo, o que mostrar, e compartilha
 export default function ShopOrderDocument({ order, tenant, photos, onClose, initialKind }: { order: ShopOrder; tenant: any; photos: string[]; onClose: () => void; initialKind?: DocKind }) {
-  const [kind, setKind] = useState<DocKind | null>(initialKind ?? null)
+  // Venda só tem um documento: o recibo
+  const sale = isSale(order)
+  const [kind, setKind] = useState<DocKind | null>(sale ? 'recibo' : (initialKind ?? null))
   const [ready, setReady] = useState(false)
   const [showPrices, setShowPrices] = useState(true)
   const [showSubtotal, setShowSubtotal] = useState(true)
@@ -41,6 +43,32 @@ export default function ShopOrderDocument({ order, tenant, photos, onClose, init
   const doc: RodriguesDocProps | null = useMemo(() => {
     if (!kind) return null
     const header = docHeaderOf(tenant)
+    if (kind === 'recibo') {
+      const products = order.parts.map(s => ({ description: s.description, details: s.details, unit: s.unit, unit_price: Number(s.unit_price), quantity: Number(s.quantity) }))
+      return {
+        header,
+        title: `Recibo de venda ${orderNumber(order)}`,
+        date: ptDate(order.date),
+        client: {
+          name: order.client_name,
+          addressLines: [order.client_cpf ? `CPF: ${order.client_cpf}` : '', order.client_address ?? '', order.client_city ?? '', order.client_cep ? `CEP ${order.client_cep}` : ''],
+          phone: order.client_phone,
+        },
+        info: [],
+        items: products,
+        itemsTitle: 'Produtos',
+        fees: [{ label: 'Taxa de entrega', value: order.delivery_fee }],
+        showPrices, showTotals: showSubtotal, showDetails,
+        discount: order.discount,
+        payment: { methods: order.payment_methods[0] || undefined, conditions: order.sale_received ? 'Pago.' : 'A receber.' },
+        guarantee: order.guarantee,
+        partsGuarantee: order.parts.filter(s => s.guarantee).map(s => ({ part: s.description, period: s.guarantee! })),
+        extraInfo: order.observations,
+        extraTitle: 'Observações',
+        photos: withPhotos ? photos : [],
+        signatures: [header.name, order.client_name],
+      }
+    }
     const k = KINDS.find(x => x.key === kind)!
     return {
       header,
@@ -77,16 +105,17 @@ export default function ShopOrderDocument({ order, tenant, photos, onClose, init
     }
   }, [kind, order, tenant, photos, showPrices, showSubtotal, showDetails, withPhotos])
 
-  const base = `${kind ? KINDS.find(x => x.key === kind)!.label : 'Pedido'} ${orderNumber(order)} ${order.client_name}`
+  const kindLabel = kind === 'recibo' ? 'Recibo de venda' : kind ? KINDS.find(x => x.key === kind)!.label : 'Pedido'
+  const base = `${kindLabel} ${orderNumber(order)} ${order.client_name}`
     .normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9._-]+/g, '_')
-  const share = useSheetShare(docRef, base, `${kind ? KINDS.find(x => x.key === kind)!.label : 'Pedido'} ${orderNumber(order)}`,
+  const share = useSheetShare(docRef, base, `${kindLabel} ${orderNumber(order)}`,
     JSON.stringify([order.id, kind, showPrices, showSubtotal, showDetails, withPhotos, photos.length]), ready && !!doc)
 
   return (
     <Portal>
     <div className="fixed inset-0 z-[80] bg-zinc-100 overflow-y-auto">
       <div className="sticky top-0 z-10 bg-white border-b border-zinc-100 flex items-center justify-between px-4 py-3" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 12px)' }}>
-        <button type="button" onClick={() => (ready ? setReady(false) : kind ? setKind(null) : onClose())} className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-500">
+        <button type="button" onClick={() => (ready ? setReady(false) : kind && !sale ? setKind(null) : onClose())} className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-500">
           {kind ? <ArrowLeft className="w-5 h-5" /> : <X className="w-5 h-5" />}
         </button>
         <p className="font-bold text-zinc-900">{ready ? 'Documento' : 'Gerar documento'}</p>
@@ -112,9 +141,9 @@ export default function ShopOrderDocument({ order, tenant, photos, onClose, init
               <p className="text-sm text-zinc-500">As anotações internas nunca aparecem no documento.</p>
             </div>
             <div className="bg-white rounded-2xl border border-zinc-100 shadow-sm px-4 py-2 divide-y divide-zinc-50">
-              <Toggle label="Mostrar preço de cada serviço" value={showPrices} onChange={setShowPrices} />
+              <Toggle label={sale ? 'Mostrar preço de cada produto' : 'Mostrar preço de cada serviço'} value={showPrices} onChange={setShowPrices} />
               <Toggle label="Mostrar subtotal e descontos" value={showSubtotal} onChange={setShowSubtotal} />
-              <Toggle label="Mostrar detalhes dos serviços" value={showDetails} onChange={setShowDetails} />
+              <Toggle label={sale ? 'Mostrar detalhes (nº de série)' : 'Mostrar detalhes dos serviços'} value={showDetails} onChange={setShowDetails} />
               {photos.length > 0 && <Toggle label={`Mostrar as fotos (${photos.length})`} value={withPhotos} onChange={setWithPhotos} />}
             </div>
             <button type="button" onClick={() => setReady(true)} className="w-full py-3.5 rounded-2xl text-base font-bold text-white" style={{ background: 'var(--primary)' }}>Gerar documento</button>

@@ -1,7 +1,9 @@
 'use client'
 
 import SignaturePad from '@/components/SignaturePad'
-import { getOsSignature, saveOsSignature, deleteOsSignature, type OsSignature } from '@/lib/db/signatures'
+import { getOsSignature, saveOsSignature, deleteOsSignature, getTecnicoSignature, type OsSignature } from '@/lib/db/signatures'
+import { getCallVisits } from '@/lib/db/service-visits'
+import { loadServicePhotos, servicePhotosSince } from '@/lib/service-photos'
 import { useEffect, useState, useRef } from 'react'
 import { use } from 'react'
 import Link from 'next/link'
@@ -38,29 +40,30 @@ function ImprimirContent({ id }: { id: string }) {
   const docRef = useRef<HTMLDivElement>(null)
   // Fotos anexadas ao chamado, já baixadas (pra entrar no PDF)
   const [photos, setPhotos] = useState<string[]>([])
+  // Só as fotos do serviço: as que o gestor anexou ao agendar ficam de fora
+  const soCreatedAt: string | undefined = call?.service_orders?.[0]?.created_at
   useEffect(() => {
-    if (!isRodrigues || !id) return
+    if (!isRodrigues || !id || !call) return
     let alive = true
-    const storage = createClient().storage.from('chamados-anexos')
-    storage.list(id, { sortBy: { column: 'created_at', order: 'asc' } }).then(async ({ data }) => {
-      const names = (data ?? []).map(f => f.name).filter(n => /\.(jpe?g|png|gif|webp)$/i.test(n)).slice(0, 6)
-      const urls = await Promise.all(names.map(async n => {
-        const url = storage.getPublicUrl(`${id}/${n}`).data.publicUrl
-        try {
-          const blob = await (await fetch(url)).blob()
-          return await new Promise<string>(res => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.readAsDataURL(blob) })
-        } catch { return url }
-      }))
-      if (alive) setPhotos(urls)
-    }).catch(() => {})
+    getCallVisits(id).catch(() => [] as any[])
+      .then(visits => loadServicePhotos(id, servicePhotosSince(visits, soCreatedAt)))
+      .then(urls => { if (alive) setPhotos(urls) })
+      .catch(() => {})
     return () => { alive = false }
-  }, [id, isRodrigues])
+  }, [id, isRodrigues, call, soCreatedAt])
   const osNum = call?.service_orders?.[0]?.os_number ?? 'OS'
   // Rodrigues: assinatura do cliente (feita com o dedo, na hora) — sai na OS e no certificado
   const soId: string | undefined = call?.service_orders?.[0]?.id
   const [signature, setSignature] = useState<OsSignature | null>(null)
   const [signing, setSigning] = useState(false)
   const [signError, setSignError] = useState('')
+  // Assinatura fixa do técnico que fez o serviço (cadastrada por ele em Ajustes)
+  const [tecSignature, setTecSignature] = useState<string | null>(null)
+  const tecId: string | undefined = call?.service_orders?.[0]?.auxiliary_id ?? call?.technician_id
+  useEffect(() => {
+    if (!isRodrigues || !tecId) return
+    getTecnicoSignature(tecId).then(setTecSignature)
+  }, [isRodrigues, tecId])
   useEffect(() => {
     if (!isRodrigues || !soId) return
     getOsSignature(soId).then(sig => {
@@ -87,7 +90,7 @@ function ImprimirContent({ id }: { id: string }) {
   }
   const osShare = useSheetShare(docRef,
     `${docKind === 'os' ? 'OS' : docKind === 'orcamento' ? 'Orcamento' : 'Laudo'}-${osNum}`.replace(/[^a-zA-Z0-9._-]+/g, '_'), `${kindLabel} ${osNum}`,
-    JSON.stringify([call?.id, call?.service_orders?.[0]?.updated_at ?? call?.service_orders?.[0]?.total_value, tenant?.id, photos.length, docKind, signature?.signed_at ?? '']),
+    JSON.stringify([call?.id, call?.service_orders?.[0]?.updated_at ?? call?.service_orders?.[0]?.total_value, tenant?.id, photos.length, docKind, signature?.signed_at ?? '', tecSignature ? 1 : 0]),
     isRodrigues && isSheet && !!call?.service_orders?.[0])
 
   useEffect(() => {
@@ -272,10 +275,10 @@ function ImprimirContent({ id }: { id: string }) {
       {isRodrigues && docKind !== 'certificado' ? (
         <>
           <div className="max-w-3xl mx-auto px-3">
-            <ScaledSheet width={DOC_WIDTH}><RodriguesDocument {...rodriguesOsDoc(tenant, call, so, docKind)} photos={photos} clientSignature={signature?.image} /></ScaledSheet>
+            <ScaledSheet width={DOC_WIDTH}><RodriguesDocument {...rodriguesOsDoc(tenant, call, so, docKind)} photos={photos} clientSignature={signature?.image} signerSignature={tecSignature} /></ScaledSheet>
           </div>
           <div style={{ position: 'fixed', left: -10000, top: 0 }} aria-hidden>
-            <div ref={docRef}><RodriguesDocument {...rodriguesOsDoc(tenant, call, so, docKind)} photos={photos} clientSignature={signature?.image} /></div>
+            <div ref={docRef}><RodriguesDocument {...rodriguesOsDoc(tenant, call, so, docKind)} photos={photos} clientSignature={signature?.image} signerSignature={tecSignature} /></div>
           </div>
         </>
       ) : (
@@ -286,7 +289,7 @@ function ImprimirContent({ id }: { id: string }) {
         style={{ maxWidth: 720, fontFamily: 'Arial, sans-serif', fontSize: 11, color: '#000', padding: 16 }}
       >
         {isRodrigues ? (
-          <RodriguesCertificado tenant={tenant} call={call} so={so} parts={parts} tecnicoName={tecnicoName} clientSignature={signature?.image} />
+          <RodriguesCertificado tenant={tenant} call={call} so={so} parts={parts} tecnicoName={tecnicoName} clientSignature={signature?.image} tecnicoSignature={tecSignature} />
         ) : (<>
         {/* ── Header ── */}
         <div style={{ display: 'flex', border: B, marginBottom: 0 }}>

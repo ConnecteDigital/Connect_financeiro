@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import { Plus, Search, X, Pencil, Trash2, ShoppingCart, PackagePlus, Package, Refrigerator } from 'lucide-react'
 import { getLojaItems, deleteLojaItem, mediaUrl, lojaErrorMessage, EQUIPMENT_TYPES, type LojaItem, type ItemKind } from '@/lib/db/loja'
-import { ItemFormModal, SellModal, ReceiveModal, MediaSheet, MediaThumb } from '@/components/LojaModals'
+import Link from 'next/link'
+import { ItemFormModal, ReceiveModal, MediaSheet, MediaThumb } from '@/components/LojaModals'
 import { toastSuccess, toastError } from '@/components/Toast'
 
 const fmt = (v: number) => `R$ ${Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
@@ -15,7 +16,6 @@ export default function LojaEstoque() {
   const [kind, setKind] = useState<ItemKind>('maquina')
   const [query, setQuery] = useState('')
   const [form, setForm] = useState<{ item?: LojaItem | null } | null>(null)
-  const [sell, setSell] = useState<LojaItem | null>(null)
   const [receive, setReceive] = useState<LojaItem | null>(null)
   const [mediaOf, setMediaOf] = useState<LojaItem | null>(null)
   const [loadError, setLoadError] = useState('')
@@ -38,7 +38,7 @@ export default function LojaEstoque() {
     load()
   }
 
-  const done = (msg: string) => (warning?: string) => { setForm(null); setSell(null); setReceive(null); if (warning) toastError(warning); else toastSuccess(msg); load() }
+  const done = (msg: string) => (warning?: string) => { setForm(null); setReceive(null); if (warning) toastError(warning); else toastSuccess(msg); load() }
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
@@ -115,10 +115,11 @@ export default function LojaEstoque() {
               {i.sale_value > 0 && i.unit_value > 0 && <span className="text-emerald-600 font-semibold">lucro {fmt(i.sale_value - i.unit_value)}</span>}
             </div>
             <div className="flex items-center gap-2 mt-3">
-              <button type="button" onClick={() => setSell(i)} disabled={i.quantity <= 0}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-semibold bg-emerald-500 text-white disabled:opacity-40">
+              {/* Abre a venda completa (comprador, pagamento, recibo) já com este item */}
+              <Link href={`/dashboard/pedidos/novo?tipo=venda&item=${i.id}`} aria-disabled={i.quantity <= 0}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-semibold bg-emerald-500 text-white ${i.quantity <= 0 ? 'opacity-40 pointer-events-none' : ''}`}>
                 <ShoppingCart className="w-4 h-4" /> Vendi
-              </button>
+              </Link>
               <button type="button" onClick={() => setReceive(i)}
                 className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-semibold bg-orange-50 text-orange-700 border border-orange-200">
                 <PackagePlus className="w-4 h-4" /> Chegou
@@ -132,7 +133,6 @@ export default function LojaEstoque() {
 
       {mediaOf && <MediaSheet item={mediaOf} onClose={() => setMediaOf(null)} />}
       {form && <ItemFormModal item={form.item} defaultKind={kind} knownTypes={customTypes} onClose={() => setForm(null)} onSaved={done(form.item ? 'Item atualizado!' : 'Item cadastrado!')} />}
-      {sell && <SellModal item={sell} onClose={() => setSell(null)} onSaved={done('Venda registrada!')} />}
       {receive && <ReceiveModal item={receive} onClose={() => setReceive(null)} onSaved={done('Estoque atualizado!')} />}
     </div>
   )

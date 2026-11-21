@@ -108,26 +108,6 @@ async function setQuantity(id: string, quantity: number, extra: Record<string, u
 
 const itemLabel = (i: LojaItem) => [i.name, i.brand, i.model].filter(Boolean).join(' ')
 
-// Vendeu: tira do estoque e lança a entrada de dinheiro
-export async function sellItem(item: LojaItem, opts: { quantity: number; unitPrice: number; date: string; payment: string; client?: string; received: boolean }) {
-  const supabase = createClient()
-  const tenant_id = await getMyTenantId()
-  const total = opts.quantity * opts.unitPrice
-  const { error } = await supabase.from('cash_entries').insert({
-    tenant_id,
-    description: `Venda: ${opts.quantity}x ${itemLabel(item)}${opts.client ? ` — ${opts.client}` : ''}`,
-    amount: total,
-    direction: 'entrada',
-    entry_type: 'venda',
-    status: opts.received ? 'pago' : 'pendente',
-    due_date: opts.date,
-    paid_date: opts.received ? opts.date : null,
-    notes: [opts.payment ? `Pagamento: ${opts.payment}` : '', `item:${item.id}`].filter(Boolean).join(' · '),
-  })
-  if (error) throw error
-  await setQuantity(item.id, item.quantity - opts.quantity)
-}
-
 // Chegou mercadoria: soma no estoque e (se quiser) lança o gasto da compra
 export async function receiveItem(item: LojaItem, opts: { quantity: number; unitCost: number; date: string; launchExpense: boolean; paid: boolean; supplier?: string }) {
   const supabase = createClient()

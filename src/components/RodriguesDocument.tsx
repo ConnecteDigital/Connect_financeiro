@@ -24,6 +24,7 @@ export interface RodriguesDocProps {
   info: [string, string | null | undefined][]
   visit?: { date?: string; period?: string } | null
   items: DocItem[]
+  itemsTitle?: string                      // título da 1ª tabela (padrão "Serviços"; na venda, "Produtos")
   hideItems?: boolean                      // relatório sem tabela de serviços
   // seções extras logo depois de "Informações básicas" (ex.: resultado do atendimento)
   blocks?: { title: string; fields?: [string, string | null | undefined][]; text?: string | null }[]
@@ -32,6 +33,8 @@ export interface RodriguesDocProps {
   showPrices?: boolean                     // preço de cada linha
   showTotals?: boolean                     // bloco de subtotal/total (padrão = showPrices)
   showDetails?: boolean                    // detalhes embaixo de cada serviço
+  descriptionOnly?: boolean                // lista só a descrição (sem unidade e quantidade)
+  servicesTotal?: number                   // valor fechado dos serviços (quando os itens não têm preço)
   discount?: number
   payment?: { methods?: string; pix?: string; conditions?: string | null } | null
   guarantee?: string | null
@@ -41,6 +44,7 @@ export interface RodriguesDocProps {
   photos?: string[]        // fotos do aparelho/etiqueta anexadas ao chamado
   signatures: string[]
   clientSignature?: string | null   // assinatura do cliente (imagem), na 2ª linha de assinatura
+  signerSignature?: string | null   // assinatura fixa do técnico que fez o serviço (vale no lugar da da empresa)
 }
 
 const BRL = (v: number) => `R$ ${Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -94,7 +98,7 @@ const half: CSSProperties = { width: '50%', boxSizing: 'border-box', paddingRigh
 export default function RodriguesDocument(p: RodriguesDocProps) {
   const h = p.header
   const showPrices = p.showPrices !== false
-  const services = p.items.reduce((s, it) => s + it.quantity * it.unit_price, 0)
+  const services = p.servicesTotal ?? p.items.reduce((s, it) => s + it.quantity * it.unit_price, 0)
   const partsTotal = (p.parts ?? []).reduce((s, it) => s + it.quantity * it.unit_price, 0)
   const fees = (p.fees ?? []).filter(f => Number(f.value) > 0)
   const discount = Number(p.discount || 0)
@@ -175,15 +179,15 @@ export default function RodriguesDocument(p: RodriguesDocProps) {
       ) })}
 
       {/* ── Serviços / Peças ── */}
-      {!p.hideItems && ([['Serviços', p.items], ['Peças', p.parts ?? []]] as const).filter(([, list], i) => i === 0 || list.length > 0).map(([title, list], idx, arr) => (
+      {!p.hideItems && ([[p.itemsTitle ?? 'Serviços', p.items], ['Peças', p.parts ?? []]] as const).filter(([, list], i) => i === 0 || list.length > 0).map(([title, list], idx, arr) => (
         <Section key={title} title={title}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr style={{ color: '#666', fontSize: 10.5 }}>
                 <th style={{ textAlign: 'left', fontWeight: 700, padding: '0 0 8px', width: '50%' }}>Descrição</th>
-                <th style={{ textAlign: 'left', fontWeight: 700, padding: '0 0 8px' }}>Unidade</th>
+                {!p.descriptionOnly && <th style={{ textAlign: 'left', fontWeight: 700, padding: '0 0 8px' }}>Unidade</th>}
                 {showPrices && <th style={{ textAlign: 'right', fontWeight: 700, padding: '0 0 8px' }}>Preço unitário</th>}
-                <th style={{ textAlign: 'right', fontWeight: 700, padding: '0 0 8px', width: 60 }}>Qtd.</th>
+                {!p.descriptionOnly && <th style={{ textAlign: 'right', fontWeight: 700, padding: '0 0 8px', width: 60 }}>Qtd.</th>}
                 {showPrices && <th style={{ textAlign: 'right', fontWeight: 700, padding: '0 0 8px', width: 100 }}>Preço</th>}
               </tr>
             </thead>
@@ -194,9 +198,9 @@ export default function RodriguesDocument(p: RodriguesDocProps) {
                     <div style={{ fontWeight: 700 }}>{it.description}</div>
                     {showDetails && it.details && <div style={{ fontSize: 10.5, color: '#555', marginTop: 2 }}>{it.details}</div>}
                   </td>
-                  <td style={{ padding: '0 0 8px', verticalAlign: 'top' }}>{it.unit || 'un.'}</td>
+                  {!p.descriptionOnly && <td style={{ padding: '0 0 8px', verticalAlign: 'top' }}>{it.unit || 'un.'}</td>}
                   {showPrices && <td style={{ textAlign: 'right', padding: '0 0 8px', verticalAlign: 'top' }}>{BRL(it.unit_price)}</td>}
-                  <td style={{ textAlign: 'right', padding: '0 0 8px', verticalAlign: 'top' }}>{it.quantity.toLocaleString('pt-BR')}</td>
+                  {!p.descriptionOnly && <td style={{ textAlign: 'right', padding: '0 0 8px', verticalAlign: 'top' }}>{it.quantity.toLocaleString('pt-BR')}</td>}
                   {showPrices && <td style={{ textAlign: 'right', padding: '0 0 8px', verticalAlign: 'top' }}>{BRL(it.quantity * it.unit_price)}</td>}
                 </tr>
               ))}
@@ -206,9 +210,9 @@ export default function RodriguesDocument(p: RodriguesDocProps) {
           {idx === arr.length - 1 && (showTotals || p.fees !== undefined) && (
             <div style={{ marginLeft: '50%', marginRight: -6, marginTop: 2, fontSize: 12 }}>
               {[
-                ...(showTotals ? [{ l: 'Serviços', v: BRL(services) }] : []),
+                ...(showTotals && p.servicesTotal == null ? [{ l: p.itemsTitle ?? 'Serviços', v: BRL(services) }] : []),
                 ...(showTotals && partsTotal > 0 ? [{ l: 'Peças', v: BRL(partsTotal) }] : []),
-                ...(showTotals ? [{ l: 'Subtotal', v: BRL(services + partsTotal), bold: true }] : []),
+                ...(showTotals && (p.servicesTotal == null || discount > 0 || partsTotal > 0) ? [{ l: 'Subtotal', v: BRL(services + partsTotal), bold: true }] : []),
                 ...(showTotals && discount > 0 ? [{ l: partsTotal > 0 || p.fees !== undefined ? 'Desconto' : 'Desconto sobre serviços', v: `- ${BRL(discount)}` }] : []),
                 ...(showTotals ? fees.map(f => ({ l: f.label, v: BRL(f.value) })) : []),
                 ...(showTotals || p.fees !== undefined ? [{ l: 'Total', v: BRL(total), bold: true, total: true }] : []),
@@ -269,7 +273,7 @@ export default function RodriguesDocument(p: RodriguesDocProps) {
       <div style={{ display: 'flex', justifyContent: 'center', gap: 110, marginTop: 6 }}>
         {p.signatures.map((s, i) => {
           // 1ª linha: a empresa (já vem assinada, se tiver assinatura nas configurações); 2ª: o cliente
-          const img = i === 0 ? h.signature : i === 1 ? p.clientSignature : null
+          const img = i === 0 ? (p.signerSignature || h.signature) : i === 1 ? p.clientSignature : null
           return (
             <div key={s} style={{ width: p.signatures.length > 1 ? 240 : 320, textAlign: 'center' }}>
               <div style={{ height: 46, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>

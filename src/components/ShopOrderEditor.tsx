@@ -5,16 +5,17 @@ import MoneyInput from '@/components/MoneyInput'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, ChevronDown, Plus, Trash2, Wrench, Package, Percent, Truck, Receipt, CalendarClock, Loader2, Save, BookOpen, Search, Check } from 'lucide-react'
+import { ArrowLeft, ChevronDown, Plus, Trash2, Wrench, Package, Percent, Truck, Receipt, CalendarClock, Loader2, Save, BookOpen, Search, Check, ShoppingCart } from 'lucide-react'
 import { localYmd } from '@/lib/tecnico-queue'
 import { APPLIANCE_BRANDS, APPLIANCE_TYPES } from '@/lib/service-config'
 import {
-  createShopOrder, updateShopOrder, getCatalog, addToCatalog, removeFromCatalog, getPastClients, orderTotal, linesTotal, orderNumber,
-  PAYMENT_METHODS, type ShopOrder, type ShopOrderInput, type OrderLine, type CatalogService,
+  createShopOrder, updateShopOrder, saveSale, getCatalog, addToCatalog, removeFromCatalog, getPastClients, orderTotal, linesTotal, orderNumber,
+  isSale, orderTitle, PAYMENT_METHODS, type ShopOrder, type ShopOrderInput, type OrderLine, type CatalogService, type OrderKind,
 } from '@/lib/db/shop-orders'
 import { getLojaItems, type LojaItem } from '@/lib/db/loja'
 import { Sheet, input } from '@/components/LojaModals'
 import { toastSuccess } from '@/components/Toast'
+import { lookupCep } from '@/lib/cep'
 
 const fmt = (v: number) => `R$ ${Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
@@ -78,11 +79,15 @@ const EMPTY: ShopOrderInput = {
   visit_date: null, visit_time: null, visit_notes: null,
   services: [], parts: [], discount: 0, delivery_fee: 0, freight: 0, other_fees: 0, total: 0,
   payment_conditions: 'À vista.', payment_methods: ['PIX'], guarantee: '90 dias', notes: null,
+  kind: 'servico', client_cpf: null, owner_name: null, owner_phone: null, owner_amount: 0, card_fee_pct: 0, sale_received: true,
 }
+// Venda: o comprador chega e leva — sem agendamento, validade nem condições de orçamento
+const EMPTY_SALE: ShopOrderInput = { ...EMPTY, kind: 'venda', status: 'enviado', validity_days: null, payment_conditions: null }
 
-export default function ShopOrderEditor({ order }: { order?: ShopOrder | null }) {
+export default function ShopOrderEditor({ order, initialKind = 'servico', initialItemId }: { order?: ShopOrder | null; initialKind?: OrderKind; initialItemId?: string | null }) {
   const router = useRouter()
-  const [v, setV] = useState<ShopOrderInput>(() => order ? { ...EMPTY, ...order } : EMPTY)
+  const [v, setV] = useState<ShopOrderInput>(() => order ? { ...EMPTY, ...order } : initialKind === 'servico' ? EMPTY : { ...EMPTY_SALE, kind: initialKind })
+  const sale = isSale(v)
   const set = (patch: Partial<ShopOrderInput>) => setV(prev => ({ ...prev, ...patch }))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -90,6 +95,40 @@ export default function ShopOrderEditor({ order }: { order?: ShopOrder | null })
   const [modal, setModal] = useState<'servico' | 'peca' | null>(null)
 
   useEffect(() => { getPastClients().then(setPastClients).catch(() => {}) }, [])
+
+  // Veio do "Vendi" de um item do estoque: a venda já abre com ele
+  useEffect(() => {
+    if (order || !initialItemId) return
+    getLojaItems().then(items => {
+      const i = items.find(x => x.id === initialItemId)
+      if (!i) return
+      setV(prev => prev.parts.some(p => p.stock_item_id === i.id) ? prev : {
+        ...prev,
+        parts: [...prev.parts, { description: [i.name, i.brand, i.model].filter(Boolean).join(' '), unit: 'un.', unit_price: i.sale_value || i.unit_value, quantity: 1, stock_item_id: i.id }],
+      })
+    }).catch(() => {})
+  }, [order, initialItemId])
+
+  // CEP completo → preenche rua e bairro/cidade (sem apagar o que já foi digitado)
+  const [cepBusy, setCepBusy] = useState(false)
+  async function onCep(raw: string) {
+    set({ client_cep: raw || null })
+    if (raw.replace(/\D/g, '').length !== 8) return
+    setCepBusy(true)
+    try {
+      const r = await lookupCep(raw)
+      if (r) setV(prev => ({
+        ...prev,
+        client_address: prev.client_address?.trim() ? prev.client_address : (r.address || null),
+        client_city: prev.client_city?.trim() ? prev.client_city : ([r.neighborhood, r.city ? `${r.city}${r.state ? `-${r.state}` : ''}` : ''].filter(Boolean).join(', ') || null),
+      }))
+    } catch { /* sem internet ou CEP não encontrado: segue digitando */ }
+    finally { setCepBusy(false) }
+  }
+
+  const method = v.payment_methods[0] ?? 'PIX'
+  const isCard = /cart[aã]o/i.test(method)
+  const fee = sale && isCard ? Math.round(orderTotal(v) * Number(v.card_fee_pct || 0)) / 100 : 0
 
   const total = orderTotal(v)
 
@@ -99,10 +138,22 @@ export default function ShopOrderEditor({ order }: { order?: ShopOrder | null })
   }
 
   async function save() {
-    if (!v.client_name.trim()) { setError('Informe o cliente.'); window.scrollTo({ top: 0, behavior: 'smooth' }); return }
+    if (!v.client_name.trim()) { setError(sale ? 'Informe o nome do comprador.' : 'Informe o cliente.'); window.scrollTo({ top: 0, behavior: 'smooth' }); return }
+    if (sale && v.parts.length === 0) { setError('Adicione o produto que foi vendido.'); window.scrollTo({ top: 0, behavior: 'smooth' }); return }
+    if (sale && total <= 0) { setError('Informe o valor do produto.'); window.scrollTo({ top: 0, behavior: 'smooth' }); return }
     setSaving(true); setError('')
     try {
       const clean: ShopOrderInput = { ...v, client_name: v.client_name.trim(), total }
+      if (sale) {
+        // Venda: uma forma de pagamento; taxa da maquininha só no cartão; dono só na revenda
+        const id = await saveSale({
+          ...clean, services: [], payment_methods: [method], card_fee_pct: isCard ? Number(v.card_fee_pct || 0) : 0,
+          ...(v.kind === 'revenda' ? {} : { owner_name: null, owner_phone: null, owner_amount: 0 }),
+        }, order)
+        toastSuccess(order ? 'Venda atualizada!' : 'Venda registrada!')
+        router.push(`/dashboard/pedidos/${id}`)
+        return
+      }
       if (order) {
         await updateShopOrder(order.id, clean)
         toastSuccess('Pedido atualizado!')
@@ -114,7 +165,7 @@ export default function ShopOrderEditor({ order }: { order?: ShopOrder | null })
       }
     } catch (e: any) {
       console.error(e)
-      setError(String(e?.message ?? '').includes('shop_orders') ? 'Rode a migration_v33.sql no Supabase.' : (e?.message ?? 'Não foi possível salvar.'))
+      setError(/schema cache|column .* does not exist/i.test(String(e?.message ?? '')) ? 'Falta atualizar o banco: rode a migration_v38.sql no Supabase.' : String(e?.message ?? '').includes('shop_orders') ? 'Rode a migration_v33.sql no Supabase.' : (e?.message ?? 'Não foi possível salvar.'))
       setSaving(false)
     }
   }
@@ -141,27 +192,55 @@ export default function ShopOrderEditor({ order }: { order?: ShopOrder | null })
       <div className="flex items-center gap-3">
         <Link href={order ? `/dashboard/pedidos/${order.id}` : '/dashboard/pedidos'} className="p-2 hover:bg-zinc-100 rounded-lg text-zinc-500"><ArrowLeft className="w-5 h-5" /></Link>
         <div>
-          <h1 className="text-xl font-bold text-zinc-900">{order ? `Pedido n. ${orderNumber(order)}` : 'Novo pedido'}</h1>
-          <p className="text-xs text-zinc-500">Aparelho que entrou na loja pra orçamento ou conserto</p>
+          <h1 className="text-xl font-bold text-zinc-900">{order ? `${orderTitle(v)} n. ${orderNumber(order)}` : sale ? 'Nova venda' : 'Novo serviço'}</h1>
+          <p className="text-xs text-zinc-500">{sale ? 'Produto vendido na loja — entra no caixa como venda' : 'Aparelho que entrou na loja pra orçamento ou conserto'}</p>
         </div>
       </div>
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>}
 
-      <Block title="Cliente">
+      {sale && (
+        <div>
+          <div className="flex bg-zinc-100 rounded-xl p-1">
+            {([['venda', 'Produto da loja'], ['revenda', 'Revenda']] as const).map(([k, l]) => (
+              <button key={k} type="button" onClick={() => set({ kind: k })}
+                className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${v.kind === k ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500'}`}>{l}</button>
+            ))}
+          </div>
+          <p className="text-xs text-zinc-500 mt-1.5 px-1">
+            {v.kind === 'revenda' ? 'Revenda: produto de um cliente que a loja está vendendo pra ele.' : 'Produto que já é da loja (do estoque ou não).'}
+          </p>
+        </div>
+      )}
+
+      <Block title={sale ? 'Comprador' : 'Cliente'}>
         <F label="Nome *">
           <input list="shop-clients" value={v.client_name} onChange={e => pickClient(e.target.value)} className={input} placeholder="Selecione ou digite o cliente" />
           <datalist id="shop-clients">{pastClients.map(c => <option key={c.client_name} value={c.client_name} />)}</datalist>
         </F>
         <div className="grid grid-cols-2 gap-3">
           <F label="Telefone"><input value={v.client_phone ?? ''} onChange={e => set({ client_phone: e.target.value || null })} className={input} placeholder="(31) 9 9999-9999" inputMode="tel" /></F>
-          <F label="CEP"><input value={v.client_cep ?? ''} onChange={e => set({ client_cep: e.target.value || null })} className={input} placeholder="00000-000" inputMode="numeric" /></F>
+          <F label={cepBusy ? 'CEP · buscando...' : 'CEP'}><input value={v.client_cep ?? ''} onChange={e => onCep(e.target.value)} className={input} placeholder="00000-000" inputMode="numeric" /></F>
         </div>
+        {sale && <F label="CPF (opcional)"><input value={v.client_cpf ?? ''} onChange={e => set({ client_cpf: e.target.value || null })} className={input} placeholder="000.000.000-00" inputMode="numeric" /></F>}
         <F label="Endereço"><input value={v.client_address ?? ''} onChange={e => set({ client_address: e.target.value || null })} className={input} placeholder="Rua, número, complemento" /></F>
         <F label="Bairro / Cidade"><input value={v.client_city ?? ''} onChange={e => set({ client_city: e.target.value || null })} className={input} placeholder="Ex: Jardim Leblon, Belo Horizonte-MG" /></F>
       </Block>
 
-      <Block title="Informações básicas">
+      {sale && v.kind === 'revenda' && (
+        <Block title="Dono do produto">
+          <div className="grid grid-cols-2 gap-3">
+            <F label="Nome"><input value={v.owner_name ?? ''} onChange={e => set({ owner_name: e.target.value || null })} className={input} placeholder="De quem é o produto" /></F>
+            <F label="Telefone"><input value={v.owner_phone ?? ''} onChange={e => set({ owner_phone: e.target.value || null })} className={input} placeholder="(31) 9 9999-9999" inputMode="tel" /></F>
+          </div>
+          <F label="Quanto repassar pro dono (R$)">
+            <MoneyInput value={v.owner_amount || ''} onChange={e => set({ owner_amount: Number(e.target.value) || 0 })} className={input} placeholder="0,00" />
+          </F>
+          <p className="text-xs text-zinc-500">Esse valor entra no Financeiro como saída a pagar (&quot;Repasse de revenda&quot;). O que sobra é o ganho da loja{v.owner_amount > 0 && total > 0 ? `: ${fmt(total - v.owner_amount - fee)}` : ''}.</p>
+        </Block>
+      )}
+
+      {!sale && <Block title="Informações básicas">
         <div className="grid grid-cols-2 gap-3">
           <F label="Data do pedido"><input type="date" value={v.date} onChange={e => set({ date: e.target.value })} className={input} /></F>
           <F label="Validade do orçamento (dias)"><input type="number" min="0" value={v.validity_days ?? ''} onChange={e => set({ validity_days: e.target.value ? Number(e.target.value) : null })} className={input} /></F>
@@ -180,33 +259,57 @@ export default function ShopOrderEditor({ order }: { order?: ShopOrder | null })
         </div>
         <F label="Defeito"><input value={v.defect ?? ''} onChange={e => set({ defect: e.target.value || null })} className={input} placeholder="Ex: Não gela" /></F>
         <F label="Observações"><textarea rows={2} value={v.observations ?? ''} onChange={e => set({ observations: e.target.value || null })} className={`${input} resize-none`} placeholder="Estado do aparelho, acessórios que vieram junto..." /></F>
-      </Block>
+      </Block>}
 
-      <Block title="Compromisso" defaultOpen={!!v.visit_date}>
+      {!sale && <Block title="Compromisso" defaultOpen={!!v.visit_date}>
         <p className="text-xs text-zinc-500 flex items-center gap-1.5"><CalendarClock className="w-4 h-4" /> Visita técnica, entrega ou retirada marcada com o cliente</p>
         <div className="grid grid-cols-2 gap-3">
           <F label="Data"><input type="date" value={v.visit_date ?? ''} onChange={e => set({ visit_date: e.target.value || null })} className={input} /></F>
           <F label="Horário"><input type="time" value={v.visit_time?.slice(0, 5) ?? ''} onChange={e => set({ visit_time: e.target.value || null })} className={input} /></F>
         </div>
         <F label="O que é"><input value={v.visit_notes ?? ''} onChange={e => set({ visit_notes: e.target.value || null })} className={input} placeholder="Ex: Visita técnica, cliente busca o aparelho..." /></F>
-      </Block>
+      </Block>}
 
-      <Block title="Pedido">
-        <Row icon={Wrench} label="Serviços" value={v.services.length ? fmt(linesTotal(v.services)) : undefined} onAdd={() => setModal('servico')}>{lines('services')}</Row>
-        <Row icon={Package} label="Peças" value={v.parts.length ? fmt(linesTotal(v.parts)) : undefined} onAdd={() => setModal('peca')}>{lines('parts')}</Row>
+      <Block title={sale ? 'Produto vendido' : 'Pedido'}>
+        {!sale && <Row icon={Wrench} label="Serviços" value={v.services.length ? fmt(linesTotal(v.services)) : undefined} onAdd={() => setModal('servico')}>{lines('services')}</Row>}
+        <Row icon={Package} label={sale ? 'Produtos' : 'Peças'} value={v.parts.length ? fmt(linesTotal(v.parts)) : undefined} onAdd={() => setModal('peca')}>{lines('parts')}</Row>
         <Money label="Desconto" icon={Percent} value={v.discount} onChange={n => set({ discount: n })} negative />
         <Money label="Taxa de entrega" icon={Truck} value={v.delivery_fee} onChange={n => set({ delivery_fee: n })} />
-        <Money label="Frete" icon={Truck} value={v.freight} onChange={n => set({ freight: n })} />
-        <Money label="Outras taxas" icon={Receipt} value={v.other_fees} onChange={n => set({ other_fees: n })} />
+        {!sale && <Money label="Frete" icon={Truck} value={v.freight} onChange={n => set({ freight: n })} />}
+        {!sale && <Money label="Outras taxas" icon={Receipt} value={v.other_fees} onChange={n => set({ other_fees: n })} />}
         <div className="flex justify-between items-center bg-zinc-100 rounded-xl px-4 py-3 mt-1">
           <span className="text-sm font-semibold text-zinc-700">Total</span>
           <span className="text-lg font-bold text-zinc-900">{fmt(total)}</span>
         </div>
       </Block>
 
+      {sale && (
+        <Block title="Pagamento">
+          <div className="grid grid-cols-2 gap-3">
+            <F label="Data da venda"><input type="date" value={v.date} onChange={e => set({ date: e.target.value })} className={input} /></F>
+            <F label="Forma de pagamento">
+              <select value={method} onChange={e => set({ payment_methods: [e.target.value] })} className={input}>{PAYMENT_METHODS.map(m => <option key={m}>{m}</option>)}</select>
+            </F>
+          </div>
+          {isCard && (
+            <>
+              <F label="Taxa da maquininha (%) — deixe em branco se não teve">
+                <input type="number" inputMode="decimal" min="0" max="100" step="0.01" value={v.card_fee_pct || ''} onChange={e => set({ card_fee_pct: Number(e.target.value) || 0 })} className={input} placeholder="Ex: 3,5" />
+              </F>
+              {fee > 0 && <p className="text-xs text-zinc-500">Taxa de {fmt(fee)} lançada como saída · cai na conta {fmt(total - fee)}</p>}
+            </>
+          )}
+          <label className="flex items-center gap-3 p-3 border border-zinc-200 rounded-xl cursor-pointer">
+            <input type="checkbox" checked={v.sale_received} onChange={e => set({ sale_received: e.target.checked })} className="w-5 h-5 accent-emerald-500" />
+            <span className="text-sm text-zinc-700">Já recebi o dinheiro</span>
+          </label>
+          {!v.sale_received && <p className="text-xs text-amber-600">A venda entra no caixa como &quot;a receber&quot;. Depois é só marcar como recebida.</p>}
+        </Block>
+      )}
+
       <Block title="Detalhes">
-        <F label="Condições de pagamento"><input value={v.payment_conditions ?? ''} onChange={e => set({ payment_conditions: e.target.value || null })} className={input} placeholder="Ex: À vista. / 50% entrada e 50% na entrega" /></F>
-        <F label="Meios de pagamento aceitos">
+        {!sale && <F label="Condições de pagamento"><input value={v.payment_conditions ?? ''} onChange={e => set({ payment_conditions: e.target.value || null })} className={input} placeholder="Ex: À vista. / 50% entrada e 50% na entrega" /></F>}
+        {!sale && <F label="Meios de pagamento aceitos">
           <div className="flex flex-wrap gap-2">
             {PAYMENT_METHODS.map(m => {
               const on = v.payment_methods.includes(m)
@@ -219,7 +322,7 @@ export default function ShopOrderEditor({ order }: { order?: ShopOrder | null })
               )
             })}
           </div>
-        </F>
+        </F>}
         <F label="Garantia">
           <div className="flex flex-wrap gap-2">
             {GUARANTEES.map(g => (
@@ -229,21 +332,22 @@ export default function ShopOrderEditor({ order }: { order?: ShopOrder | null })
             ))}
           </div>
         </F>
+        {sale && <F label="Observações (saem no recibo)"><textarea rows={2} value={v.observations ?? ''} onChange={e => set({ observations: e.target.value || null })} className={`${input} resize-none`} placeholder="Ex: produto usado, revisado, entregue funcionando..." /></F>}
         <F label="Anotações (só pra você, não saem no documento)"><textarea rows={2} value={v.notes ?? ''} onChange={e => set({ notes: e.target.value || null })} className={`${input} resize-none`} /></F>
       </Block>
 
-      <p className="text-xs text-zinc-400 text-center">As fotos do aparelho são anexadas depois de salvar o pedido.</p>
+      <p className="text-xs text-zinc-400 text-center">{sale ? 'O produto sai do estoque e a venda entra no caixa ao concluir.' : 'As fotos do aparelho são anexadas depois de salvar o pedido.'}</p>
 
       {/* Salvar fixo embaixo */}
       <div className="fixed left-0 right-0 z-30 px-4 lg:left-64" style={{ bottom: 'calc(var(--bottom-nav-height, 0px) + var(--safe-bottom, 0px) + 12px)' }}>
         <button type="button" onClick={save} disabled={saving}
           className="max-w-2xl mx-auto w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-base font-bold text-white shadow-lg disabled:opacity-60" style={{ background: 'var(--primary)' }}>
-          {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />} Salvar pedido · {fmt(total)}
+          {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : sale ? <ShoppingCart className="w-5 h-5" /> : <Save className="w-5 h-5" />} {sale ? (order ? 'Salvar venda' : 'Concluir venda') : 'Salvar pedido'} · {fmt(total)}
         </button>
       </div>
 
       {modal === 'servico' && <ServiceModal onClose={() => setModal(null)} onAdd={l => { set({ services: [...v.services, l] }); setModal(null); toastSuccess('Serviço adicionado ao pedido') }} />}
-      {modal === 'peca' && <PartModal onClose={() => setModal(null)} onAdd={l => { set({ parts: [...v.parts, l] }); setModal(null); toastSuccess('Peça adicionada ao pedido') }} />}
+      {modal === 'peca' && <PartModal sale={sale} onClose={() => setModal(null)} onAdd={l => { set({ parts: [...v.parts, l] }); setModal(null); toastSuccess(sale ? 'Produto adicionado' : 'Peça adicionada ao pedido') }} />}
     </div>
   )
 }
@@ -347,20 +451,20 @@ function ServiceModal({ onClose, onAdd }: { onClose: () => void; onAdd: (l: Orde
   )
 }
 
-function PartModal({ onClose, onAdd }: { onClose: () => void; onAdd: (l: OrderLine) => void }) {
+function PartModal({ onClose, onAdd, sale }: { onClose: () => void; onAdd: (l: OrderLine) => void; sale?: boolean }) {
   const [tab, setTab] = useState('estoque')
   const [items, setItems] = useState<LojaItem[] | null>(null)
   const [picked, setPicked] = useState<LojaItem | null>(null)
   const [q, setQ] = useState('')
   useEffect(() => { getLojaItems().then(setItems).catch(() => setItems([])) }, [])
-  const list = (items ?? []).filter(i => norm([i.name, i.brand, i.model].filter(Boolean).join(' ')).includes(norm(q.trim())))
+  const list = (items ?? []).filter(i => norm([i.name, i.equipment_type, i.brand, i.model, i.serial_number].filter(Boolean).join(' ')).includes(norm(q.trim())))
 
   return (
-    <Sheet title="Adicionar peça ao pedido" onClose={onClose}>
-      <Tabs value={tab} onChange={t => { setTab(t); setPicked(null) }} options={[['estoque', 'Do estoque', Package], ['novo', 'Outra peça', Plus]]} />
+    <Sheet title={sale ? 'Adicionar produto' : 'Adicionar peça ao pedido'} onClose={onClose}>
+      <Tabs value={tab} onChange={t => { setTab(t); setPicked(null) }} options={[['estoque', 'Do estoque', Package], ['novo', sale ? 'Outro produto' : 'Outra peça', Plus]]} />
       {tab === 'novo' || picked ? (
-        <LineForm key={picked?.id ?? 'novo'} saveLabel="Adicionar essa peça" partGuarantee
-          initial={picked ? { description: [picked.name, picked.brand, picked.model].filter(Boolean).join(' '), unit: 'un.', unit_price: picked.sale_value || picked.unit_value, stock_item_id: picked.id } : undefined}
+        <LineForm key={picked?.id ?? 'novo'} saveLabel={sale ? 'Adicionar esse produto' : 'Adicionar essa peça'} partGuarantee
+          initial={picked ? { description: [picked.name, picked.brand, picked.model].filter(Boolean).join(' '), details: picked.serial_number ? `Nº de série: ${picked.serial_number}` : undefined, unit: 'un.', unit_price: picked.sale_value || picked.unit_value, stock_item_id: picked.id } : undefined}
           onAdd={l => onAdd(l)} />
       ) : (
         <>
@@ -370,7 +474,7 @@ function PartModal({ onClose, onAdd }: { onClose: () => void; onAdd: (l: OrderLi
           </div>
           <div className="max-h-72 overflow-y-auto divide-y divide-zinc-50 border border-zinc-100 rounded-xl">
             {items === null ? <p className="px-3 py-4 text-sm text-zinc-400 text-center">Carregando...</p>
-              : list.length === 0 ? <p className="px-3 py-4 text-sm text-zinc-400 text-center">Nada no estoque. Use &quot;Outra peça&quot;.</p>
+              : list.length === 0 ? <p className="px-3 py-4 text-sm text-zinc-400 text-center">Nada no estoque. Use &quot;{sale ? 'Outro produto' : 'Outra peça'}&quot;.</p>
               : list.map(i => (
                 <button key={i.id} type="button" onClick={() => setPicked(i)} className="w-full text-left px-3 py-2.5 hover:bg-zinc-50 flex justify-between gap-2">
                   <span className="min-w-0">
@@ -381,7 +485,7 @@ function PartModal({ onClose, onAdd }: { onClose: () => void; onAdd: (l: OrderLi
                 </button>
               ))}
           </div>
-          <p className="text-xs text-zinc-400">A peça sai do estoque quando o pedido for marcado como Entregue ou Concluído.</p>
+          <p className="text-xs text-zinc-400">{sale ? 'O produto sai do estoque quando a venda for concluída.' : 'A peça sai do estoque quando o pedido for marcado como Entregue ou Concluído.'}</p>
         </>
       )}
     </Sheet>

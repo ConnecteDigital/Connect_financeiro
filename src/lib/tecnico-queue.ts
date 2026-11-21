@@ -46,7 +46,7 @@ export type CallKind = 'Retorno' | 'Serviço' | 'Orçamento'
 export function callKind(call: { return_of_call_id?: string | null }, visits: VisitInfo[]): CallKind {
   if (call.return_of_call_id) return 'Retorno'
   // Já teve uma visita que terminou em orçamento: agora é a execução
-  if (visits.some(v => v.finished_at && v.outcome === 'orcamento')) return 'Serviço'
+  if (visits.some(v => v.finished_at && (v.outcome === 'orcamento' || v.outcome === 'aprovado_reagendado'))) return 'Serviço'
   return 'Orçamento'
 }
 

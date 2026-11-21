@@ -1,5 +1,7 @@
 'use client'
 
+import { getTecnicoSignature } from '@/lib/db/signatures'
+import { loadServicePhotos, servicePhotosSince } from '@/lib/service-photos'
 import { use, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, FileImage, FileText, Loader2 } from 'lucide-react'
@@ -22,6 +24,9 @@ export default function RelatorioAtendimentoPage({ params }: { params: Promise<{
   const [call, setCall] = useState<any>(null)
   const [visits, setVisits] = useState<any[]>([])
   const [tecnico, setTecnico] = useState('')
+  const [tecSignature, setTecSignature] = useState<string | null>(null)
+  // Fotos de como o técnico encontrou o aparelho (tiradas no atendimento)
+  const [photos, setPhotos] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const docRef = useRef<HTMLDivElement>(null)
 
@@ -32,18 +37,20 @@ export default function RelatorioAtendimentoPage({ params }: { params: Promise<{
         if (c?.technician_id) {
           const { data } = await createClient().from('auxiliaries').select('name').eq('id', c.technician_id).maybeSingle()
           setTecnico(data?.name ?? '')
+          getTecnicoSignature(c.technician_id).then(setTecSignature)
         }
+        loadServicePhotos(id, servicePhotosSince(v, null)).then(setPhotos).catch(() => {})
       })
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [id])
 
   const ok = isRodrigues && !!call && ['nao_aprovou', 'pagou_somente_visita', 'orcamento'].includes(call.status)
-  const doc = ok ? rodriguesVisitReportDoc(tenant, call, visits, tecnico) : null
+  const doc = ok ? { ...rodriguesVisitReportDoc(tenant, call, visits, tecnico), photos, signerSignature: tecSignature } : null
   const name = String(call?.client?.name ?? call?.contact_name ?? 'cliente')
   const base = `Relatorio ${call?.call_number ?? ''} ${name}`.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9._-]+/g, '_')
   const share = useSheetShare(docRef, base, doc?.title ?? 'Relatório de atendimento',
-    JSON.stringify([call?.id, call?.status, visits.length, tecnico, tenant?.id]), !!doc)
+    JSON.stringify([call?.id, call?.status, visits.length, tecnico, tenant?.id, photos.length, tecSignature ? 1 : 0]), !!doc)
 
   if (loading || tenantLoading) return <div className="max-w-2xl mx-auto h-40 bg-slate-50 rounded-xl animate-pulse" />
 

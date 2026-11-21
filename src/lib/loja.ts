@@ -4,6 +4,6 @@ export function isLojaMode(tenant: { call_form_config?: any } | null | undefined
   return tenant?.call_form_config?.loja_mode === true
 }
 
-export const LOJA_CATEGORIES = ['Compra de mercadoria', 'Peças', 'Aluguel', 'Energia', 'Água', 'Internet', 'Funcionários', 'Transporte', 'Marketing', 'Impostos', 'Manutenção', 'Outros']
+export const LOJA_CATEGORIES = ['Compra de mercadoria', 'Peças', 'Aluguel', 'Energia', 'Água', 'Internet', 'Funcionários', 'Transporte', 'Marketing', 'Impostos', 'Manutenção', 'Taxa Maquininha', 'Repasse de revenda', 'Outros']
 
 export const LOJA_ALLOWED_PREFIXES = ['/dashboard/pedidos', '/dashboard/estoque', '/dashboard/financeiro', '/dashboard/configuracoes']

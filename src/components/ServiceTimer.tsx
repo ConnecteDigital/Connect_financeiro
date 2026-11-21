@@ -1,15 +1,19 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Play, CheckCircle, XCircle, Loader2, Timer } from 'lucide-react'
+import { Play, CheckCircle, XCircle, Loader2, Timer, Camera, Paperclip, X } from 'lucide-react'
 import {
   getCallVisits, startServiceVisit, finishServiceVisit, VISIT_OUTCOME_LABEL, type VisitOutcome,
 } from '@/lib/db/service-visits'
 import { formatDuration } from '@/lib/business-hours'
 import { useTenant } from '@/lib/tenant-context'
+import { createClient } from '@/lib/supabase/client'
+import Portal from '@/components/Portal'
 
-const END_REASONS: { value: VisitOutcome; label: string; date: 'required' | 'optional' | 'none'; notes: boolean }[] = [
+const END_REASONS: { value: VisitOutcome; label: string; date: 'required' | 'optional' | 'none'; notes: boolean; time?: boolean }[] = [
+  // Cliente aprovou, mas o técnico tem outro serviço agora: fica agendado pra nova data/horário
+  { value: 'aprovado_reagendado', label: 'Aprovado — vou fazer em outro horário', date: 'required', notes: false, time: true },
   { value: 'orcamento', label: 'Orçamento — cliente vai decidir', date: 'none', notes: false },
   { value: 'nao_aprovou', label: 'Cliente não aprovou', date: 'none', notes: false },
   { value: 'sem_conserto', label: 'Não tem conserto', date: 'none', notes: false },
@@ -43,6 +47,11 @@ export default function ServiceTimer({ callId, status, onChanged }: {
   const [reason, setReason] = useState<VisitOutcome | null>(null)
   const [newDate, setNewDate] = useState('')
   const [notes, setNotes] = useState('')
+  const [newTime, setNewTime] = useState('')
+  // Fotos de como o técnico encontrou o aparelho (ficam no chamado e saem no relatório)
+  const [photos, setPhotos] = useState<{ id: string; file: File; preview: string }[]>([])
+  const cameraRef = useRef<HTMLInputElement>(null)
+  const galleryRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(() => {
     getCallVisits(callId)
@@ -88,21 +97,36 @@ export default function ServiceTimer({ callId, status, onChanged }: {
   const reasonCfg = END_REASONS.find(r => r.value === reason) ?? null
   const missing = !reasonCfg ? 'Escolha o motivo'
     : reasonCfg.date === 'required' && !newDate ? 'Escolha a nova data'
+    : reasonCfg.time && !newTime ? 'Escolha o novo horário'
     : reasonCfg.notes && !notes.trim() ? 'Escreva uma observação'
     : ''
   const canConfirmEnd = !missing
+
+  function addPhotos(list: FileList | null) {
+    if (!list?.length) return
+    setPhotos(prev => [...prev, ...Array.from(list).map(file => ({ id: `${Date.now()}${Math.random()}`, file, preview: URL.createObjectURL(file) }))])
+  }
 
   async function handleEnd() {
     if (!canConfirmEnd || !reasonCfg) return
     setBusy(true); setError('')
     try {
-      await finishServiceVisit(callId, reasonCfg.value, notes, reasonCfg.date === 'none' ? undefined : (newDate || undefined))
+      await finishServiceVisit(callId, reasonCfg.value, notes, reasonCfg.date === 'none' ? undefined : (newDate || undefined), reasonCfg.time ? (newTime || undefined) : undefined)
+      // Fotos de como encontrou o aparelho: sobem depois de encerrar (se alguma falhar, o encerramento vale)
+      if (photos.length > 0) {
+        const storage = createClient().storage.from('chamados-anexos')
+        await Promise.all(photos.map(({ file }, i) => {
+          const safe = file.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9._-]/g, '_')
+          return storage.upload(`${callId}/${Date.now() + i}_${safe}`, file).catch(console.error)
+        }))
+        photos.forEach(p => URL.revokeObjectURL(p.preview))
+      }
       setEndOpen(false)
-      setNotes(''); setNewDate(''); setReason(null)
+      setNotes(''); setNewDate(''); setNewTime(''); setReason(null); setPhotos([])
       load()
       onChanged()
     } catch (e: any) {
-      setError(/resultado inv/i.test(e?.message ?? '') ? 'Esse motivo é novo: rode a migration_v34.sql no Supabase.' : (e?.message ?? 'Não foi possível encerrar o serviço.'))
+      setError(/resultado inv|p_new_time|finish_service_visit/i.test(e?.message ?? '') ? 'Esse motivo é novo: rode a migration_v38.sql no Supabase.' : (e?.message ?? 'Não foi possível encerrar o serviço.'))
     } finally { setBusy(false) }
   }
 
@@ -167,7 +191,8 @@ export default function ServiceTimer({ callId, status, onChanged }: {
       )}
 
       {endOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backdropFilter: 'blur(4px)', background: 'rgba(0,0,0,0.4)' }}>
+        <Portal>
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{ backdropFilter: 'blur(4px)', background: 'rgba(0,0,0,0.4)' }}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90dvh] overflow-y-auto">
             <h2 className="text-lg font-bold text-zinc-900">Encerrar serviço</h2>
             <div className="space-y-2">
@@ -181,13 +206,27 @@ export default function ServiceTimer({ callId, status, onChanged }: {
               ))}
             </div>
             {reasonCfg && reasonCfg.date !== 'none' && (
-              <div>
-                <label className="block text-xs font-medium text-zinc-500 mb-1.5">
-                  Nova data {reasonCfg.date === 'required' ? '*' : '(opcional)'}
-                </label>
-                <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)}
-                  className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+              <div className={reasonCfg.time ? 'grid grid-cols-2 gap-3' : ''}>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-500 mb-1.5">
+                    Nova data {reasonCfg.date === 'required' ? '*' : '(opcional)'}
+                  </label>
+                  <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)}
+                    className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                </div>
+                {reasonCfg.time && (
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-500 mb-1.5">Novo horário *</label>
+                    <input type="time" value={newTime} onChange={e => setNewTime(e.target.value)}
+                      className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                  </div>
+                )}
               </div>
+            )}
+            {reasonCfg?.time && (
+              <p className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
+                O chamado continua na sua agenda, já como aprovado, no dia e horário escolhidos.
+              </p>
             )}
             <div>
               <label className="block text-xs font-medium text-zinc-500 mb-1.5">
@@ -196,6 +235,29 @@ export default function ServiceTimer({ callId, status, onChanged }: {
               <textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)}
                 className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none"
                 placeholder="Ex: precisa de compressor 1/4 HP..." />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-zinc-500 mb-1.5">Foto de como encontrou o aparelho (opcional)</label>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => cameraRef.current?.click()}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-orange-50 border border-orange-200 text-orange-600"><Camera className="w-4 h-4" /> Tirar foto</button>
+                <button type="button" onClick={() => galleryRef.current?.click()}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-zinc-50 border border-zinc-200 text-zinc-600"><Paperclip className="w-4 h-4" /> Galeria</button>
+              </div>
+              <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => { addPhotos(e.target.files); e.target.value = '' }} />
+              <input ref={galleryRef} type="file" accept="image/*" multiple className="hidden" onChange={e => { addPhotos(e.target.files); e.target.value = '' }} />
+              {photos.length > 0 && (
+                <div className="grid grid-cols-3 gap-2 mt-2">
+                  {photos.map(p => (
+                    <div key={p.id} className="relative rounded-lg overflow-hidden border border-zinc-200 bg-zinc-50">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={p.preview} alt="" className="w-full h-20 object-cover" />
+                      <button type="button" onClick={() => { URL.revokeObjectURL(p.preview); setPhotos(l => l.filter(x => x.id !== p.id)) }}
+                        className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1"><X className="w-3 h-3" /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             {error && <p className="text-sm text-red-500">{error}</p>}
             {missing && <p className="text-xs text-zinc-400 text-center">{missing} pra confirmar.</p>}
@@ -211,6 +273,7 @@ export default function ServiceTimer({ callId, status, onChanged }: {
             </div>
           </div>
         </div>
+        </Portal>
       )}
     </div>
   )

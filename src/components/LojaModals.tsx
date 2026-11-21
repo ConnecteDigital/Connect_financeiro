@@ -5,7 +5,7 @@ import Portal from '@/components/Portal'
 import { useRef, useState, type ReactNode } from 'react'
 import { X, Loader2, Search, Plus, Camera, Video, Paperclip, Play } from 'lucide-react'
 import { localYmd } from '@/lib/tecnico-queue'
-import { sellItem, receiveItem, saveLojaItem, saveLojaMedia, mediaUrl, isVideoFile, lojaErrorMessage, kindLabel, EQUIPMENT_TYPES, type LojaItem, type LojaMedia, type ItemKind } from '@/lib/db/loja'
+import { receiveItem, saveLojaItem, saveLojaMedia, mediaUrl, isVideoFile, lojaErrorMessage, kindLabel, EQUIPMENT_TYPES, type LojaItem, type LojaMedia, type ItemKind } from '@/lib/db/loja'
 
 const fmt = (v: number) => `R$ ${Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
 export const input = 'w-full px-3 py-2.5 border border-zinc-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]'
@@ -268,72 +268,6 @@ export function ItemPicker({ items, onPick }: { items: LojaItem[]; onPick: (i: L
         ))}
       </div>
     </div>
-  )
-}
-
-const PAYMENTS = ['PIX', 'Dinheiro', 'Cartão de crédito', 'Cartão de débito', 'Boleto', 'Transferência']
-
-// Vendeu
-export function SellModal({ item, items, onClose, onSaved }: { item?: LojaItem | null; items?: LojaItem[]; onClose: () => void; onSaved: () => void }) {
-  const [picked, setPicked] = useState<LojaItem | null>(item ?? null)
-  const [quantity, setQuantity] = useState('1')
-  const [price, setPrice] = useState(item?.sale_value ? String(item.sale_value) : '')
-  const [date, setDate] = useState(localYmd())
-  const [payment, setPayment] = useState('PIX')
-  const [client, setClient] = useState('')
-  const [received, setReceived] = useState(true)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const qty = Math.max(1, Number(quantity) || 1)
-  const total = qty * (Number(price) || 0)
-
-  async function save() {
-    if (!picked) return
-    if (!(Number(price) > 0)) { setError('Informe o valor da venda.'); return }
-    setBusy(true); setError('')
-    try {
-      await sellItem(picked, { quantity: qty, unitPrice: Number(price), date, payment, client: client.trim(), received })
-      onSaved()
-    } catch (e) { console.error(e); setError(lojaErrorMessage(e, 'Não foi possível registrar a venda.')) }
-    finally { setBusy(false) }
-  }
-
-  return (
-    <Sheet title="Registrar venda" onClose={onClose}>
-      {!picked ? <ItemPicker items={items ?? []} onPick={i => { setPicked(i); setPrice(i.sale_value ? String(i.sale_value) : '') }} /> : (
-        <>
-          <div className="rounded-xl bg-zinc-50 border border-zinc-100 px-3 py-2.5 flex justify-between items-center gap-2">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-zinc-800 truncate">{picked.name}</p>
-              <p className="text-xs text-zinc-500">{[picked.brand, picked.model].filter(Boolean).join(' · ') || kindLabel(picked.kind)} · {picked.quantity} em estoque</p>
-            </div>
-            {!item && <button type="button" onClick={() => setPicked(null)} className="text-xs font-semibold" style={{ color: 'var(--primary)' }}>Trocar</button>}
-          </div>
-          {picked.quantity < qty && <p className="text-xs text-amber-600">Atenção: o estoque tem só {picked.quantity}. Ele vai ficar zerado.</p>}
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Quantidade"><input type="number" min="1" value={quantity} onChange={e => setQuantity(e.target.value)} className={input} /></Field>
-            <Field label="Valor unitário (R$) *"><MoneyInput min="0" step="0.01" value={price} onChange={e => setPrice(e.target.value)} className={input} placeholder="0,00" /></Field>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Data"><input type="date" value={date} onChange={e => setDate(e.target.value)} className={input} /></Field>
-            <Field label="Pagamento">
-              <select value={payment} onChange={e => setPayment(e.target.value)} className={input}>{PAYMENTS.map(p => <option key={p}>{p}</option>)}</select>
-            </Field>
-          </div>
-          <Field label="Cliente (opcional)"><input value={client} onChange={e => setClient(e.target.value)} className={input} placeholder="Nome de quem comprou" /></Field>
-          <label className="flex items-center gap-3 p-3 border border-zinc-200 rounded-xl cursor-pointer">
-            <input type="checkbox" checked={received} onChange={e => setReceived(e.target.checked)} className="w-5 h-5 accent-emerald-500" />
-            <span className="text-sm text-zinc-700">Já recebi o dinheiro</span>
-          </label>
-          <div className="flex justify-between items-center rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3">
-            <span className="text-sm font-medium text-emerald-800">Total da venda</span>
-            <span className="text-lg font-bold text-emerald-700">{fmt(total)}</span>
-          </div>
-          {error && <p className="text-sm text-red-500">{error}</p>}
-          <Actions busy={busy} onClose={onClose} onSave={save} label="Registrar venda" />
-        </>
-      )}
-    </Sheet>
   )
 }
 

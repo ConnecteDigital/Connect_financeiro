@@ -13,9 +13,11 @@ export const BASE_CHANNELS: Channel[] = [
 ]
 
 export const GOOGLE_MAPS: Channel = { value: 'google_maps', label: '📍 Google Maps' }
+// Rodrigues: serviço que chegou pela loja deles
+export const LOJA: Channel = { value: 'loja', label: '🏬 Loja' }
 
 // Rótulos conhecidos (pra mostrar canais gravados mesmo fora da lista da empresa)
-export const ALL_CHANNELS: Channel[] = [...BASE_CHANNELS, GOOGLE_MAPS]
+export const ALL_CHANNELS: Channel[] = [...BASE_CHANNELS, GOOGLE_MAPS, LOJA]
 export const CHANNEL_LABEL: Record<string, string> = Object.fromEntries(ALL_CHANNELS.map(c => [c.value, c.label]))
 
 type TenantLike = { slug?: string | null; name?: string | null; call_form_config?: any } | null | undefined
@@ -35,6 +37,7 @@ export function channelsFor(tenant: TenantLike): Channel[] {
   const extra = customChannels(tenant)
   const out = [...BASE_CHANNELS, ...extra]
   if (isNovoAmbiental(tenant) && !out.some(c => c.value === GOOGLE_MAPS.value)) out.push(GOOGLE_MAPS)
+  if (tenant?.call_form_config?.rodrigues_custom === true && !out.some(c => c.value === LOJA.value)) out.push(LOJA)
   return out
 }
 

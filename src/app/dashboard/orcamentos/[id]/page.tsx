@@ -90,7 +90,8 @@ function rodriguesQuoteDoc(q: Quote, tenant: Tenant | null): RodriguesDocProps {
     info: [['Validade do orçamento', validity ? `${validity}` : null], ['Marca', d.brand], ['Modelo', d.model], ['Aparelho', d.appliance], ['Defeito', d.defect]],
     visit: d.visit_date || d.visit_period?.trim() ? { date: brDate(d.visit_date), period: d.visit_period?.trim() } : null,
     items: (q.items ?? []).map(it => ({ description: it.description, quantity: Number(it.quantity), unit_price: Number(it.unit_price) })),
-    showPrices: q.show_total !== false,
+    // Só o valor total: lista o que vai ser feito, sem preço nem quantidade por item
+    ...(d.total_only ? { showPrices: false, showTotals: true, descriptionOnly: true, servicesTotal: Number(q.subtotal || 0) } : { showPrices: q.show_total !== false }),
     discount: Number(q.discount || 0),
     payment: { methods: header.payment_methods, pix: header.pix, conditions: d.payment_conditions },
     guarantee: q.guarantee,

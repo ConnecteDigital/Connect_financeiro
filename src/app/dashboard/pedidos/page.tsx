@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Plus, Search, X, ChevronRight, CalendarClock, CheckCircle2 } from 'lucide-react'
+import { Plus, Search, X, ChevronRight, CalendarClock, CheckCircle2, ShoppingCart } from 'lucide-react'
 import { useTenant } from '@/lib/tenant-context'
 import { isLojaMode } from '@/lib/loja'
-import { getShopOrders, orderNumber, statusOf, ALL_ORDER_STATUSES, type ShopOrder } from '@/lib/db/shop-orders'
+import { getShopOrders, orderNumber, statusOf, isSale, orderTitle, statusLabelOf, ALL_ORDER_STATUSES, type ShopOrder } from '@/lib/db/shop-orders'
 import { ptDate } from '@/lib/period'
 
 const fmt = (v: number) => `R$ ${Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
@@ -28,13 +28,18 @@ export default function PedidosPage() {
 
   const counts = useMemo(() => {
     const m: Record<string, { n: number; total: number }> = {}
-    for (const o of orders ?? []) { (m[o.status] ??= { n: 0, total: 0 }); m[o.status].n++; m[o.status].total += o.total }
+    // Serviços por situação; vendas e revendas num quadro só ("Vendas")
+    for (const o of orders ?? []) {
+      const k = isSale(o) ? '__vendas' : o.status
+      if (isSale(o) && o.status === 'cancelado') continue
+      ;(m[k] ??= { n: 0, total: 0 }); m[k].n++; m[k].total += o.total
+    }
     return m
   }, [orders])
 
   const list = (orders ?? []).filter(o =>
-    (status === 'todos' || o.status === status) &&
-    norm([o.client_name, orderNumber(o), o.appliance, o.brand, o.model, o.client_phone].filter(Boolean).join(' ')).includes(norm(query.trim())))
+    (status === 'todos' || (status === '__vendas' ? isSale(o) : !isSale(o) && o.status === status)) &&
+    norm([o.client_name, orderNumber(o), o.appliance, o.brand, o.model, o.client_phone, ...o.parts.map(p => p.description)].filter(Boolean).join(' ')).includes(norm(query.trim())))
 
   if (!tenantLoading && !isLojaMode(tenant)) {
     return <p className="text-center text-zinc-500 py-16 text-sm">Esta função não está disponível para esta conta.</p>
@@ -45,10 +50,17 @@ export default function PedidosPage() {
       <div className="flex items-center justify-between gap-2">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900">Pedidos</h1>
-          <p className="text-sm text-zinc-500">Orçamentos e consertos da loja</p>
+          <p className="text-sm text-zinc-500">Serviços, vendas e revendas da loja</p>
         </div>
-        <Link href="/dashboard/pedidos/novo" className="btn-primary text-sm px-4 py-2.5 flex items-center gap-2">
-          <Plus className="w-4 h-4" /> Novo pedido
+      </div>
+
+      {/* O que vai lançar: conserto/orçamento ou venda */}
+      <div className="grid grid-cols-2 gap-2">
+        <Link href="/dashboard/pedidos/novo" className="btn-primary text-sm px-3 py-3 flex items-center justify-center gap-2">
+          <Plus className="w-4 h-4" /> Novo serviço
+        </Link>
+        <Link href="/dashboard/pedidos/novo?tipo=venda" className="text-sm font-semibold px-3 py-3 rounded-xl flex items-center justify-center gap-2 text-white bg-emerald-600 shadow-sm">
+          <ShoppingCart className="w-4 h-4" /> Nova venda
         </Link>
       </div>
 
@@ -57,7 +69,8 @@ export default function PedidosPage() {
       {/* Situações: toca pra ver só aquela */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {[{ value: 'todos', label: 'Todos', dot: 'bg-zinc-400', n: orders?.length ?? 0, total: (orders ?? []).reduce((s, o) => s + o.total, 0) },
-          ...ALL_ORDER_STATUSES.filter(s => counts[s.value]).map(s => ({ ...s, n: counts[s.value].n, total: counts[s.value].total }))].map(s => {
+          ...ALL_ORDER_STATUSES.filter(s => counts[s.value]).map(s => ({ ...s, n: counts[s.value].n, total: counts[s.value].total })),
+          ...(counts.__vendas ? [{ value: '__vendas', label: 'Vendas', dot: 'bg-emerald-500', n: counts.__vendas.n, total: counts.__vendas.total }] : [])].map(s => {
           const active = status === s.value
           return (
             <button key={s.value} type="button" onClick={() => setStatus(active && s.value !== 'todos' ? 'todos' : s.value)}
@@ -88,19 +101,22 @@ export default function PedidosPage() {
           </div>
         ) : list.map(o => {
           const st = statusOf(o.status)
+          const sale = isSale(o)
           return (
             <Link key={o.id} href={`/dashboard/pedidos/${o.id}`} className="block bg-white rounded-2xl border border-zinc-100 shadow-sm p-4 active:scale-[0.99] transition">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${st.pill}`}><span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />{st.label}</span>
+                  <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${sale ? (o.status === 'cancelado' ? 'bg-zinc-100 text-zinc-600 border-zinc-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200') : st.pill}`}><span className={`w-1.5 h-1.5 rounded-full ${sale ? 'bg-emerald-500' : st.dot}`} />{sale ? `${orderTitle(o)} · ${statusLabelOf(o)}` : st.label}</span>
                   <p className="font-semibold text-zinc-900 mt-1.5 truncate">{o.client_name}</p>
-                  <p className="text-xs text-zinc-500 truncate">Pedido n. {orderNumber(o)} · {ptDate(o.date)}</p>
+                  <p className="text-xs text-zinc-500 truncate">{orderTitle(o)} n. {orderNumber(o)} · {ptDate(o.date)}</p>
+                  {sale && o.parts.length > 0 && <p className="text-xs text-zinc-500 truncate">{o.parts.map(p => `${p.quantity}x ${p.description}`).join(', ')}</p>}
                   {(o.appliance || o.brand) && <p className="text-xs text-zinc-500 truncate">{[o.appliance, o.brand, o.model].filter(Boolean).join(' ')}{o.defect ? ` — ${o.defect}` : ''}</p>}
                   {o.visit_date && <p className="text-xs font-medium mt-1 flex items-center gap-1" style={{ color: 'var(--primary)' }}><CalendarClock className="w-3.5 h-3.5" /> {ptDate(o.visit_date)}{o.visit_time ? ` às ${o.visit_time.slice(0, 5)}` : ''}{o.visit_notes ? ` · ${o.visit_notes}` : ''}</p>}
                 </div>
                 <div className="text-right flex-shrink-0">
                   <p className="text-sm font-bold text-zinc-900">{fmt(o.total)}</p>
-                  {o.cash_entry_id && <p className="text-[11px] font-semibold text-emerald-600 flex items-center justify-end gap-0.5"><CheckCircle2 className="w-3 h-3" /> Pago</p>}
+                  {o.cash_entry_id && (!sale || o.sale_received) && <p className="text-[11px] font-semibold text-emerald-600 flex items-center justify-end gap-0.5"><CheckCircle2 className="w-3 h-3" /> Pago</p>}
+                  {sale && !o.sale_received && o.status !== 'cancelado' && <p className="text-[11px] font-semibold text-amber-600">A receber</p>}
                   <ChevronRight className="w-4 h-4 text-zinc-300 ml-auto mt-1" />
                 </div>
               </div>

@@ -7,10 +7,10 @@ import { useTenant } from '@/lib/tenant-context'
 import { getLojaItems, getLojaSummary, type LojaItem, type LojaSummary } from '@/lib/db/loja'
 import { periodOf, ptDate, type PeriodMode } from '@/lib/period'
 import PeriodNav from '@/components/PeriodNav'
-import { SellModal, ReceiveModal } from '@/components/LojaModals'
+import { ReceiveModal } from '@/components/LojaModals'
 import { toastSuccess } from '@/components/Toast'
 import { greeting } from '@/lib/greeting'
-import { getShopOrders, orderNumber, ALL_ORDER_STATUSES, CLOSED_STATUSES, type ShopOrder } from '@/lib/db/shop-orders'
+import { getShopOrders, orderNumber, isSale, ALL_ORDER_STATUSES, CLOSED_STATUSES, type ShopOrder } from '@/lib/db/shop-orders'
 import { localYmd } from '@/lib/tecnico-queue'
 
 const fmt = (v: number) => `R$ ${Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
@@ -24,7 +24,7 @@ export default function LojaHome() {
   const period = periodOf(mode, offset)
   const [sum, setSum] = useState<LojaSummary | null>(null)
   const [items, setItems] = useState<LojaItem[]>([])
-  const [modal, setModal] = useState<'sell' | 'receive' | null>(null)
+  const [modal, setModal] = useState<'receive' | null>(null)
   const [orders, setOrders] = useState<ShopOrder[]>([])
 
   const load = useCallback(() => {
@@ -52,14 +52,14 @@ export default function LojaHome() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <Link href="/dashboard/pedidos/novo" className="rounded-2xl text-white p-3 text-left shadow-sm active:scale-[0.98] transition" style={{ background: 'var(--primary)' }}>
           <FilePlus2 className="w-5 h-5" />
-          <p className="text-sm font-bold mt-1.5 leading-tight">Novo pedido</p>
+          <p className="text-sm font-bold mt-1.5 leading-tight">Novo serviço</p>
           <p className="text-[11px] opacity-90">orçamento ou conserto</p>
         </Link>
-        <button type="button" onClick={() => setModal('sell')} className="rounded-2xl bg-emerald-500 text-white p-3 text-left shadow-sm active:scale-[0.98] transition">
+        <Link href="/dashboard/pedidos/novo?tipo=venda" className="rounded-2xl bg-emerald-500 text-white p-3 text-left shadow-sm active:scale-[0.98] transition">
           <ShoppingCart className="w-5 h-5" />
           <p className="text-sm font-bold mt-1.5 leading-tight">Vendi</p>
-          <p className="text-[11px] opacity-90">equipamento ou peça</p>
-        </button>
+          <p className="text-[11px] opacity-90">venda ou revenda</p>
+        </Link>
         <button type="button" onClick={() => setModal('receive')} className="rounded-2xl bg-orange-500 text-white p-3 text-left shadow-sm active:scale-[0.98] transition">
           <PackagePlus className="w-5 h-5" />
           <p className="text-sm font-bold mt-1.5 leading-tight">Chegou</p>
@@ -74,9 +74,9 @@ export default function LojaHome() {
 
       {/* Pedidos em aberto */}
       {(() => {
-        const open = orders.filter(o => !CLOSED_STATUSES.includes(o.status))
+        const open = orders.filter(o => !isSale(o) && !CLOSED_STATUSES.includes(o.status))
         const today = localYmd()
-        const agenda = orders.filter(o => o.visit_date && o.visit_date >= today && !['cancelado', 'nao_aprovado'].includes(o.status))
+        const agenda = orders.filter(o => !isSale(o) && o.visit_date && o.visit_date >= today && !['cancelado', 'nao_aprovado'].includes(o.status))
           .sort((a, b) => `${a.visit_date}${a.visit_time ?? ''}`.localeCompare(`${b.visit_date}${b.visit_time ?? ''}`)).slice(0, 3)
         const byStatus = ALL_ORDER_STATUSES.map(s => ({ ...s, n: open.filter(o => o.status === s.value).length })).filter(s => s.n > 0)
         return (
@@ -180,7 +180,6 @@ export default function LojaHome() {
         )}
       </div>
 
-      {modal === 'sell' && <SellModal items={items} onClose={() => setModal(null)} onSaved={() => { setModal(null); toastSuccess('Venda registrada!'); load() }} />}
       {modal === 'receive' && <ReceiveModal items={items} onClose={() => setModal(null)} onSaved={() => { setModal(null); toastSuccess('Estoque atualizado!'); load() }} />}
     </div>
   )
