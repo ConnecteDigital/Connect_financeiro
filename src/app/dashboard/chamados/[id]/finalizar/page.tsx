@@ -42,8 +42,8 @@ export default function FinalizarServicoPage({ params }: { params: Promise<{ id:
   const [uberCost, setUberCost] = useState(0)
   const [paymentLines, setPaymentLines] = useState<PaymentLine[]>([])
   const [partsPaid, setPartsPaid] = useState(false)
-  // Retorno que virou serviço novo: valor de serviço cobrado (entra na comissão)
-  const [returnService, setReturnService] = useState(0)
+  // Retorno: TOTAL que o cliente pagou (0 = só garantia). O sistema não soma a peça por cima.
+  const [returnTotal, setReturnTotal] = useState(0)
   const [observations, setObservations] = useState('')
   const [guarantee, setGuarantee] = useState<GuaranteeKey | ''>('90')
   const [noGuaranteeReason, setNoGuaranteeReason] = useState('')
@@ -70,7 +70,7 @@ export default function FinalizarServicoPage({ params }: { params: Promise<{ id:
       if (existing) {
         setValue(Number(existing.total_value ?? 0))
         setPaymentLines(paymentsFromOs(existing))
-        setReturnService(Number(existing.return_service_value ?? 0))
+        setReturnTotal(Number(existing.total_value ?? 0))
         setPartsPaid(c.return_parts_paid ?? (Number(existing.total_value ?? 0) - Number(existing.return_service_value ?? 0)) > 0)
         setObservations(existing.observations ?? '')
         setGuarantee(guaranteeFromOs(existing) || '90')
@@ -114,16 +114,21 @@ export default function FinalizarServicoPage({ params }: { params: Promise<{ id:
   }
 
   const partsTotal = stockLines.reduce((s, l) => s + l.total_value, 0) + extraPartsCost
-  // Valor cobrado: no retorno é a peça (se o cliente pagou) + o serviço
-  // novo, quando o retorno gerou um
-  const chargedTotal = isReturn ? (partsPaid ? partsTotal : 0) + (returnService || 0) : value
+  // Valor cobrado: o que foi digitado como recebido — no retorno também.
+  // (Antes o retorno somava o valor da peça do estoque por cima do que o
+  // técnico digitava, e a nota saía com a peça a mais.)
+  const chargedTotal = isReturn ? (returnTotal || 0) : value
+  // Parte do retorno que é serviço (base da comissão): se o cliente pagou a
+  // peça, ela já está dentro do total e é descontada; se foi garantia, não.
+  const paidPart = partsPaid && partsTotal > 0   // só vale se tem peça lançada
+  const returnService = isReturn ? (paidPart ? Math.max(chargedTotal - partsTotal, 0) : chargedTotal) : 0
   // Garantia: serviço normal ou retorno que virou serviço cobrado
   const withGuarantee = !isReturn || returnService > 0
   const needsPayment = chargedTotal > 0
 
   async function handleSave() {
     if (!isReturn && value <= 0) { setError('Informe o valor total recebido.'); return }
-    if (isReturn && partsPaid && partsTotal <= 0) { setError('Lance a peça usada (ou marque que o cliente não pagou).'); return }
+    if (isReturn && paidPart && chargedTotal <= 0) { setError('Informe quanto o cliente pagou (ou marque que ele não pagou a peça).'); return }
     if (withGuarantee && !guarantee) { setError('Escolha a garantia.'); return }
     if (withGuarantee && guarantee === 'none' && !noGuaranteeReason.trim()) { setError('Escreva por que o serviço não tem garantia.'); return }
     const lines = needsPayment ? paymentLines.filter(l => l.method) : []
@@ -231,14 +236,14 @@ export default function FinalizarServicoPage({ params }: { params: Promise<{ id:
         {isReturn ? (
           <>
             <div className="rounded-lg bg-violet-50 border border-violet-100 px-3 py-2.5 text-sm text-violet-800">
-              Retorno de garantia: normalmente o serviço não é cobrado. Lance a peça usada e diga se o cliente pagou por ela.
-              Se o retorno virou um serviço novo (defeito que não era da primeira visita), informe o valor abaixo.
+              Retorno de garantia: normalmente o cliente não paga nada. Se ele pagou alguma coisa (peça, serviço novo),
+              digite abaixo o <b>total que recebeu</b> — é exatamente esse valor que sai na nota.
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor do serviço cobrado no retorno (R$)</label>
-              <MoneyInput min="0" step="0.01" value={returnService || ''} onChange={e => setReturnService(Number(e.target.value))}
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Valor total recebido do cliente (R$)</label>
+              <MoneyInput min="0" step="0.01" value={returnTotal || ''} onChange={e => setReturnTotal(Number(e.target.value))}
                 className={inputCls} placeholder="0,00 — deixe em branco se foi só garantia" />
-              <p className="text-xs text-slate-400 mt-1">Esse valor entra na sua comissão (descontando Uber e taxa da maquininha).</p>
+              <p className="text-xs text-slate-400 mt-1">Já com a peça, se o cliente pagou por ela. O sistema não soma nada por cima.</p>
             </div>
           </>
         ) : (
@@ -283,7 +288,7 @@ export default function FinalizarServicoPage({ params }: { params: Promise<{ id:
           </div>
         </div>
 
-        {isReturn && (
+        {isReturn && partsTotal > 0 && (
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">O cliente pagou a peça?</label>
             <div className="flex gap-2">
@@ -294,12 +299,36 @@ export default function FinalizarServicoPage({ params }: { params: Promise<{ id:
                 </button>
               ))}
             </div>
-            {chargedTotal > 0 && (
-              <p className="text-xs text-slate-500 mt-1.5">
-                Valor cobrado do cliente: R$ {chargedTotal.toFixed(2)}
-                {returnService > 0 && partsPaid && partsTotal > 0 ? ` (peça R$ ${partsTotal.toFixed(2)} + serviço R$ ${returnService.toFixed(2)})` : ''}
+            {paidPart ? (
+              <div className="mt-2 space-y-1.5">
+                <p className="text-xs text-slate-500">
+                  A peça (R$ {partsTotal.toFixed(2)}) já está dentro do total recebido — não é somada de novo.
+                </p>
+                {chargedTotal <= 0 && (
+                  <button type="button" onClick={() => setReturnTotal(partsTotal)}
+                    className="px-3 py-2 rounded-lg text-xs font-semibold border border-orange-200 bg-orange-50 text-orange-700">
+                    Recebeu só a peça? Preencher R$ {partsTotal.toFixed(2)}
+                  </button>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500 mt-2">
+                Peça em garantia: o cliente não paga por ela. Ela sai do seu estoque e fica como custo da empresa.
               </p>
             )}
+          </div>
+        )}
+
+        {isReturn && (
+          <div className="rounded-lg bg-slate-50 border border-slate-100 px-3 py-2.5 text-sm">
+            <div className="flex justify-between font-semibold text-slate-800"><span>Valor que sai na nota</span><span>R$ {chargedTotal.toFixed(2)}</span></div>
+            {chargedTotal > 0 && (
+              <p className="text-xs text-slate-500 mt-1">
+                {paidPart ? `Peça R$ ${partsTotal.toFixed(2)} + serviço R$ ${returnService.toFixed(2)}. ` : ''}
+                Sua comissão é sobre R$ {Math.max(returnService - (uberCost || 0), 0).toFixed(2)}{uberCost > 0 ? ' (já sem o Uber)' : ''}.
+              </p>
+            )}
+            {chargedTotal <= 0 && <p className="text-xs text-slate-500 mt-1">Retorno em garantia: nada é cobrado do cliente.</p>}
           </div>
         )}
 

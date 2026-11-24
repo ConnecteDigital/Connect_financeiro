@@ -81,6 +81,9 @@ export default function RodriguesCertificado({
   const [firstWord, ...restWords] = (tenant?.name ?? 'Empresa').toUpperCase().split(' ')
   const restName = restWords.join(' ')
 
+  const isReturn = !!call.return_of_call_id
+  const partsPaidByClient = call.return_parts_paid ?? (Number(so.total_value || 0) - Number(so.return_service_value || 0)) > 0
+
   const rows: Row[] = [
     ...(so.items ?? []).map((it: any) => ({
       tipo: String(it.description ?? '').replace(/\s*\(valor fechado\)\s*$/i, ''),
@@ -90,7 +93,9 @@ export default function RodriguesCertificado({
     ...parts.map(p => ({
       tipo: p.item_name,
       quant: String(p.quantity ?? ''),
-      valor: BRL(p.total_value),
+      // Retorno: a peça não tem valor próprio na nota — ou é garantia (cliente não
+      // paga), ou já está dentro do valor recebido da linha de cima
+      valor: isReturn ? (partsPaidByClient ? 'incluída' : 'garantia') : BRL(p.total_value),
     })),
   ]
   const descricao = (so.observations ?? '').trim()
