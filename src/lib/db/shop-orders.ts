@@ -5,7 +5,7 @@ import { getMyTenantId } from '@/lib/db/tenant'
 // entrou pra orçamento/conserto. Vira Orçamento, Ordem de serviço ou
 // Laudo técnico na hora de gerar o documento.
 
-export interface OrderLine { description: string; details?: string; unit?: string; unit_price: number; quantity: number; stock_item_id?: string | null; guarantee?: string /* garantia desta peça, ex.: "6 meses" */ }
+export interface OrderLine { description: string; details?: string; unit?: string; unit_price: number; quantity: number; stock_item_id?: string | null; guarantee?: string /* garantia desta peça, ex.: "6 meses" */; cost?: number /* venda: quanto o produto custou (compra + gastos), por unidade */ }
 
 export interface ShopOrder {
   id: string
@@ -50,7 +50,10 @@ export interface ShopOrder {
   owner_amount: number           // revenda: quanto repassar pro dono
   card_fee_pct: number           // taxa da maquininha (%)
   sale_received: boolean         // o dinheiro da venda já entrou
+  sale_costs: SaleCost[]         // gastos da venda (carreto da entrega etc.) — migration_v39
 }
+
+export interface SaleCost { description: string; amount: number }
 
 // servico = conserto/orçamento · venda = produto da loja · revenda = produto de um cliente vendido pela loja
 export type OrderKind = 'servico' | 'venda' | 'revenda'
@@ -66,15 +69,28 @@ export const SALE_STATUSES = [
   { value: 'garantia', label: 'Garantia', dot: 'bg-violet-500' },
   { value: 'cancelado', label: 'Cancelada', dot: 'bg-zinc-400' },
 ]
-const SALE_FIELDS = ['kind', 'client_cpf', 'owner_name', 'owner_phone', 'owner_amount', 'card_fee_pct', 'sale_received'] as const
+const SALE_FIELDS = ['kind', 'client_cpf', 'owner_name', 'owner_phone', 'owner_amount', 'card_fee_pct', 'sale_received', 'sale_costs'] as const
 // Pedido de serviço não manda os campos de venda (assim salva mesmo se a v38 ainda não rodou)
 function forDb<T extends Record<string, any>>(values: T): T {
-  if (isSale(values as any)) return values
   const out: Record<string, any> = { ...values }
+  if (isSale(values as any)) {
+    // sale_costs é da v39: venda sem gastos salva mesmo se ela ainda não rodou
+    if (!Array.isArray(out.sale_costs) || out.sale_costs.length === 0) delete out.sale_costs
+    return out as T
+  }
   for (const f of SALE_FIELDS) delete out[f]
   return out as T
 }
 export const cardFeeOf = (o: Pick<ShopOrder, 'total' | 'card_fee_pct'>) => Math.round(Number(o.total || 0) * Number(o.card_fee_pct || 0)) / 100
+
+// Resultado da venda: o que entrou menos tudo que custou (antes e depois de vender)
+export function saleResult(o: Pick<ShopOrder, 'total' | 'card_fee_pct' | 'parts' | 'sale_costs' | 'kind' | 'owner_amount'>) {
+  const productCost = o.parts.reduce((s, p) => s + Number(p.cost || 0) * Number(p.quantity || 0), 0)
+  const saleCosts = (o.sale_costs ?? []).reduce((s, c) => s + Number(c.amount || 0), 0)
+  const fee = cardFeeOf(o)
+  const owner = o.kind === 'revenda' ? Number(o.owner_amount || 0) : 0
+  return { productCost, saleCosts, fee, owner, profit: Number(o.total || 0) - productCost - saleCosts - fee - owner }
+}
 
 export type ShopOrderInput = Omit<ShopOrder, 'id' | 'seq' | 'year' | 'cash_entry_id' | 'stock_applied' | 'created_at'>
 
@@ -121,6 +137,7 @@ const norm = (o: any): ShopOrder => ({
   kind: o.kind === 'venda' || o.kind === 'revenda' ? o.kind : 'servico',
   client_cpf: o.client_cpf ?? null, owner_name: o.owner_name ?? null, owner_phone: o.owner_phone ?? null,
   owner_amount: Number(o.owner_amount || 0), card_fee_pct: Number(o.card_fee_pct || 0), sale_received: o.sale_received !== false,
+  sale_costs: Array.isArray(o.sale_costs) ? o.sale_costs.map((c: any) => ({ description: String(c.description ?? ''), amount: Number(c.amount || 0) })) : [],
 })
 
 export async function getShopOrders(): Promise<ShopOrder[]> {
@@ -241,6 +258,16 @@ async function postSaleMoney(order: ShopOrder) {
       amount: fee, type: 'avulso', status: paid ? 'pago' : 'pendente', due_date: order.date, paid_date: paid ? order.date : null, notes: tag,
     })
     if (e2) throw e2
+  }
+  // Gastos da venda (carreto da entrega etc.): saem do caixa junto
+  for (const c of order.sale_costs ?? []) {
+    if (!(c.amount > 0)) continue
+    const { error: e4 } = await supabase.from('expenses').insert({
+      tenant_id, description: `${c.description || 'Gasto da venda'} — ${orderTitle(order).toLowerCase()} ${num}`,
+      category: /carreto|frete|entrega|transporte/i.test(c.description) ? 'Transporte' : 'Outros',
+      amount: c.amount, type: 'avulso', status: 'pago', due_date: order.date, paid_date: order.date, notes: tag,
+    })
+    if (e4) throw e4
   }
   if (order.kind === 'revenda' && order.owner_amount > 0) {
     const { error: e3 } = await supabase.from('expenses').insert({

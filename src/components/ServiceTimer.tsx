@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Play, CheckCircle, XCircle, Loader2, Timer, Camera, Paperclip, X } from 'lucide-react'
+import { Play, CheckCircle, XCircle, Loader2, Timer, Camera, Paperclip, X, CalendarClock } from 'lucide-react'
 import {
   getCallVisits, startServiceVisit, finishServiceVisit, VISIT_OUTCOME_LABEL, type VisitOutcome,
 } from '@/lib/db/service-visits'
@@ -12,8 +12,6 @@ import { createClient } from '@/lib/supabase/client'
 import Portal from '@/components/Portal'
 
 const END_REASONS: { value: VisitOutcome; label: string; date: 'required' | 'optional' | 'none'; notes: boolean; time?: boolean }[] = [
-  // Cliente aprovou, mas o técnico tem outro serviço agora: fica agendado pra nova data/horário
-  { value: 'aprovado_reagendado', label: 'Aprovado — vou fazer em outro horário', date: 'required', notes: false, time: true },
   { value: 'orcamento', label: 'Orçamento — cliente vai decidir', date: 'none', notes: false },
   { value: 'nao_aprovou', label: 'Cliente não aprovou', date: 'none', notes: false },
   { value: 'sem_conserto', label: 'Não tem conserto', date: 'none', notes: false },
@@ -23,6 +21,9 @@ const END_REASONS: { value: VisitOutcome; label: string; date: 'required' | 'opt
   { value: 'faltou_peca', label: 'Faltou peça', date: 'optional', notes: false },
   { value: 'outro', label: 'Outro', date: 'optional', notes: true },
 ]
+
+// No login do técnico o "Encerrar serviço" é só pra serviço que NÃO foi fechado
+const TECNICO_END_REASONS: VisitOutcome[] = ['nao_aprovou', 'sem_conserto', 'pagou_somente_visita']
 
 function timeOf(iso: string) {
   return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
@@ -44,6 +45,11 @@ export default function ServiceTimer({ callId, status, onChanged }: {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [endOpen, setEndOpen] = useState(false)
+  // "Serviço aprovado": feito agora (vai pra OS) ou aprovado pra fazer em outro horário
+  const [approveOpen, setApproveOpen] = useState(false)
+  const [later, setLater] = useState(false)
+  const [laterDate, setLaterDate] = useState('')
+  const [laterTime, setLaterTime] = useState('')
   const [reason, setReason] = useState<VisitOutcome | null>(null)
   const [newDate, setNewDate] = useState('')
   const [notes, setNotes] = useState('')
@@ -94,7 +100,23 @@ export default function ServiceTimer({ callId, status, onChanged }: {
     }
   }
 
-  const reasonCfg = END_REASONS.find(r => r.value === reason) ?? null
+  // Cliente aprovou, mas o técnico tem outro serviço agora: o chamado continua
+  // agendado, já como aprovado, na nova data e horário
+  async function handleApprovedLater() {
+    if (!laterDate || !laterTime) { setError('Escolha a nova data e o horário.'); return }
+    setBusy(true); setError('')
+    try {
+      await finishServiceVisit(callId, 'aprovado_reagendado', undefined, laterDate, laterTime)
+      setApproveOpen(false); setLater(false); setLaterDate(''); setLaterTime('')
+      load()
+      onChanged()
+    } catch (e: any) {
+      setError(/resultado inv|p_new_time|finish_service_visit/i.test(e?.message ?? '') ? 'Falta rodar a migration_v38.sql no Supabase.' : (e?.message ?? 'Não foi possível salvar.'))
+    } finally { setBusy(false) }
+  }
+
+  const endReasons = isTecnico ? END_REASONS.filter(r => TECNICO_END_REASONS.includes(r.value)) : END_REASONS
+  const reasonCfg = endReasons.find(r => r.value === reason) ?? null
   const missing = !reasonCfg ? 'Escolha o motivo'
     : reasonCfg.date === 'required' && !newDate ? 'Escolha a nova data'
     : reasonCfg.time && !newTime ? 'Escolha o novo horário'
@@ -149,7 +171,7 @@ export default function ServiceTimer({ callId, status, onChanged }: {
             </p>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <button onClick={handleApproved} disabled={busy}
+            <button onClick={() => { setError(''); setLater(false); setApproveOpen(true) }} disabled={busy}
               className="flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-60 transition">
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
               Serviço aprovado
@@ -157,7 +179,7 @@ export default function ServiceTimer({ callId, status, onChanged }: {
             <button onClick={() => setEndOpen(true)} disabled={busy}
               className="flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 disabled:opacity-60 transition">
               <XCircle className="w-4 h-4" />
-              Encerrar serviço
+              {isTecnico ? 'Não aprovado' : 'Encerrar serviço'}
             </button>
           </div>
         </div>
@@ -190,13 +212,66 @@ export default function ServiceTimer({ callId, status, onChanged }: {
         </div>
       )}
 
+      {approveOpen && (
+        <Portal>
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{ backdropFilter: 'blur(4px)', background: 'rgba(0,0,0,0.4)' }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90dvh] overflow-y-auto">
+            <h2 className="text-lg font-bold text-zinc-900">Serviço aprovado</h2>
+            <div className="space-y-2">
+              <button type="button" onClick={handleApproved} disabled={busy}
+                className="w-full flex items-center gap-3 p-4 rounded-xl text-left bg-emerald-500 text-white disabled:opacity-60">
+                {busy && !later ? <Loader2 className="w-5 h-5 animate-spin flex-shrink-0" /> : <CheckCircle className="w-5 h-5 flex-shrink-0" />}
+                <span><span className="block text-sm font-bold">Feito agora</span><span className="block text-xs opacity-90">Completar a ordem de serviço</span></span>
+              </button>
+              <button type="button" onClick={() => { setLater(true); setError('') }} disabled={busy}
+                className="w-full flex items-center gap-3 p-4 rounded-xl text-left border transition"
+                style={{ borderColor: later ? '#f97316' : '#e4e4e7', background: later ? '#fff7ed' : '#fff' }}>
+                <CalendarClock className="w-5 h-5 flex-shrink-0 text-orange-500" />
+                <span><span className="block text-sm font-bold text-zinc-800">Vou fazer em outro horário</span><span className="block text-xs text-zinc-500">Cliente aprovou, mas o serviço fica pra depois</span></span>
+              </button>
+            </div>
+            {later && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-500 mb-1.5">Nova data *</label>
+                    <input type="date" value={laterDate} onChange={e => setLaterDate(e.target.value)}
+                      className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-500 mb-1.5">Novo horário *</label>
+                    <input type="time" value={laterTime} onChange={e => setLaterTime(e.target.value)}
+                      className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400" />
+                  </div>
+                </div>
+                <p className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
+                  O chamado continua na agenda, já como aprovado, no dia e horário escolhidos.
+                </p>
+              </>
+            )}
+            {error && <p className="text-sm text-red-500">{error}</p>}
+            <div className="flex gap-3">
+              <button onClick={() => { setApproveOpen(false); setError('') }} disabled={busy}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition">Cancelar</button>
+              {later && (
+                <button onClick={handleApprovedLater} disabled={busy || !laterDate || !laterTime}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-orange-500 disabled:opacity-50 transition">
+                  {busy ? 'Salvando...' : 'Confirmar'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+        </Portal>
+      )}
+
       {endOpen && (
         <Portal>
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{ backdropFilter: 'blur(4px)', background: 'rgba(0,0,0,0.4)' }}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90dvh] overflow-y-auto">
-            <h2 className="text-lg font-bold text-zinc-900">Encerrar serviço</h2>
+            <h2 className="text-lg font-bold text-zinc-900">{isTecnico ? 'Serviço não aprovado' : 'Encerrar serviço'}</h2>
             <div className="space-y-2">
-              {END_REASONS.map(r => (
+              {endReasons.map(r => (
                 <label key={r.value} className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition hover:bg-zinc-50"
                   style={{ borderColor: reason === r.value ? '#f97316' : '#e4e4e7' }}>
                   <input type="radio" name="endReason" checked={reason === r.value}

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Plus, Search, X, Pencil, Trash2, ShoppingCart, PackagePlus, Package, Refrigerator } from 'lucide-react'
-import { getLojaItems, deleteLojaItem, mediaUrl, lojaErrorMessage, EQUIPMENT_TYPES, type LojaItem, type ItemKind } from '@/lib/db/loja'
+import { getLojaItems, deleteLojaItem, mediaUrl, lojaErrorMessage, itemCostTotal, costsTotal, EQUIPMENT_TYPES, type LojaItem, type ItemKind } from '@/lib/db/loja'
 import Link from 'next/link'
 import { ItemFormModal, ReceiveModal, MediaSheet, MediaThumb } from '@/components/LojaModals'
 import { toastSuccess, toastError } from '@/components/Toast'
@@ -27,7 +27,7 @@ export default function LojaEstoque() {
   // Tipos de equipamento que a loja criou (além dos que já vêm prontos)
   const customTypes = Array.from(new Set((items ?? []).map(i => i.equipment_type ?? '').filter(t => t && !EQUIPMENT_TYPES.includes(t))))
   const of = (k: ItemKind) => (items ?? []).filter(i => i.kind === k)
-  const stockValue = (l: LojaItem[]) => l.reduce((s, i) => s + i.quantity * i.unit_value, 0)
+  const stockValue = (l: LojaItem[]) => l.reduce((s, i) => s + i.quantity * itemCostTotal(i), 0)
 
   async function remove(i: LojaItem) {
     if (!confirm(`Excluir "${i.name}" do estoque?`)) return
@@ -110,15 +110,21 @@ export default function LojaEstoque() {
               </button>
             )}
             <div className="flex items-center gap-4 mt-2 text-xs text-zinc-500">
-              <span>Custo <b className="text-zinc-700">{fmt(i.unit_value)}</b></span>
+              <span>Custo <b className="text-zinc-700">{fmt(itemCostTotal(i))}</b></span>
               <span>Venda <b className="text-zinc-700">{fmt(i.sale_value)}</b></span>
-              {i.sale_value > 0 && i.unit_value > 0 && <span className="text-emerald-600 font-semibold">lucro {fmt(i.sale_value - i.unit_value)}</span>}
+              {i.sale_value > 0 && itemCostTotal(i) > 0 && <span className={`font-semibold ${i.sale_value - itemCostTotal(i) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>lucro {fmt(i.sale_value - itemCostTotal(i))}</span>}
             </div>
+            {/* De onde vem o custo: o que pagou + o que gastou pra deixar pronto */}
+            {i.costs.length > 0 && (
+              <p className="text-[11px] text-zinc-400 mt-1 truncate">
+                Compra {fmt(i.unit_value)} + gastos {fmt(costsTotal(i))} ({i.costs.map(c => c.description || c.kind).join(', ')})
+              </p>
+            )}
             <div className="flex items-center gap-2 mt-3">
               {/* Abre a venda completa (comprador, pagamento, recibo) já com este item */}
               <Link href={`/dashboard/pedidos/novo?tipo=venda&item=${i.id}`} aria-disabled={i.quantity <= 0}
                 className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-semibold bg-emerald-500 text-white ${i.quantity <= 0 ? 'opacity-40 pointer-events-none' : ''}`}>
-                <ShoppingCart className="w-4 h-4" /> Vendi
+                <ShoppingCart className="w-4 h-4" /> {i.kind === 'maquina' ? 'Vendido' : 'Vendi'}
               </Link>
               <button type="button" onClick={() => setReceive(i)}
                 className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-semibold bg-orange-50 text-orange-700 border border-orange-200">

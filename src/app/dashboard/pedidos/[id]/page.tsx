@@ -9,7 +9,7 @@ import { useTenant } from '@/lib/tenant-context'
 import {
   getShopOrder, updateShopOrder, deleteShopOrder, receiveOrderPayment, undoOrderPayment, applyOrderStock,
   orderNumber, statusOf, linesTotal, ORDER_STATUSES, PAYMENT_METHODS, isAwaitingApproval, type ShopOrder, type OrderLine,
-  isSale, orderTitle, statusLabelOf, cardFeeOf, setSaleStatus, markSaleReceived, deleteSale, SALE_STATUSES,
+  isSale, orderTitle, statusLabelOf, cardFeeOf, saleResult, setSaleStatus, markSaleReceived, deleteSale, SALE_STATUSES,
 } from '@/lib/db/shop-orders'
 import PhotoGallery, { type GalleryFile } from '@/components/PhotoGallery'
 import ShopOrderDocument from '@/components/ShopOrderDocument'
@@ -317,6 +317,23 @@ export default function PedidoPage({ params }: { params: Promise<{ id: string }>
           </button>
         )}
       </div>
+
+      {/* Venda: o que entrou menos tudo que custou (antes e depois de vender) */}
+      {sale && order.status !== 'cancelado' && (() => {
+        const r = saleResult(order)
+        return (
+          <div className="bg-white rounded-2xl border border-zinc-100 shadow-sm p-4 space-y-1 text-sm">
+            <p className="text-base font-bold text-zinc-900 mb-1">Resultado da venda</p>
+            <div className="flex justify-between text-zinc-600"><span>Valor da venda</span><span>{fmt(order.total)}</span></div>
+            {r.productCost > 0 && <div className="flex justify-between text-zinc-600"><span>Custo do aparelho (compra + gastos)</span><span>− {fmt(r.productCost)}</span></div>}
+            {order.sale_costs.map((c, i) => <div key={i} className="flex justify-between text-zinc-600"><span>{c.description || 'Gasto da venda'}</span><span>− {fmt(c.amount)}</span></div>)}
+            {r.fee > 0 && <div className="flex justify-between text-zinc-600"><span>Taxa da maquininha</span><span>− {fmt(r.fee)}</span></div>}
+            {r.owner > 0 && <div className="flex justify-between text-zinc-600"><span>Repasse pro dono</span><span>− {fmt(r.owner)}</span></div>}
+            <div className={`flex justify-between text-base font-bold border-t border-zinc-100 pt-1.5 ${r.profit >= 0 ? 'text-emerald-700' : 'text-red-600'}`}><span>{r.profit >= 0 ? 'Lucro' : 'Prejuízo'}</span><span>{fmt(Math.abs(r.profit))}</span></div>
+            {r.productCost === 0 && <p className="text-[11px] text-zinc-400">Sem custo informado no produto — o lucro considera só os gastos da venda.</p>}
+          </div>
+        )
+      })()}
 
       {/* Detalhes */}
       {(order.payment_conditions || (!sale && order.payment_methods.length > 0) || order.guarantee || order.notes || (sale && order.observations)) && (

@@ -7,6 +7,17 @@ export type ItemKind = 'maquina' | 'peca'   // 'maquina' = equipamento (o nome a
 
 export interface LojaMedia { path: string; video: boolean }
 
+// Gasto pra deixar o aparelho pronto pra venda: peça usada, conserto, carreto...
+export type CostKind = 'peca' | 'conserto' | 'carreto' | 'outro'
+export interface LojaCost { id: string; kind: CostKind; description: string; amount: number; expense_id?: string | null }
+export const COST_KINDS: { key: CostKind; label: string; category: string; placeholder: string }[] = [
+  { key: 'peca', label: 'Peça', category: 'Peças', placeholder: 'Qual peça? Ex: Compressor 1/4' },
+  { key: 'conserto', label: 'Conserto', category: 'Manutenção', placeholder: 'O que foi consertado?' },
+  { key: 'carreto', label: 'Carreto', category: 'Transporte', placeholder: 'Ex: Buscar o aparelho' },
+  { key: 'outro', label: 'Outro', category: 'Outros', placeholder: 'Ex: Pintura, limpeza...' },
+]
+export const costKindLabel = (k: CostKind) => COST_KINDS.find(c => c.key === k)?.label ?? 'Gasto'
+
 export interface LojaItem {
   id: string
   kind: ItemKind
@@ -20,7 +31,12 @@ export interface LojaItem {
   equipment_type: string | null   // Geladeira, Freezer...
   serial_number: string | null
   media: LojaMedia[]              // fotos e vídeos do equipamento
+  costs: LojaCost[]               // gastos pra deixar pronto pra venda
 }
+
+export const costsTotal = (i: Pick<LojaItem, 'costs'>) => i.costs.reduce((s, c) => s + Number(c.amount || 0), 0)
+// Quanto o aparelho custou de verdade: a compra + o que foi gasto nele
+export const itemCostTotal = (i: Pick<LojaItem, 'unit_value' | 'costs'>) => Number(i.unit_value || 0) + costsTotal(i)
 
 // Tipos de equipamento que já vêm prontos; a loja pode criar outros no "+"
 export const EQUIPMENT_TYPES = ['Geladeira', 'Máquina de lavar', 'Freezer', 'Micro-ondas']
@@ -36,6 +52,7 @@ const normItem = (i: any): LojaItem => ({
   quantity: Number(i.quantity || 0), unit_value: Number(i.unit_value || 0), sale_value: Number(i.sale_value || 0),
   equipment_type: i.equipment_type ?? null, serial_number: i.serial_number ?? null,
   media: Array.isArray(i.media) ? i.media : [],
+  costs: Array.isArray(i.costs) ? i.costs.map((c: any) => ({ ...c, amount: Number(c.amount || 0) })) : [],
 })
 
 // Mensagem que explica o erro do banco em vez de um "não foi possível" genérico
@@ -49,9 +66,14 @@ export function lojaErrorMessage(e: any, fallback: string): string {
 export async function getLojaItems(): Promise<LojaItem[]> {
   const supabase = createClient()
   const full = await supabase.from('stock_items')
-    .select(`${BASE_COLS}, equipment_type, serial_number, media`)
+    .select(`${BASE_COLS}, equipment_type, serial_number, media, costs`)
     .is('auxiliary_id', null).order('name')
   if (!full.error) return (full.data ?? []).map(normItem)
+  // Banco sem a migration_v39: lista sem os gastos
+  const v35 = await supabase.from('stock_items')
+    .select(`${BASE_COLS}, equipment_type, serial_number, media`)
+    .is('auxiliary_id', null).order('name')
+  if (!v35.error) return (v35.data ?? []).map(normItem)
   // Banco sem a migration_v35: lista sem tipo, série e fotos (não some com o estoque)
   const { data, error } = await supabase.from('stock_items').select(BASE_COLS).is('auxiliary_id', null).order('name')
   if (error) throw error
@@ -59,7 +81,7 @@ export async function getLojaItems(): Promise<LojaItem[]> {
 }
 
 // Cria ou atualiza o item e devolve o id (pra anexar fotos/vídeos depois)
-export async function saveLojaItem(values: Omit<LojaItem, 'id' | 'media'>, id?: string): Promise<string> {
+export async function saveLojaItem(values: Omit<LojaItem, 'id' | 'media' | 'costs'>, id?: string): Promise<string> {
   const supabase = createClient()
   if (id) {
     const { error } = await supabase.from('stock_items').update(values).eq('id', id)
@@ -92,6 +114,38 @@ export async function saveLojaMedia(itemId: string, keep: LojaMedia[], removed: 
   if (error) throw error
   if (removed.length) await storage.remove(removed.map(m => m.path)).catch(console.error)
   return failed
+}
+
+// Grava os gastos do aparelho. Os marcados pra "lançar no caixa" viram
+// saída no Financeiro (uma vez só; corrigir o valor corrige a saída e
+// apagar o gasto apaga a saída).
+export async function saveLojaCosts(itemId: string, itemLabel: string, costs: (LojaCost & { launch?: boolean })[], removed: LojaCost[]) {
+  const supabase = createClient()
+  const today = new Date()
+  const ymd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  const out: LojaCost[] = []
+  let tenant_id: string | null = null
+  for (const c of costs) {
+    const { launch, ...cost } = c
+    const kind = COST_KINDS.find(k => k.key === cost.kind) ?? COST_KINDS[3]
+    const description = `${kind.label}${cost.description ? `: ${cost.description}` : ''} — ${itemLabel}`
+    if (cost.expense_id) {
+      await supabase.from('expenses').update({ amount: cost.amount, description, category: kind.category }).eq('id', cost.expense_id)
+    } else if (launch && cost.amount > 0) {
+      tenant_id ??= await getMyTenantId()
+      const { data, error } = await supabase.from('expenses').insert({
+        tenant_id, description, category: kind.category, amount: cost.amount, type: 'avulso',
+        status: 'pago', due_date: ymd, paid_date: ymd, notes: `estoque:${itemId}`,
+      }).select('id').single()
+      if (error) throw error
+      cost.expense_id = data.id
+    }
+    out.push(cost)
+  }
+  const { error } = await supabase.from('stock_items').update({ costs: out }).eq('id', itemId)
+  if (error) throw error
+  const ids = removed.map(r => r.expense_id).filter(Boolean) as string[]
+  if (ids.length) await supabase.from('expenses').delete().in('id', ids)
 }
 
 export async function deleteLojaItem(id: string, media: LojaMedia[] = []) {

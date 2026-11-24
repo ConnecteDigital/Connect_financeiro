@@ -10,9 +10,9 @@ import { localYmd } from '@/lib/tecnico-queue'
 import { APPLIANCE_BRANDS, APPLIANCE_TYPES } from '@/lib/service-config'
 import {
   createShopOrder, updateShopOrder, saveSale, getCatalog, addToCatalog, removeFromCatalog, getPastClients, orderTotal, linesTotal, orderNumber,
-  isSale, orderTitle, PAYMENT_METHODS, type ShopOrder, type ShopOrderInput, type OrderLine, type CatalogService, type OrderKind,
+  isSale, orderTitle, saleResult, PAYMENT_METHODS, type ShopOrder, type ShopOrderInput, type OrderLine, type CatalogService, type OrderKind,
 } from '@/lib/db/shop-orders'
-import { getLojaItems, type LojaItem } from '@/lib/db/loja'
+import { getLojaItems, itemCostTotal, type LojaItem } from '@/lib/db/loja'
 import { Sheet, input } from '@/components/LojaModals'
 import { toastSuccess } from '@/components/Toast'
 import { lookupCep } from '@/lib/cep'
@@ -79,7 +79,7 @@ const EMPTY: ShopOrderInput = {
   visit_date: null, visit_time: null, visit_notes: null,
   services: [], parts: [], discount: 0, delivery_fee: 0, freight: 0, other_fees: 0, total: 0,
   payment_conditions: 'À vista.', payment_methods: ['PIX'], guarantee: '90 dias', notes: null,
-  kind: 'servico', client_cpf: null, owner_name: null, owner_phone: null, owner_amount: 0, card_fee_pct: 0, sale_received: true,
+  kind: 'servico', client_cpf: null, owner_name: null, owner_phone: null, owner_amount: 0, card_fee_pct: 0, sale_received: true, sale_costs: [],
 }
 // Venda: o comprador chega e leva — sem agendamento, validade nem condições de orçamento
 const EMPTY_SALE: ShopOrderInput = { ...EMPTY, kind: 'venda', status: 'enviado', validity_days: null, payment_conditions: null }
@@ -104,7 +104,7 @@ export default function ShopOrderEditor({ order, initialKind = 'servico', initia
       if (!i) return
       setV(prev => prev.parts.some(p => p.stock_item_id === i.id) ? prev : {
         ...prev,
-        parts: [...prev.parts, { description: [i.name, i.brand, i.model].filter(Boolean).join(' '), unit: 'un.', unit_price: i.sale_value || i.unit_value, quantity: 1, stock_item_id: i.id }],
+        parts: [...prev.parts, { description: [i.name, i.brand, i.model].filter(Boolean).join(' '), details: i.serial_number ? `Nº de série: ${i.serial_number}` : undefined, unit: 'un.', unit_price: i.sale_value || i.unit_value, quantity: 1, stock_item_id: i.id, cost: itemCostTotal(i) }],
       })
     }).catch(() => {})
   }, [order, initialItemId])
@@ -129,6 +129,9 @@ export default function ShopOrderEditor({ order, initialKind = 'servico', initia
   const method = v.payment_methods[0] ?? 'PIX'
   const isCard = /cart[aã]o/i.test(method)
   const fee = sale && isCard ? Math.round(orderTotal(v) * Number(v.card_fee_pct || 0)) / 100 : 0
+  // Gastos da venda (carreto da entrega etc.) e resultado previsto
+  const setSaleCost = (i: number, patch: Partial<{ description: string; amount: number }>) => set({ sale_costs: v.sale_costs.map((c, idx) => idx === i ? { ...c, ...patch } : c) })
+  const result = saleResult({ ...v, total: orderTotal(v), card_fee_pct: isCard ? v.card_fee_pct : 0 })
 
   const total = orderTotal(v)
 
@@ -148,6 +151,7 @@ export default function ShopOrderEditor({ order, initialKind = 'servico', initia
         // Venda: uma forma de pagamento; taxa da maquininha só no cartão; dono só na revenda
         const id = await saveSale({
           ...clean, services: [], payment_methods: [method], card_fee_pct: isCard ? Number(v.card_fee_pct || 0) : 0,
+          sale_costs: v.sale_costs.filter(c => c.amount > 0).map(c => ({ description: c.description.trim() || 'Gasto da venda', amount: c.amount })),
           ...(v.kind === 'revenda' ? {} : { owner_name: null, owner_phone: null, owner_amount: 0 }),
         }, order)
         toastSuccess(order ? 'Venda atualizada!' : 'Venda registrada!')
@@ -307,6 +311,41 @@ export default function ShopOrderEditor({ order, initialKind = 'servico', initia
         </Block>
       )}
 
+      {sale && (
+        <Block title="Gastos da venda" defaultOpen={v.sale_costs.length > 0}>
+          <p className="text-xs text-zinc-500">O que a loja gastou pra vender: carreto da entrega, instalação, comissão... Sai do caixa e entra na conta do lucro.</p>
+          {v.sale_costs.map((c, i) => (
+            <div key={i} className="grid grid-cols-12 gap-2 items-center">
+              <input value={c.description} onChange={e => setSaleCost(i, { description: e.target.value })} className={`${input} col-span-7`} placeholder="Ex: Carreto da entrega" />
+              <div className="col-span-4"><MoneyInput value={c.amount || ''} onChange={e => setSaleCost(i, { amount: Number(e.target.value) || 0 })} className={input} placeholder="0,00" /></div>
+              <button type="button" aria-label="Remover gasto" onClick={() => set({ sale_costs: v.sale_costs.filter((_, idx) => idx !== i) })} className="col-span-1 p-1.5 text-red-400"><Trash2 className="w-4 h-4" /></button>
+            </div>
+          ))}
+          <div className="flex flex-wrap gap-2">
+            {!v.sale_costs.some(c => /carreto/i.test(c.description)) && (
+              <button type="button" onClick={() => set({ sale_costs: [...v.sale_costs, { description: 'Carreto da entrega', amount: 0 }] })}
+                className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-semibold border border-zinc-200 bg-white text-zinc-700"><Truck className="w-3.5 h-3.5" /> Carreto</button>
+            )}
+            <button type="button" onClick={() => set({ sale_costs: [...v.sale_costs, { description: '', amount: 0 }] })}
+              className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-semibold border border-dashed border-zinc-300 text-zinc-600"><Plus className="w-3.5 h-3.5" /> Outro gasto</button>
+          </div>
+        </Block>
+      )}
+
+      {/* Quanto sobra: venda − custo do aparelho − gastos */}
+      {sale && total > 0 && (
+        <div className="bg-white rounded-2xl border border-zinc-100 shadow-sm p-4 space-y-1 text-sm">
+          <p className="text-base font-bold text-zinc-900 mb-1">Resultado da venda</p>
+          <div className="flex justify-between text-zinc-600"><span>Valor da venda</span><span>{fmt(total)}</span></div>
+          {result.productCost > 0 && <div className="flex justify-between text-zinc-600"><span>Custo do aparelho (compra + gastos)</span><span>− {fmt(result.productCost)}</span></div>}
+          {result.saleCosts > 0 && <div className="flex justify-between text-zinc-600"><span>Gastos da venda</span><span>− {fmt(result.saleCosts)}</span></div>}
+          {result.fee > 0 && <div className="flex justify-between text-zinc-600"><span>Taxa da maquininha</span><span>− {fmt(result.fee)}</span></div>}
+          {result.owner > 0 && <div className="flex justify-between text-zinc-600"><span>Repasse pro dono</span><span>− {fmt(result.owner)}</span></div>}
+          <div className={`flex justify-between text-base font-bold border-t border-zinc-100 pt-1.5 ${result.profit >= 0 ? 'text-emerald-700' : 'text-red-600'}`}><span>{result.profit >= 0 ? 'Lucro' : 'Prejuízo'}</span><span>{fmt(Math.abs(result.profit))}</span></div>
+          {result.productCost === 0 && <p className="text-[11px] text-zinc-400">Sem custo informado no produto — o lucro considera só os gastos da venda.</p>}
+        </div>
+      )}
+
       <Block title="Detalhes">
         {!sale && <F label="Condições de pagamento"><input value={v.payment_conditions ?? ''} onChange={e => set({ payment_conditions: e.target.value || null })} className={input} placeholder="Ex: À vista. / 50% entrada e 50% na entrega" /></F>}
         {!sale && <F label="Meios de pagamento aceitos">
@@ -365,7 +404,7 @@ function Tabs({ value, onChange, options }: { value: string; onChange: (v: strin
   )
 }
 
-function LineForm({ initial, onAdd, saveLabel, catalogToggle, partGuarantee }: { initial?: Partial<OrderLine>; onAdd: (l: OrderLine, saveToCatalog: boolean) => void; saveLabel: string; catalogToggle?: boolean; partGuarantee?: boolean }) {
+function LineForm({ initial, onAdd, saveLabel, catalogToggle, partGuarantee, askCost }: { initial?: Partial<OrderLine>; onAdd: (l: OrderLine, saveToCatalog: boolean) => void; saveLabel: string; catalogToggle?: boolean; partGuarantee?: boolean; askCost?: boolean }) {
   const [description, setDescription] = useState(initial?.description ?? '')
   const [details, setDetails] = useState(initial?.details ?? '')
   const [unit, setUnit] = useState(initial?.unit ?? 'un.')
@@ -373,6 +412,7 @@ function LineForm({ initial, onAdd, saveLabel, catalogToggle, partGuarantee }: {
   const [qty, setQty] = useState('1')
   const [toCatalog, setToCatalog] = useState(false)
   const [guarantee, setGuarantee] = useState(initial?.guarantee ?? '')
+  const [cost, setCost] = useState(initial?.cost ? String(initial.cost) : '')
   const value = (Number(price) || 0) * (Number(qty) || 0)
   return (
     <>
@@ -383,6 +423,11 @@ function LineForm({ initial, onAdd, saveLabel, catalogToggle, partGuarantee }: {
         <F label="Preço unitário"><MoneyInput min="0" step="0.01" value={price} onChange={e => setPrice(e.target.value)} className={input} placeholder="0,00" /></F>
         <F label="Quantidade"><input type="number" min="0" step="any" value={qty} onChange={e => setQty(e.target.value)} className={input} /></F>
       </div>
+      {askCost && (
+        <F label="Quanto esse produto custou pra loja (R$) — compra + gastos">
+          <MoneyInput value={cost} onChange={e => setCost(e.target.value)} className={input} placeholder="0,00 — entra na conta do lucro" />
+        </F>
+      )}
       {partGuarantee && (
         <F label="Garantia desta peça (opcional)">
           <div className="flex flex-wrap gap-2">
@@ -404,7 +449,7 @@ function LineForm({ initial, onAdd, saveLabel, catalogToggle, partGuarantee }: {
         </label>
       )}
       <button type="button" disabled={!description.trim()}
-        onClick={() => onAdd({ description: description.trim(), details: details.trim() || undefined, unit: unit.trim() || 'un.', unit_price: Number(price) || 0, quantity: Number(qty) || 1, stock_item_id: initial?.stock_item_id ?? null, ...(partGuarantee && guarantee ? { guarantee } : {}) }, toCatalog)}
+        onClick={() => onAdd({ description: description.trim(), details: details.trim() || undefined, unit: unit.trim() || 'un.', unit_price: Number(price) || 0, quantity: Number(qty) || 1, stock_item_id: initial?.stock_item_id ?? null, ...(partGuarantee && guarantee ? { guarantee } : {}), ...(askCost && Number(cost) > 0 ? { cost: Number(cost) } : {}) }, toCatalog)}
         className="w-full py-3 rounded-xl text-sm font-bold text-white disabled:opacity-50" style={{ background: 'var(--primary)' }}>{saveLabel}</button>
     </>
   )
@@ -463,8 +508,8 @@ function PartModal({ onClose, onAdd, sale }: { onClose: () => void; onAdd: (l: O
     <Sheet title={sale ? 'Adicionar produto' : 'Adicionar peça ao pedido'} onClose={onClose}>
       <Tabs value={tab} onChange={t => { setTab(t); setPicked(null) }} options={[['estoque', 'Do estoque', Package], ['novo', sale ? 'Outro produto' : 'Outra peça', Plus]]} />
       {tab === 'novo' || picked ? (
-        <LineForm key={picked?.id ?? 'novo'} saveLabel={sale ? 'Adicionar esse produto' : 'Adicionar essa peça'} partGuarantee
-          initial={picked ? { description: [picked.name, picked.brand, picked.model].filter(Boolean).join(' '), details: picked.serial_number ? `Nº de série: ${picked.serial_number}` : undefined, unit: 'un.', unit_price: picked.sale_value || picked.unit_value, stock_item_id: picked.id } : undefined}
+        <LineForm key={picked?.id ?? 'novo'} saveLabel={sale ? 'Adicionar esse produto' : 'Adicionar essa peça'} partGuarantee askCost={sale}
+          initial={picked ? { description: [picked.name, picked.brand, picked.model].filter(Boolean).join(' '), details: picked.serial_number ? `Nº de série: ${picked.serial_number}` : undefined, unit: 'un.', unit_price: picked.sale_value || picked.unit_value, stock_item_id: picked.id, cost: itemCostTotal(picked) || undefined } : undefined}
           onAdd={l => onAdd(l)} />
       ) : (
         <>

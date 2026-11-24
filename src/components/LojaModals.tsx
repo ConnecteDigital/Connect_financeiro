@@ -2,10 +2,10 @@
 
 import MoneyInput from '@/components/MoneyInput'
 import Portal from '@/components/Portal'
-import { useRef, useState, type ReactNode } from 'react'
-import { X, Loader2, Search, Plus, Camera, Video, Paperclip, Play } from 'lucide-react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { X, Loader2, Search, Plus, Camera, Video, Paperclip, Play, Send, Download } from 'lucide-react'
 import { localYmd } from '@/lib/tecnico-queue'
-import { receiveItem, saveLojaItem, saveLojaMedia, mediaUrl, isVideoFile, lojaErrorMessage, kindLabel, EQUIPMENT_TYPES, type LojaItem, type LojaMedia, type ItemKind } from '@/lib/db/loja'
+import { receiveItem, saveLojaItem, saveLojaMedia, saveLojaCosts, mediaUrl, isVideoFile, lojaErrorMessage, kindLabel, costKindLabel, COST_KINDS, EQUIPMENT_TYPES, type LojaItem, type LojaMedia, type LojaCost, type CostKind, type ItemKind } from '@/lib/db/loja'
 
 const fmt = (v: number) => `R$ ${Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
 export const input = 'w-full px-3 py-2.5 border border-zinc-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]'
@@ -67,6 +67,13 @@ export function ItemFormModal({ item, defaultKind, knownTypes = [], onClose, onS
   const [keep, setKeep] = useState<LojaMedia[]>(item?.media ?? [])
   const [removed, setRemoved] = useState<LojaMedia[]>([])
   const [pending, setPending] = useState<PendingMedia[]>([])
+  // Gastos pra deixar o aparelho pronto pra venda (peça usada, conserto, carreto...)
+  const [costs, setCosts] = useState<(LojaCost & { launch?: boolean })[]>(item?.costs ?? [])
+  const [removedCosts, setRemovedCosts] = useState<LojaCost[]>([])
+  const [costKind, setCostKind] = useState<CostKind>('peca')
+  const [costDesc, setCostDesc] = useState('')
+  const [costAmount, setCostAmount] = useState('')
+  const [costLaunch, setCostLaunch] = useState(true)
   const photoRef = useRef<HTMLInputElement>(null)
   const videoRef = useRef<HTMLInputElement>(null)
   const galleryRef = useRef<HTMLInputElement>(null)
@@ -81,6 +88,17 @@ export function ItemFormModal({ item, defaultKind, knownTypes = [], onClose, onS
     if (t) { setExtraTypes(prev => [...prev, t]); setEqType(t) }
     setNewType(''); setAddingType(false)
   }
+
+  function addCost() {
+    const amount = Number(costAmount) || 0
+    if (amount <= 0) { setError('Informe o valor do gasto.'); return }
+    setError('')
+    setCosts(prev => [...prev, { id: `${Date.now()}${Math.round(Math.random() * 1e6)}`, kind: costKind, description: costDesc.trim(), amount, launch: costLaunch }])
+    setCostDesc(''); setCostAmount('')
+  }
+  const costsSum = costs.reduce((t, c) => t + Number(c.amount || 0), 0)
+  const fullCost = (Number(cost) || 0) + costsSum
+  const profit = (Number(price) || 0) - fullCost
 
   function addFiles(list: FileList | null) {
     if (!list?.length) return
@@ -106,15 +124,23 @@ export function ItemFormModal({ item, defaultKind, knownTypes = [], onClose, onS
       setBusy(false)
       return
     }
-    // O item já está salvo; as fotos/vídeos vão depois
+    // O item já está salvo; gastos e fotos/vídeos vão depois
     let warning: string | undefined
+    if (isEquip && (costs.length > 0 || removedCosts.length > 0)) {
+      try {
+        await saveLojaCosts(id, [finalName, brand.trim(), model.trim()].filter(Boolean).join(' '), costs, removedCosts)
+      } catch (e: any) {
+        console.error(e)
+        warning = lojaErrorMessage(e, 'Item salvo, mas os gastos não foram gravados.')
+      }
+    }
     if (pending.length > 0 || removed.length > 0) {
       try {
         const failed = await saveLojaMedia(id, keep, removed, pending.map(p => p.file))
         if (failed > 0) warning = `Item salvo, mas ${failed} arquivo${failed > 1 ? 's' : ''} não subi${failed > 1 ? 'ram' : 'u'} (vídeo muito grande ou sem internet). Edite o item pra tentar de novo.`
       } catch (e: any) {
         console.error(e)
-        warning = lojaErrorMessage(e, 'Item salvo, mas as fotos não foram gravadas.')
+        warning = warning ?? lojaErrorMessage(e, 'Item salvo, mas as fotos não foram gravadas.')
       }
     }
     pending.forEach(p => URL.revokeObjectURL(p.preview))
@@ -177,6 +203,53 @@ export function ItemFormModal({ item, defaultKind, knownTypes = [], onClose, onS
       <Field label="Observação"><input value={notes} onChange={e => setNotes(e.target.value)} className={input} placeholder="Ex: usada, revisada, garantia 3 meses..." /></Field>
 
       {isEquip && (
+        <Field label="Gastos com o aparelho (peça usada, conserto, carreto...)">
+          {costs.length > 0 && (
+            <div className="space-y-1.5 mb-2">
+              {costs.map(c => (
+                <div key={c.id} className="flex items-center gap-2 bg-zinc-50 rounded-xl px-3 py-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-zinc-800 truncate">{costKindLabel(c.kind)}{c.description ? ` · ${c.description}` : ''}</p>
+                    <p className="text-[11px] text-zinc-400">{c.expense_id ? 'Lançado no caixa' : c.launch ? 'Vai pro caixa ao salvar' : 'Só no custo do aparelho'}</p>
+                  </div>
+                  <span className="text-sm font-bold text-zinc-800 flex-shrink-0">{fmt(c.amount)}</span>
+                  <button type="button" aria-label="Remover gasto" onClick={() => { setCosts(l => l.filter(x => x.id !== c.id)); if (c.expense_id) setRemovedCosts(r => [...r, c]) }} className="p-1.5 text-red-400"><X className="w-4 h-4" /></button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="rounded-xl border border-zinc-200 p-3 space-y-2">
+            <div className="flex flex-wrap gap-1.5">
+              {COST_KINDS.map(k => (
+                <button key={k.key} type="button" onClick={() => setCostKind(k.key)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${costKind === k.key ? 'text-white border-transparent' : 'bg-white text-zinc-600 border-zinc-200'}`}
+                  style={costKind === k.key ? { background: 'var(--primary)' } : {}}>{k.label}</button>
+              ))}
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <input value={costDesc} onChange={e => setCostDesc(e.target.value)} className={`${input} col-span-2`} placeholder={COST_KINDS.find(k => k.key === costKind)!.placeholder} />
+              <MoneyInput value={costAmount} onChange={e => setCostAmount(e.target.value)} className={input} placeholder="0,00" />
+            </div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={costLaunch} onChange={e => setCostLaunch(e.target.checked)} className="w-4 h-4 accent-orange-500" />
+              <span className="text-xs text-zinc-600">Lançar como saída no caixa (dinheiro que saiu hoje)</span>
+            </label>
+            <button type="button" onClick={addCost} className="w-full py-2 rounded-xl text-sm font-semibold border border-dashed border-zinc-300 text-zinc-700 flex items-center justify-center gap-1.5">
+              <Plus className="w-4 h-4" /> Adicionar gasto
+            </button>
+          </div>
+          {(fullCost > 0 || Number(price) > 0) && (
+            <div className="rounded-xl bg-zinc-50 border border-zinc-100 px-3 py-2.5 mt-2 space-y-1 text-sm">
+              <div className="flex justify-between text-zinc-600"><span>Compra</span><span>{fmt(Number(cost) || 0)}</span></div>
+              <div className="flex justify-between text-zinc-600"><span>Gastos</span><span>{fmt(costsSum)}</span></div>
+              <div className="flex justify-between font-bold text-zinc-900 border-t border-zinc-200 pt-1"><span>Custo total</span><span>{fmt(fullCost)}</span></div>
+              {Number(price) > 0 && <div className={`flex justify-between font-bold ${profit >= 0 ? 'text-emerald-700' : 'text-red-600'}`}><span>Lucro se vender por {fmt(Number(price))}</span><span>{fmt(profit)}</span></div>}
+            </div>
+          )}
+        </Field>
+      )}
+
+      {isEquip && (
         <Field label="Fotos e vídeos">
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={() => photoRef.current?.click()} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-medium bg-orange-50 border border-orange-200 text-orange-600"><Camera className="w-4 h-4" /> Foto</button>
@@ -228,10 +301,56 @@ export function MediaThumb({ src, video }: { src: string; video: boolean }) {
   )
 }
 
-// Ver as fotos e vídeos de um equipamento
+// Ver as fotos e vídeos de um equipamento — e enviar pro cliente interessado.
+// Os arquivos são baixados assim que a tela abre: o celular só deixa abrir
+// o "compartilhar" se ele vier logo depois do toque.
 export function MediaSheet({ item, onClose }: { item: LojaItem; onClose: () => void }) {
+  const [files, setFiles] = useState<File[] | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    let alive = true
+    Promise.all(item.media.map(async (m, i) => {
+      const res = await fetch(mediaUrl(m.path))
+      const blob = await res.blob()
+      const ext = (m.path.split('.').pop() || (m.video ? 'mp4' : 'jpg')).toLowerCase()
+      return new File([blob], `${item.name.replace(/[^a-zA-Z0-9]+/g, '_')}_${i + 1}.${ext}`, { type: blob.type || (m.video ? 'video/mp4' : 'image/jpeg') })
+    })).then(f => { if (alive) setFiles(f) }).catch(e => { console.error(e); if (alive) setFiles([]) })
+    return () => { alive = false }
+  }, [item])
+
+  function download(list: File[]) {
+    for (const f of list) {
+      const url = URL.createObjectURL(f)
+      const a = document.createElement('a')
+      a.href = url; a.download = f.name; a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 4000)
+    }
+  }
+
+  async function send() {
+    if (!files?.length) return
+    setBusy(true)
+    try {
+      if (navigator.canShare?.({ files })) await navigator.share({ files, title: item.name })
+      else download(files)
+    } catch (e: any) {
+      if (e?.name !== 'AbortError') download(files)
+    } finally { setBusy(false) }
+  }
+
   return (
     <Sheet title={item.name} onClose={onClose}>
+      <div className="grid grid-cols-2 gap-2">
+        <button type="button" onClick={send} disabled={!files?.length || busy}
+          className="flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white bg-emerald-600 disabled:opacity-50">
+          {files === null || busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} {files === null ? 'Preparando...' : 'Enviar pro cliente'}
+        </button>
+        <button type="button" onClick={() => files && download(files)} disabled={!files?.length}
+          className="flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-zinc-700 bg-zinc-100 disabled:opacity-50">
+          <Download className="w-4 h-4" /> Baixar tudo
+        </button>
+      </div>
       <div className="space-y-3">
         {item.media.map(m => m.video ? (
           <video key={m.path} src={mediaUrl(m.path)} controls playsInline preload="metadata" className="w-full rounded-xl bg-black max-h-[70dvh]" />
