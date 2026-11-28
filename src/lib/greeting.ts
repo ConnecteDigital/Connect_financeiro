@@ -7,3 +7,13 @@ export function greeting(profileName: string | null | undefined, tenantName?: st
   const first = name.split(/\s+/)[0]
   return `Olá, ${first.charAt(0).toUpperCase()}${first.slice(1)}!`
 }
+
+// Nome de quem confirma o cartão / paga a comissão (o dono da empresa),
+// usado nos avisos pro técnico. Fica em call_form_config.owner_name
+// (Eletromark: "Marcos"); a Rodrigues continua "Rodrigues".
+export function ownerNameOf(tenant: { slug?: string | null; call_form_config?: any } | null | undefined): string {
+  const n = String(tenant?.call_form_config?.owner_name ?? '').trim()
+  if (n) return n
+  if (tenant?.slug === 'rodrigues-refrigeracao') return 'Rodrigues'
+  return 'gestor'
+}

@@ -1,5 +1,6 @@
 'use client'
 
+import { ownerNameOf } from '@/lib/greeting'
 import PartsGuaranteeEditor from '@/components/PartsGuaranteeEditor'
 import { cleanPartsGuarantee, type PartGuarantee } from '@/lib/parts-guarantee'
 import MoneyInput from '@/components/MoneyInput'
@@ -29,7 +30,7 @@ const inputCls = 'w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm 
 export default function FinalizarServicoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
-  const { isTecnico, loading: tenantLoading } = useTenant()
+  const { tenant, isTecnico, loading: tenantLoading } = useTenant()
   const [call, setCall] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -338,7 +339,7 @@ export default function FinalizarServicoPage({ params }: { params: Promise<{ id:
             <PaymentLinesEditor lines={paymentLines} onChange={setPaymentLines} total={chargedTotal} />
             {hasCard(paymentLines) && (
               <p className="mt-2 text-xs rounded-lg bg-amber-50 border border-amber-100 text-amber-800 px-3 py-2">
-                Pagamento em cartão: o Rodrigues vai confirmar o valor; sua comissão aparece depois disso.
+                Pagamento em cartão: o {ownerNameOf(tenant)} vai confirmar o valor; sua comissão aparece depois disso.
               </p>
             )}
           </div>

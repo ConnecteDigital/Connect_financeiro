@@ -1,5 +1,7 @@
 'use client'
 
+import { ownerNameOf } from '@/lib/greeting'
+import { useTenant } from '@/lib/tenant-context'
 import { getCallVisits } from '@/lib/db/service-visits'
 import { cleanPartsGuarantee } from '@/lib/parts-guarantee'
 import { useEffect, useState } from 'react'
@@ -28,6 +30,7 @@ export default function TecnicoCallView({ call, lock, onChanged }: {
   onChanged: () => void
 }) {
   const so = call.service_orders?.[0]
+  const { tenant } = useTenant()
   const [parts, setParts] = useState<any[]>([])
   // Retorno marcado como "Resolvido": a última visita guarda a descrição
   const [resolved, setResolved] = useState<{ notes: string | null } | null>(null)
@@ -209,7 +212,7 @@ export default function TecnicoCallView({ call, lock, onChanged }: {
           )}
           {osCardPending(so) && (
             <p className="text-xs rounded-lg bg-amber-50 border border-amber-100 text-amber-800 px-3 py-2">
-              Cartão aguardando confirmação do Rodrigues — sua comissão aparece depois disso.
+              Cartão aguardando confirmação do {ownerNameOf(tenant)} — sua comissão aparece depois disso.
             </p>
           )}
           {parts.length > 0 && (
