@@ -348,7 +348,7 @@ export default function ChamadoDetailPage({ params }: { params: Promise<{ id: st
 
       {isRodrigues ? (
         <>
-          <ServiceTimer callId={id} status={call.status}
+          <ServiceTimer callId={id} status={call.status} isReturn={!!call.return_of_call_id}
             onChanged={() => getCall(id).then(setCall).catch(console.error)} />
 
           {(call.status === 'retorno' || call.return_of_call_id) && (

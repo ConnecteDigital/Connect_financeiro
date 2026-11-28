@@ -32,8 +32,10 @@ export function compareQueue(a: QueueCall, b: QueueCall) {
   if (d !== 0) return d
   if (a.scheduled_time && !b.scheduled_time) return -1
   if (!a.scheduled_time && b.scheduled_time) return 1
-  const t = String(a.scheduled_time ?? '').localeCompare(String(b.scheduled_time ?? ''))
+  // Compara só HH:MM ("14:00" e "14:00:00" são o mesmo horário)
+  const t = String(a.scheduled_time ?? '').slice(0, 5).localeCompare(String(b.scheduled_time ?? '').slice(0, 5))
   if (t !== 0) return t
+  // Mesmo horário: o chamado criado primeiro vem antes
   return String(a.created_at ?? '').localeCompare(String(b.created_at ?? ''))
 }
 
@@ -65,9 +67,11 @@ export function finishedDay(call: { date: string; scheduled_date?: string | null
 
 // Abas de concluídos do técnico
 export const FINISHED_TABS: { key: string; label: string; statuses: string[] }[] = [
-  { key: 'aprovados', label: 'Aprovados', statuses: ['aprovado', 'retorno'] },
+  { key: 'aprovados', label: 'Aprovados', statuses: ['aprovado'] },
   { key: 'orcamentos', label: 'Orçamentos', statuses: ['orcamento'] },
   { key: 'recusados', label: 'Recusados', statuses: ['nao_aprovou', 'pagou_somente_visita'] },
+  // Retorno resolvido ou aprovado (garantia)
+  { key: 'retornos', label: 'Retornos', statuses: ['retorno'] },
 ]
 
 export function computeLocks(calls: QueueCall[], openCallIds: Set<string>, today: string): Map<string, LockInfo> {

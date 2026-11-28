@@ -1,10 +1,11 @@
 import { createClient } from '@/lib/supabase/client'
 
-export type VisitOutcome = 'aprovado' | 'aprovado_reagendado' | 'orcamento' | 'remarcado' | 'faltou_peca' | 'cliente_ausente' | 'nao_aprovou' | 'sem_conserto' | 'pagou_somente_visita' | 'outro'
+export type VisitOutcome = 'aprovado' | 'aprovado_reagendado' | 'resolvido' | 'orcamento' | 'remarcado' | 'faltou_peca' | 'cliente_ausente' | 'nao_aprovou' | 'sem_conserto' | 'pagou_somente_visita' | 'outro'
 
 export const VISIT_OUTCOME_LABEL: Record<string, string> = {
   aprovado: 'Serviço aprovado',
   aprovado_reagendado: 'Aprovado — vai fazer em outro horário',
+  resolvido: 'Retorno resolvido',
   orcamento: 'Orçamento — cliente vai decidir',
   remarcado: 'Cliente remarcou',
   faltou_peca: 'Faltou peça',

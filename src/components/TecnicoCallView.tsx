@@ -1,5 +1,6 @@
 'use client'
 
+import { getCallVisits } from '@/lib/db/service-visits'
 import { cleanPartsGuarantee } from '@/lib/parts-guarantee'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
@@ -28,6 +29,15 @@ export default function TecnicoCallView({ call, lock, onChanged }: {
 }) {
   const so = call.service_orders?.[0]
   const [parts, setParts] = useState<any[]>([])
+  // Retorno marcado como "Resolvido": a última visita guarda a descrição
+  const [resolved, setResolved] = useState<{ notes: string | null } | null>(null)
+  useEffect(() => {
+    if (call.status !== 'retorno') { setResolved(null); return }
+    getCallVisits(call.id).then(vs => {
+      const last = vs.filter((v: any) => v.finished_at).sort((a: any, b: any) => String(b.finished_at).localeCompare(String(a.finished_at)))[0]
+      setResolved(last?.outcome === 'resolvido' ? { notes: last.notes ?? null } : null)
+    }).catch(() => setResolved(null))
+  }, [call.id, call.status])
 
   useEffect(() => {
     if (!so?.id) return
@@ -93,7 +103,7 @@ export default function TecnicoCallView({ call, lock, onChanged }: {
     <div className="max-w-2xl mx-auto space-y-4">
       {header}
 
-      <ServiceTimer callId={call.id} status={call.status} onChanged={onChanged} />
+      <ServiceTimer callId={call.id} status={call.status} onChanged={onChanged} isReturn={!!call.return_of_call_id} />
 
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5 space-y-4">
         <div>
@@ -135,7 +145,18 @@ export default function TecnicoCallView({ call, lock, onChanged }: {
 
       <PhotoGallery files={files} />
 
-      {(call.status === 'aprovado' || call.status === 'retorno') && !so && (
+      {/* Retorno resolvido (sem cobrança): mostra o que foi feito; OS só se usou peça ou cobrou */}
+      {resolved && !so && (
+        <div className="bg-violet-50 rounded-xl border border-violet-100 p-5 space-y-2">
+          <p className="font-semibold text-violet-800 flex items-center gap-2 text-sm"><CheckCircle className="w-4 h-4" /> Retorno resolvido</p>
+          {resolved.notes && <p className="text-sm text-violet-900 whitespace-pre-line">{resolved.notes}</p>}
+          <Link href={`/dashboard/chamados/${call.id}/finalizar`} className="inline-block text-xs font-semibold text-violet-700 underline pt-1">
+            Usou peça ou cobrou algo? Completar a OS
+          </Link>
+        </div>
+      )}
+
+      {(call.status === 'aprovado' || call.status === 'retorno') && !so && !resolved && (
         <Link href={`/dashboard/chamados/${call.id}/finalizar`}
           className="flex items-center justify-center gap-2 py-3.5 rounded-xl text-base font-bold text-white"
           style={{ background: 'var(--primary)' }}>

@@ -60,13 +60,32 @@ function localToday() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+const DAY_KEY = 'chamados_dia'
+const TAB_KEY = 'chamados_aba'
+const DAY_TTL = 3 * 60 * 60 * 1000
+
 export default function ChamadosPage() {
   const router = useRouter()
   const { tenant, isTecnico } = useTenant()
   const isRodrigues = tenant?.call_form_config?.rodrigues_custom === true
   // Gerente da Rodrigues: painel do dia por técnico, sem lista nem aprovar/recusar
   const isRodriguesOwner = isRodrigues && !isTecnico
+  // Lembra o dia que estava aberto: abrir um chamado e voltar não pula pra hoje.
+  // Vale por algumas horas (no dia seguinte o app abre de novo no dia de hoje).
   const [dayFilter, setDayFilter] = useState(localToday)
+  const restored = useRef(false)
+  useEffect(() => {
+    if (!restored.current) {
+      restored.current = true
+      try {
+        const saved = JSON.parse(sessionStorage.getItem(DAY_KEY) ?? 'null')
+        const tab = sessionStorage.getItem(TAB_KEY)
+        if (tab && FINISHED_TABS.some(x => x.key === tab)) setFinishedTab(tab)
+        if (saved?.day && Date.now() - saved.at < DAY_TTL && saved.day !== dayFilter) { setDayFilter(String(saved.day)); return }
+      } catch { /* sem sessionStorage */ }
+    }
+    try { sessionStorage.setItem(DAY_KEY, JSON.stringify({ day: dayFilter, at: Date.now() })) } catch { /* ignora */ }
+  }, [dayFilter]) // eslint-disable-line react-hooks/exhaustive-deps
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [retornoOpen, setRetornoOpen] = useState(false)
   // Bloqueios de agenda + calendário pra pular de dia (dono da Rodrigues)
@@ -107,6 +126,7 @@ export default function ChamadosPage() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { lockOf, visitsOf, reload: reloadQueue } = useTecnicoQueue(isTecnico)
   const [finishedTab, setFinishedTab] = useState(FINISHED_TABS[0].key)
+  useEffect(() => { if (restored.current) { try { sessionStorage.setItem(TAB_KEY, finishedTab) } catch { /* ignora */ } } }, [finishedTab])
 
   // Agrupa os chamados por dia do serviço (usa a data agendada; sem ela, a data do chamado)
   const callsByDay = useMemo(() => {

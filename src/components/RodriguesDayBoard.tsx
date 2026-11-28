@@ -155,7 +155,8 @@ export default function RodriguesDayBoard({ calls, day, blocks = [], onEditBlock
         ;(b.timed ? blocks : untimed).push(b)
       }
       // Empilha os que se sobrepõem em linhas
-      blocks.sort((a, b) => a.start - b.start)
+      // Mesmo horário: o chamado criado primeiro vem antes
+      blocks.sort((a, b) => a.start - b.start || String(a.call.created_at ?? '').localeCompare(String(b.call.created_at ?? '')))
       const rowEnds: number[] = []
       for (const b of blocks) {
         let r = rowEnds.findIndex(e => e <= b.start)
@@ -164,6 +165,7 @@ export default function RodriguesDayBoard({ calls, day, blocks = [], onEditBlock
         b.row = r
       }
       const locks = blocks_.filter(b => b.auxiliary_id === id || (b.auxiliary_id === null && id !== 'none'))
+      untimed.sort((a, b) => String(a.call.created_at ?? '').localeCompare(String(b.call.created_at ?? '')))
       return { id, name, blocks, untimed, rows: Math.max(1, rowEnds.length), total: list.length, revenue, counts, locks }
     }
 
@@ -264,7 +266,7 @@ export default function RodriguesDayBoard({ calls, day, blocks = [], onEditBlock
                     const rows: { start: number; end: number; b?: Block; lock?: BlockOnDay }[] = [
                       ...selected.blocks.map(b => ({ start: b.start, end: b.end, b })),
                       ...selected.locks.map(lock => ({ start: lock.startMin, end: lock.endMin, lock })),
-                    ].sort((a, b) => a.start - b.start)
+                    ].sort((a, b) => a.start - b.start || String('b' in a ? a.b.call.created_at ?? '' : '').localeCompare(String('b' in b ? b.b.call.created_at ?? '' : '')))
                     return rows.map((row, i) => {
                     const prev = rows[i - 1]
                     const showNow = isToday && nowMin < row.start && (!prev || nowMin >= prev.start)

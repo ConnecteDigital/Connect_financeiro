@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Play, CheckCircle, XCircle, Loader2, Timer, Camera, Paperclip, X, CalendarClock } from 'lucide-react'
+import { Play, CheckCircle, XCircle, Loader2, Timer, Camera, Paperclip, X, CalendarClock, Wrench } from 'lucide-react'
 import {
   getCallVisits, startServiceVisit, finishServiceVisit, VISIT_OUTCOME_LABEL, type VisitOutcome,
 } from '@/lib/db/service-visits'
@@ -32,10 +32,11 @@ function timeOf(iso: string) {
 // Iniciar / encerrar serviço (Rodrigues). O tempo nunca é guardado no
 // celular: o banco grava a hora de início e a tela só mostra quanto passou
 // desde então — fechar o app, trocar de aparelho etc. não perde nada.
-export default function ServiceTimer({ callId, status, onChanged }: {
+export default function ServiceTimer({ callId, status, onChanged, isReturn = false }: {
   callId: string
   status: string
   onChanged: () => void
+  isReturn?: boolean   // retorno: tem o botão "Resolvido"
 }) {
   const router = useRouter()
   const { isTecnico } = useTenant()
@@ -48,6 +49,9 @@ export default function ServiceTimer({ callId, status, onChanged }: {
   // "Serviço aprovado": feito agora (vai pra OS) ou aprovado pra fazer em outro horário
   const [approveOpen, setApproveOpen] = useState(false)
   const [later, setLater] = useState(false)
+  // Retorno resolvido: descrição do que foi feito
+  const [resolvedOpen, setResolvedOpen] = useState(false)
+  const [resolvedNotes, setResolvedNotes] = useState('')
   const [laterDate, setLaterDate] = useState('')
   const [laterTime, setLaterTime] = useState('')
   const [reason, setReason] = useState<VisitOutcome | null>(null)
@@ -98,6 +102,27 @@ export default function ServiceTimer({ callId, status, onChanged }: {
       setError(e?.message ?? 'Não foi possível encerrar o serviço.')
       setBusy(false)
     }
+  }
+
+  async function handleResolved() {
+    if (!resolvedNotes.trim()) { setError('Descreva o que foi resolvido.'); return }
+    setBusy(true); setError('')
+    try {
+      await finishServiceVisit(callId, 'resolvido', resolvedNotes.trim())
+      if (photos.length > 0) {
+        const storage = createClient().storage.from('chamados-anexos')
+        await Promise.all(photos.map(({ file }, i) => {
+          const safe = file.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9._-]/g, '_')
+          return storage.upload(`${callId}/${Date.now() + i}_${safe}`, file).catch(console.error)
+        }))
+        photos.forEach(p => URL.revokeObjectURL(p.preview))
+      }
+      setResolvedOpen(false); setResolvedNotes(''); setPhotos([])
+      load()
+      onChanged()
+    } catch (e: any) {
+      setError(/resultado inv/i.test(e?.message ?? '') ? 'Falta rodar a migration_v41.sql no Supabase.' : (e?.message ?? 'Não foi possível salvar.'))
+    } finally { setBusy(false) }
   }
 
   // Cliente aprovou, mas o técnico tem outro serviço agora: o chamado continua
@@ -170,6 +195,12 @@ export default function ServiceTimer({ callId, status, onChanged }: {
               {formatDuration(now - new Date(open.started_at).getTime())}
             </p>
           </div>
+          {isReturn && (
+            <button onClick={() => { setError(''); setResolvedOpen(true) }} disabled={busy}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-60 transition">
+              <Wrench className="w-4 h-4" /> Resolvido
+            </button>
+          )}
           <div className="grid grid-cols-2 gap-2">
             <button onClick={() => { setError(''); setLater(false); setApproveOpen(true) }} disabled={busy}
               className="flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-60 transition">
@@ -210,6 +241,57 @@ export default function ServiceTimer({ callId, status, onChanged }: {
             </div>
           ))}
         </div>
+      )}
+
+      {resolvedOpen && (
+        <Portal>
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" style={{ backdropFilter: 'blur(4px)', background: 'rgba(0,0,0,0.4)' }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[90dvh] overflow-y-auto">
+            <div>
+              <h2 className="text-lg font-bold text-zinc-900">Retorno resolvido</h2>
+              <p className="text-xs text-zinc-500 mt-0.5">Sem cobrança. Se usou peça ou cobrou algo, use "Serviço aprovado".</p>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-zinc-500 mb-1.5">O que foi resolvido? *</label>
+              <textarea rows={4} value={resolvedNotes} onChange={e => setResolvedNotes(e.target.value)} autoFocus
+                className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 resize-none"
+                placeholder="Ex: regulei o termostato e troquei a borracha da porta, que estava descolada" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-zinc-500 mb-1.5">Fotos (opcional)</label>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => cameraRef.current?.click()}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-orange-50 border border-orange-200 text-orange-600"><Camera className="w-4 h-4" /> Tirar foto</button>
+                <button type="button" onClick={() => galleryRef.current?.click()}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-zinc-50 border border-zinc-200 text-zinc-600"><Paperclip className="w-4 h-4" /> Galeria</button>
+              </div>
+              <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => { addPhotos(e.target.files); e.target.value = '' }} />
+              <input ref={galleryRef} type="file" accept="image/*" multiple className="hidden" onChange={e => { addPhotos(e.target.files); e.target.value = '' }} />
+              {photos.length > 0 && (
+                <div className="grid grid-cols-3 gap-2 mt-2">
+                  {photos.map(p => (
+                    <div key={p.id} className="relative rounded-lg overflow-hidden border border-zinc-200 bg-zinc-50">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={p.preview} alt="" className="w-full h-20 object-cover" />
+                      <button type="button" onClick={() => { URL.revokeObjectURL(p.preview); setPhotos(l => l.filter(x => x.id !== p.id)) }}
+                        className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1"><X className="w-3 h-3" /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {error && <p className="text-sm text-red-500">{error}</p>}
+            <div className="flex gap-3">
+              <button onClick={() => { setResolvedOpen(false); setError('') }} disabled={busy}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-zinc-100 text-zinc-600 hover:bg-zinc-200 transition">Cancelar</button>
+              <button onClick={handleResolved} disabled={busy || !resolvedNotes.trim()}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-violet-600 disabled:opacity-50 transition">
+                {busy ? 'Salvando...' : 'Confirmar'}
+              </button>
+            </div>
+          </div>
+        </div>
+        </Portal>
       )}
 
       {approveOpen && (
