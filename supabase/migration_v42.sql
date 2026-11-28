@@ -3,14 +3,14 @@
 -- Substitui a regra dos R$ 100 por dia trabalhado (v40) por esta:
 --   • Todo chamado agendado na empresa  → saída de R$ 200 "Google Ads"
 --     no financeiro (painel do gestor), já como paga, na data do chamado.
---   • Todo chamado agendado pra um técnico → − R$ 35 na comissão dele
+--   • Todo chamado agendado pra um técnico → − R$ 25 na comissão dele
 --     (no líquido), na data do chamado.
 --
 -- Regras:
---   • Trocou o técnico do chamado → os − R$ 35 passam pro técnico novo.
---   • Tirou o técnico → os − R$ 35 saem.
+--   • Trocou o técnico do chamado → os − R$ 25 passam pro técnico novo.
+--   • Tirou o técnico → os − R$ 25 saem.
 --   • Mudou a data → as duas linhas vão pra data nova.
---   • Apagou o chamado → as duas linhas saem (o − R$ 35 só se a comissão
+--   • Apagou o chamado → as duas linhas saem (o − R$ 25 só se a comissão
 --     ainda não foi paga).
 --   • Chamado cancelado continua cobrando (o anúncio já foi gasto).
 --   • Retorno NÃO cobra (não é cliente novo).
@@ -60,7 +60,7 @@ begin
     end if;
   end if;
 
-  -- Técnico: − R$ 35 na comissão
+  -- Técnico: − R$ 25 na comissão
   if p_call.technician_id is null or v_tec <= 0 then
     delete from expenses where tenant_id = p_call.tenant_id and notes = v_tag_tec and status = 'pendente';
   else
@@ -100,7 +100,7 @@ create trigger calls_fees
 -- ─── 3. Liga pra Eletromark (e desliga os R$ 100 por dia) ───────────
 update tenants
 set call_form_config = (coalesce(call_form_config, '{}'::jsonb) - 'daily_tech_fee') || jsonb_build_object(
-  'call_fees', jsonb_build_object('company_amount', 200, 'tecnico_amount', 35, 'label', 'Google Ads')
+  'call_fees', jsonb_build_object('company_amount', 200, 'tecnico_amount', 25, 'label', 'Google Ads')
 )
 where slug = 'eletromark-refrigeracoes';
 
@@ -123,5 +123,5 @@ select 'v42 ok' as resultado,
   (select call_form_config -> 'call_fees' from tenants where id = (select id from t)) as regra,
   (select count(*) from calls where tenant_id = (select id from t) and return_of_call_id is null) as chamados,
   (select count(*) from expenses where tenant_id = (select id from t) and notes like 'agenda-empresa:%') as linhas_google_ads_200,
-  (select count(*) from expenses where tenant_id = (select id from t) and notes like 'agenda-tecnico:%') as linhas_tecnico_35,
+  (select count(*) from expenses where tenant_id = (select id from t) and notes like 'agenda-tecnico:%') as linhas_tecnico_25,
   (select count(*) from expenses where tenant_id = (select id from t) and notes like 'taxa-dia:%') as linhas_antigas_100_por_dia;
