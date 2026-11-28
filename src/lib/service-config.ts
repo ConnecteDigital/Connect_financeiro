@@ -74,6 +74,14 @@ export const APPLIANCE_TYPES = [
   'Câmara Fria', 'Cooler', 'Outro',
 ]
 
+// Aparelhos que aparecem pra escolher no chamado e no orçamento. Cada
+// empresa pode ter a própria lista em call_form_config.appliance_types
+// (ex.: Eletromark só trabalha com geladeira, freezer e máquina de lavar).
+export function applianceTypesFor(tenant: { call_form_config?: any } | null | undefined): string[] {
+  const list = tenant?.call_form_config?.appliance_types
+  return Array.isArray(list) && list.length > 0 ? list.map(String) : APPLIANCE_TYPES
+}
+
 const GENERIC_CATEGORY_CONFIG: ServiceCategoryConfig = {
   qtyLabel: 'Quantidade',
   priceLabel: 'Valor (R$)',

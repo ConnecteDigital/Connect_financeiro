@@ -1,7 +1,8 @@
 'use client'
 
 import PartsGuaranteeEditor from '@/components/PartsGuaranteeEditor'
-import { APPLIANCE_BRANDS, APPLIANCE_TYPES } from '@/lib/service-config'
+import { APPLIANCE_BRANDS, applianceTypesFor } from '@/lib/service-config'
+import { useTenant } from '@/lib/tenant-context'
 import { QuoteDetails, VISIT_PERIODS } from '@/lib/rodrigues-doc'
 
 // Orçamento da Rodrigues: campos que aparecem em "Informações básicas",
@@ -11,6 +12,8 @@ export default function RodriguesQuoteFields({ value, onChange }: {
   onChange: (v: QuoteDetails) => void
 }) {
   const set = (patch: Partial<QuoteDetails>) => onChange({ ...value, ...patch })
+  const { tenant } = useTenant()
+  const types = applianceTypesFor(tenant)
   const label = 'block text-xs font-medium mb-1.5'
   const lStyle = { color: 'var(--text-secondary)' }
   const input = 'input-field py-2.5 text-sm'
@@ -24,8 +27,8 @@ export default function RodriguesQuoteFields({ value, onChange }: {
           <label className={label} style={lStyle}>Aparelho</label>
           <select value={value.appliance ?? ''} onChange={e => set({ appliance: e.target.value })} className={input}>
             <option value="">Selecionar...</option>
-            {APPLIANCE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            {value.appliance && !APPLIANCE_TYPES.includes(value.appliance) && <option value={value.appliance}>{value.appliance}</option>}
+            {types.map(t => <option key={t} value={t}>{t}</option>)}
+            {value.appliance && !types.includes(value.appliance) && <option value={value.appliance}>{value.appliance}</option>}
           </select>
         </div>
         <div>

@@ -1,7 +1,8 @@
 'use client'
 
 import MoneyInput from '@/components/MoneyInput'
-import { APPLIANCE_BRANDS, APPLIANCE_TYPES } from '@/lib/service-config'
+import { APPLIANCE_BRANDS, applianceTypesFor } from '@/lib/service-config'
+import { useTenant } from '@/lib/tenant-context'
 
 interface Line { flatValue?: number; notes: string }
 
@@ -26,6 +27,8 @@ export default function RodriguesApplianceSection(props: {
   inputCls: string
 }) {
   const { appliance, brand, service, line, inputCls } = props
+  const { tenant } = useTenant()
+  const types = applianceTypesFor(tenant)
   const chip = (active: boolean) =>
     `px-3 py-2 rounded-xl text-sm font-medium border transition ${active ? 'bg-orange-500 border-orange-500 text-white shadow-sm' : 'border-slate-200 text-slate-600 hover:border-orange-300 bg-white'}`
 
@@ -33,7 +36,8 @@ export default function RodriguesApplianceSection(props: {
     <div>
       <label className="block text-sm font-medium text-slate-700 mb-2">Aparelho</label>
       <div className="flex flex-wrap gap-2 mb-2">
-        {APPLIANCE_TYPES.map(t => (
+        {/* Aparelho de um chamado antigo que saiu da lista continua aparecendo */}
+        {[...types, ...(appliance && !types.includes(appliance) ? [appliance] : [])].map(t => (
           <button key={t} type="button" onClick={() => props.onApplianceChange(appliance === t ? '' : t)} className={chip(appliance === t)}>
             {t}
           </button>
