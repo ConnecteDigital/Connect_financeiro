@@ -1,5 +1,6 @@
 'use client'
 
+import { TecnicoFuelCard } from '@/components/FuelLogs'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { PhoneCall, CheckCircle, XCircle, Clock, Wallet, ChevronRight, ChevronLeft, CalendarDays, Timer, Lock, Search, X } from 'lucide-react'
@@ -229,6 +230,9 @@ export default function TecnicoHome() {
           </span>
         </Link>
       )}
+
+      {/* Abastecimento (empresas com essa função ligada) */}
+      {tenant?.call_form_config?.fuel_logs === true && <TecnicoFuelCard />}
 
       {/* Chamados de hoje — na ordem da agenda, com cadeado nos próximos */}
       <div className="bg-white rounded-2xl border border-zinc-100 shadow-sm overflow-hidden">

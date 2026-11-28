@@ -1,5 +1,6 @@
 'use client'
 
+import { GestorFuelCard } from '@/components/FuelLogs'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { UserRound, CheckCircle2, Clock, Wallet, Loader2, Share2, X, CreditCard, ChevronDown, Undo2, ExternalLink } from 'lucide-react'
@@ -134,7 +135,7 @@ export default function RodriguesComissoesBoard() {
     total: lanes.reduce((s, l) => s + l.total, 0),
     pending: lanes.reduce((s, l) => s + l.pending, 0),
     paid: lanes.reduce((s, l) => s + l.paid, 0),
-    services: entries.length,
+    services: entries.filter(e => e.source_service_order_id).length,
   }
 
   // Ao escolher o técnico (ou trocar o período), já deixa marcado tudo que está pendente
@@ -233,7 +234,7 @@ export default function RodriguesComissoesBoard() {
                   <p className="text-sm font-semibold text-zinc-800 truncate">{l.name}</p>
                 </div>
                 <p className="text-xs text-zinc-500 mt-0.5">
-                  {l.entries.length === 0 ? 'Sem comissão' : `${l.entries.length} serviço${l.entries.length > 1 ? 's' : ''}`}
+                  {(() => { const n = l.entries.filter(e => e.source_service_order_id).length; return l.entries.length === 0 ? 'Sem comissão' : n === 0 ? 'Só descontos/reembolsos' : `${n} serviço${n > 1 ? 's' : ''}` })()}
                 </p>
                 {l.pending > 0 && <p className="text-sm font-bold text-amber-600 mt-1">{fmt(l.pending)} <span className="text-[10px] font-medium">a pagar</span></p>}
                 {l.pending === 0 && l.paid > 0 && <p className="text-sm font-bold text-emerald-600 mt-1">{fmt(l.paid)} <span className="text-[10px] font-medium">pago</span></p>}
@@ -336,7 +337,7 @@ export default function RodriguesComissoesBoard() {
               ) : (
                 <div className="space-y-3">
                   <p className="text-sm font-semibold text-zinc-800">
-                    Pagar <span style={{ color: 'var(--primary)' }}>{fmt(toPayTotal)}</span> para {selected.name} ({toPay.length} serviço{toPay.length > 1 ? 's' : ''})
+                    Pagar <span style={{ color: 'var(--primary)' }}>{fmt(toPayTotal)}</span> para {selected.name} ({toPay.length} lançamento{toPay.length > 1 ? 's' : ''})
                   </p>
                   <div className="flex items-center gap-2">
                     <label className="text-xs font-medium text-zinc-600">Data do pagamento</label>
@@ -408,13 +409,16 @@ export default function RodriguesComissoesBoard() {
           </div>
         </div>
       )}
+
+      {/* Abastecimentos (empresas com essa função ligada) */}
+      {tenant?.call_form_config?.fuel_logs === true && <GestorFuelCard start={period.start} end={period.end} onChanged={load} />}
     </div>
   )
 }
 
 // Como a comissão foi calculada: (total − peças − Uber − taxa da maquininha) × %
 function Detail({ so, amount, description }: { so: any; amount: number; description?: string }) {
-  if (!so) return <p className="px-4 pb-3 text-xs text-zinc-500">{amount < 0 && description ? `${description}. Desconto gerado por uma devolução ao cliente.` : 'Sem ordem de serviço vinculada.'}</p>
+  if (!so) return <p className="px-4 pb-3 text-xs text-zinc-500">{description ? `${description}.${/estorno/i.test(description) ? ' Desconto gerado por uma devolução ao cliente.' : ''}` : 'Sem ordem de serviço vinculada.'}</p>
   const total = Number(so.total_value || 0)
   const parts = Number(so.parts_cost || 0)
   const uber = Number(so.uber_cost || 0)

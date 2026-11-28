@@ -25,6 +25,9 @@ export interface Tenant {
   call_form_config: {
     simplified?: boolean; millenium_custom_os?: boolean; vertical?: string; rodrigues_custom?: boolean
     business_hours?: BusinessHours
+    fuel_logs?: boolean                                  // técnico lança abastecimento (Eletromark)
+    daily_tech_fee?: { amount: number; label?: string }  // taxa por dia trabalhado (Eletromark: Google Ads)
+    appliance_types?: string[]                           // aparelhos do chamado (padrão = lista completa)
   } | null
 }
 

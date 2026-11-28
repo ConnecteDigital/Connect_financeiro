@@ -198,7 +198,7 @@ export default function ComissaoPage() {
 function CommissionDetail({ so, amount, description }: { so: any; amount: number; description?: string }) {
   if (!so) {
     // Desconto por devolução ao cliente (estorno): mostra o lançamento inteiro
-    return <p className="px-4 pb-3 text-xs text-zinc-500">{amount < 0 && description ? `${description}. O cliente recebeu uma devolução nesse serviço, e a parte da comissão referente foi descontada.` : 'Sem ordem de serviço vinculada.'}</p>
+    return <p className="px-4 pb-3 text-xs text-zinc-500">{description ? `${description}.${/estorno/i.test(description) ? ' O cliente recebeu uma devolução nesse serviço, e a parte da comissão referente foi descontada.' : ''}` : 'Sem ordem de serviço vinculada.'}</p>
   }
   const total = Number(so.total_value || 0)
   const parts = Number(so.parts_cost || 0)
