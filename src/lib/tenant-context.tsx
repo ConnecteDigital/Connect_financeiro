@@ -27,6 +27,8 @@ export interface Tenant {
     business_hours?: BusinessHours
     fuel_logs?: boolean                                  // técnico lança abastecimento (Eletromark)
     daily_tech_fee?: { amount: number; label?: string }  // taxa por dia trabalhado (Eletromark: Google Ads)
+    call_fees?: { company_amount?: number; tecnico_amount?: number; label?: string }  // por chamado agendado (Eletromark: R$ 200 empresa / R$ 35 técnico) — lançado pelo banco (v42)
+    owner_name?: string  // nome do dono nos avisos do técnico (ex.: "Marcos")
     appliance_types?: string[]                           // aparelhos do chamado (padrão = lista completa)
   } | null
 }
