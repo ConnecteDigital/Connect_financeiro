@@ -11,6 +11,7 @@ import { formatDuration } from '@/lib/business-hours'
 import { useTecnicoQueue, compareQueue, localYmd, callKind, CALL_KIND_STYLE } from '@/lib/tecnico-queue'
 import { getBlocksForRange, blockLabel, type BlockOnDay } from '@/lib/db/schedule-blocks'
 import { greeting } from '@/lib/greeting'
+import { periodOf, settlementOf } from '@/lib/period'
 import { Sheet } from '@/components/LojaModals'
 
 const fmt = (v: number) => `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
@@ -20,14 +21,6 @@ function monthRange(offset: number) {
   const first = new Date(now.getFullYear(), now.getMonth() + offset, 1)
   const last = new Date(now.getFullYear(), now.getMonth() + offset + 1, 0)
   return { start: localYmd(first), end: localYmd(last), label: first.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) }
-}
-
-// Semana atual, de segunda a domingo (a comissão é paga por semana)
-function currentWeekRange() {
-  const now = new Date()
-  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7))
-  const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6)
-  return { start: localYmd(monday), end: localYmd(sunday) }
 }
 
 const CALL_FIELDS = 'id, status, date, scheduled_date, scheduled_time, created_at, contact_name, service_category, call_address, address_number, call_neighborhood, return_of_call_id, client:clients(name)'
@@ -128,13 +121,15 @@ export default function TecnicoHome() {
     })
   }, [])
 
-  // A receber nesta semana (sempre a semana atual)
+  // A receber no acerto atual: a semana (Rodrigues) ou o dia (Eletromark)
+  const settle = settlementOf(tenant)
   useEffect(() => {
-    const { start, end } = currentWeekRange()
+    if (!tenant) return
+    const { start, end } = periodOf(settle, 0)
     createClient().from('expenses').select('amount').eq('status', 'pendente')
       .gte('due_date', start).lte('due_date', end)
       .then(({ data }) => setWeekPending((data ?? []).reduce((s, e) => s + Number(e.amount || 0), 0)))
-  }, [])
+  }, [tenant, settle])
 
   // Serviço em andamento: o tempo vem da hora de início gravada no banco
   useEffect(() => {
@@ -319,7 +314,7 @@ export default function TecnicoHome() {
         className="block rounded-3xl p-5 text-white shadow-sm"
         style={{ background: 'var(--primary)' }}>
         <div className="flex items-center gap-2 text-white/80 text-xs font-medium uppercase tracking-wide">
-          <Wallet className="w-4 h-4" /> Comissão a receber · esta semana
+          <Wallet className="w-4 h-4" /> Comissão a receber · {settle === 'dia' ? 'hoje' : 'esta semana'}
         </div>
         <p className="text-3xl font-bold mt-1">{weekPending === null ? '—' : fmt(weekPending)}</p>
         <p className="text-sm text-white/80 mt-1 capitalize">

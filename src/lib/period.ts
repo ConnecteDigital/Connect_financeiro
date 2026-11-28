@@ -27,3 +27,9 @@ export function periodOf(mode: PeriodMode, offset: number, base = new Date()): P
 }
 
 export const ptDate = (s?: string | null) => s ? new Date(String(s).slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR') : ''
+
+// Acerto da comissão do técnico: por semana (padrão, Rodrigues) ou por dia
+// (Eletromark) — call_form_config.commission_settlement = 'dia'
+export function settlementOf(tenant: { call_form_config?: any } | null | undefined): 'dia' | 'semana' {
+  return tenant?.call_form_config?.commission_settlement === 'dia' ? 'dia' : 'semana'
+}

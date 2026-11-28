@@ -7,20 +7,15 @@ import { Sheet, input } from '@/components/LojaModals'
 import { toastSuccess, toastError } from '@/components/Toast'
 import { getFuelLogs, registerFuel, deleteFuel, fuelPhotoUrl, fuelErrorMessage, type FuelLog } from '@/lib/db/fuel'
 import { localYmd } from '@/lib/tecnico-queue'
-import { ptDate } from '@/lib/period'
+import { ptDate, periodOf, settlementOf } from '@/lib/period'
+import { useTenant } from '@/lib/tenant-context'
 
 const fmt = (v: number) => `R$ ${Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
 
-// Segunda a domingo da semana atual (a comissão é paga por semana)
-function weekRange() {
-  const now = new Date()
-  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7))
-  const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6)
-  return { start: localYmd(monday), end: localYmd(sunday) }
-}
-
 // Lançar abastecimento: valor + foto da nota
 function FuelForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const { tenant } = useTenant()
+  const daily = settlementOf(tenant) === 'dia'
   const [amount, setAmount] = useState('')
   const [date, setDate] = useState(localYmd())
   const [photo, setPhoto] = useState<{ file: File; preview: string } | null>(null)
@@ -92,7 +87,7 @@ function FuelForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => vo
       </div>
 
       <p className="text-xs text-zinc-500">
-        O valor volta pra você como reembolso, junto com a comissão da semana. A gasolina sai da base da comissão,
+        O valor volta pra você como reembolso, junto com a comissão {daily ? 'do dia' : 'da semana'}. A gasolina sai da base da comissão,
         então você perde só a sua porcentagem dela.
       </p>
       {error && <p className="text-sm text-red-500">{error}</p>}
@@ -146,7 +141,10 @@ async function confirmDelete(l: FuelLog, after: () => void) {
 export function TecnicoFuelCard() {
   const [open, setOpen] = useState(false)
   const [logs, setLogs] = useState<FuelLog[] | null>(null)
-  const load = useCallback(() => { const { start, end } = weekRange(); getFuelLogs(start, end).then(setLogs) }, [])
+  // Os do período do acerto: a semana, ou o dia (Eletromark)
+  const { tenant } = useTenant()
+  const settle = settlementOf(tenant)
+  const load = useCallback(() => { const { start, end } = periodOf(settle, 0); getFuelLogs(start, end).then(setLogs) }, [settle])
   useEffect(() => { load() }, [load])
   const total = (logs ?? []).reduce((s, l) => s + l.amount, 0)
 
@@ -154,7 +152,7 @@ export function TecnicoFuelCard() {
     <div className="bg-white rounded-2xl border border-zinc-100 shadow-sm overflow-hidden">
       <div className="flex items-center justify-between gap-3 px-4 py-3">
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-zinc-700 flex items-center gap-2"><Fuel className="w-4 h-4" style={{ color: 'var(--primary)' }} /> Abastecimentos da semana</p>
+          <p className="text-sm font-semibold text-zinc-700 flex items-center gap-2"><Fuel className="w-4 h-4" style={{ color: 'var(--primary)' }} /> Abastecimentos {settle === 'dia' ? 'de hoje' : 'da semana'}</p>
           <p className="text-xs text-zinc-500">{logs === null ? '—' : logs.length === 0 ? 'Nenhum lançado' : `${logs.length} · ${fmt(total)}`}</p>
         </div>
         <button type="button" onClick={() => setOpen(true)}

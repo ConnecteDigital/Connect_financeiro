@@ -5,6 +5,8 @@ import { Wallet, CheckCircle2, Clock, ChevronLeft, ChevronRight, ChevronDown, Cr
 import { getExpenses } from '@/lib/db/expenses'
 import { createClient } from '@/lib/supabase/client'
 import { osCardGross, osCardPending } from '@/lib/payments'
+import { useTenant } from '@/lib/tenant-context'
+import { periodOf, settlementOf } from '@/lib/period'
 
 const OS_FIELDS = 'id, os_number, date, total_value, parts_cost, uber_cost, after_hours, payments, payment_method, card_net_value, call:calls(contact_name, return_of_call_id, client:clients(name))'
 
@@ -16,11 +18,6 @@ const clientOf = (so: any) => {
 const fmtDate = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('pt-BR')
 
 const fmt = (v: number) => `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-
-function localDate(d?: Date): string {
-  const dt = d ?? new Date()
-  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
-}
 
 export default function ComissaoPage() {
   const [loading, setLoading] = useState(true)
@@ -50,26 +47,15 @@ export default function ComissaoPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  // Comissão por SEMANA (segunda a domingo — é paga por semana) ou por MÊS,
-  // pela data de vencimento. Os períodos anteriores ficam na seta ‹; não
-  // passa do atual.
-  const [mode, setMode] = useState<'semana' | 'mes'>('semana')
+  // Comissão pelo período do acerto — SEMANA (segunda a domingo, Rodrigues)
+  // ou DIA (Eletromark) — ou por MÊS, pela data de vencimento. Os períodos
+  // anteriores ficam na seta ‹; não passa do atual.
+  const { tenant } = useTenant()
+  const settle = settlementOf(tenant)
+  const [picked, setMode] = useState<'acerto' | 'mes'>('acerto')
+  const mode = picked === 'mes' ? 'mes' : settle
   const [offset, setOffset] = useState(0)
-  const now = new Date()
-  let start: string, end: string, periodLabel: string
-  if (mode === 'semana') {
-    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7) + offset * 7)
-    const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6)
-    start = localDate(monday)
-    end = localDate(sunday)
-    const short = (d: Date) => d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
-    periodLabel = offset === 0 ? `Esta semana · ${short(monday)} a ${short(sunday)}` : `${short(monday)} a ${short(sunday)}`
-  } else {
-    const first = new Date(now.getFullYear(), now.getMonth() + offset, 1)
-    start = localDate(first)
-    end = localDate(new Date(now.getFullYear(), now.getMonth() + offset + 1, 0))
-    periodLabel = first.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
-  }
+  const { start, end, label: periodLabel } = periodOf(mode, offset)
   // Serviços do mês no cartão que o dono ainda não confirmou: a comissão
   // só é lançada depois disso
   useEffect(() => {
@@ -94,9 +80,9 @@ export default function ComissaoPage() {
       </div>
 
       <div className="flex bg-zinc-100 rounded-xl p-1">
-        {([['semana', 'Semana'], ['mes', 'Mês']] as const).map(([v, l]) => (
+        {([['acerto', settle === 'dia' ? 'Dia' : 'Semana'], ['mes', 'Mês']] as const).map(([v, l]) => (
           <button key={v} type="button" onClick={() => { setMode(v); setOffset(0) }}
-            className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${mode === v ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500'}`}>
+            className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${picked === v ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500'}`}>
             {l}
           </button>
         ))}
@@ -157,7 +143,7 @@ export default function ComissaoPage() {
             {[...Array(3)].map((_, i) => <div key={i} className="h-12 bg-zinc-50 rounded-lg animate-pulse" />)}
           </div>
         ) : monthEntries.length === 0 ? (
-          <p className="px-4 py-10 text-center text-sm text-zinc-400">{mode === 'semana' ? 'Nenhuma comissão nesta semana' : 'Nenhuma comissão neste mês'}</p>
+          <p className="px-4 py-10 text-center text-sm text-zinc-400">{mode === 'dia' ? 'Nenhuma comissão neste dia' : mode === 'semana' ? 'Nenhuma comissão nesta semana' : 'Nenhuma comissão neste mês'}</p>
         ) : (
           <div className="divide-y divide-zinc-50">
             {monthEntries.map(e => {
