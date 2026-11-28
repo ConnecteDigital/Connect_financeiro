@@ -8,6 +8,12 @@ import { localYmd } from '@/lib/tecnico-queue'
 import { receiveItem, saveLojaItem, saveLojaMedia, saveLojaCosts, mediaUrl, isVideoFile, lojaErrorMessage, kindLabel, costKindLabel, COST_KINDS, EQUIPMENT_TYPES, type LojaItem, type LojaMedia, type LojaCost, type CostKind, type ItemKind } from '@/lib/db/loja'
 
 const fmt = (v: number) => `R$ ${Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+// AAAA-MM-DD no horário do Brasil
+export function ymdOf(iso: string) {
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return ''
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d)
+}
 export const input = 'w-full px-3 py-2.5 border border-zinc-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]'
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
@@ -59,6 +65,9 @@ export function ItemFormModal({ item, defaultKind, knownTypes = [], onClose, onS
   const [notes, setNotes] = useState(item?.notes ?? '')
   const [eqType, setEqType] = useState(item?.equipment_type ?? '')
   const [serial, setSerial] = useState(item?.serial_number ?? '')
+  // Data de cadastro: hoje, ou a que já estava salva
+  const origDate = item?.created_at ? ymdOf(item.created_at) : ''
+  const [regDate, setRegDate] = useState(origDate || ymdOf(new Date().toISOString()))
   // Tipos: os prontos + os que a loja já usou + os criados agora no "+"
   const [extraTypes, setExtraTypes] = useState<string[]>([])
   const [addingType, setAddingType] = useState(false)
@@ -117,6 +126,8 @@ export function ItemFormModal({ item, defaultKind, knownTypes = [], onClose, onS
         kind, name: finalName, brand: brand.trim() || null, model: model.trim() || null, notes: notes.trim() || null,
         quantity: Math.max(0, Math.round(Number(quantity) || 0)), unit_value: Number(cost) || 0, sale_value: Number(price) || 0,
         equipment_type: isEquip ? (eqType.trim() || null) : null, serial_number: isEquip ? (serial.trim() || null) : null,
+        // Só manda a data se mudou (meio-dia de Brasília pra não virar o dia)
+        ...(regDate && regDate !== origDate ? { created_at: `${regDate}T12:00:00-03:00` } : {}),
       }, item?.id)
     } catch (e: any) {
       console.error(e)
@@ -200,6 +211,7 @@ export function ItemFormModal({ item, defaultKind, knownTypes = [], onClose, onS
         <Field label="Custo (R$)"><MoneyInput inputMode="decimal" min="0" step="0.01" value={cost} onChange={e => setCost(e.target.value)} className={input} placeholder="0,00" /></Field>
         <Field label="Venda (R$)"><MoneyInput inputMode="decimal" min="0" step="0.01" value={price} onChange={e => setPrice(e.target.value)} className={input} placeholder="0,00" /></Field>
       </div>
+      <Field label="Data de cadastro"><input type="date" value={regDate} onChange={e => setRegDate(e.target.value)} className={input} /></Field>
       <Field label="Observação"><input value={notes} onChange={e => setNotes(e.target.value)} className={input} placeholder="Ex: usada, revisada, garantia 3 meses..." /></Field>
 
       {isEquip && (

@@ -32,6 +32,7 @@ export interface LojaItem {
   serial_number: string | null
   media: LojaMedia[]              // fotos e vídeos do equipamento
   costs: LojaCost[]               // gastos pra deixar pronto pra venda
+  created_at?: string | null      // data de cadastro (a loja pode escolher)
 }
 
 export const costsTotal = (i: Pick<LojaItem, 'costs'>) => i.costs.reduce((s, c) => s + Number(c.amount || 0), 0)
@@ -46,7 +47,7 @@ const BUCKET = 'chamados-anexos'
 export const mediaUrl = (path: string) => createClient().storage.from(BUCKET).getPublicUrl(path).data.publicUrl
 export const isVideoFile = (f: { type?: string; name: string }) => (f.type ?? '').startsWith('video/') || /\.(mp4|mov|m4v|webm|3gp|avi)$/i.test(f.name)
 
-const BASE_COLS = 'id, kind, name, brand, model, notes, quantity, unit_value, sale_value'
+const BASE_COLS = 'id, kind, name, brand, model, notes, quantity, unit_value, sale_value, created_at'
 const normItem = (i: any): LojaItem => ({
   ...i,
   quantity: Number(i.quantity || 0), unit_value: Number(i.unit_value || 0), sale_value: Number(i.sale_value || 0),

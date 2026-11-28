@@ -1,10 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Plus, Search, X, Pencil, Trash2, ShoppingCart, PackagePlus, Package, Refrigerator } from 'lucide-react'
+import { Plus, Search, X, Pencil, Trash2, ShoppingCart, PackagePlus, Package, Refrigerator, Camera } from 'lucide-react'
+import { ptDate } from '@/lib/period'
 import { getLojaItems, deleteLojaItem, mediaUrl, lojaErrorMessage, itemCostTotal, costsTotal, EQUIPMENT_TYPES, type LojaItem, type ItemKind } from '@/lib/db/loja'
 import Link from 'next/link'
-import { ItemFormModal, ReceiveModal, MediaSheet, MediaThumb } from '@/components/LojaModals'
+import { ItemFormModal, ReceiveModal, MediaSheet, ymdOf } from '@/components/LojaModals'
 import { toastSuccess, toastError } from '@/components/Toast'
 
 const fmt = (v: number) => `R$ ${Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
@@ -47,9 +48,6 @@ export default function LojaEstoque() {
           <h1 className="text-2xl font-bold text-zinc-900">Estoque</h1>
           <p className="text-sm text-zinc-500">Equipamentos e peças da loja</p>
         </div>
-        <button type="button" onClick={() => setForm({ item: null })} className="btn-primary text-sm px-4 py-2.5 flex items-center gap-2">
-          <Plus className="w-4 h-4" /> Cadastrar
-        </button>
       </div>
 
       {loadError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{loadError}</p>}
@@ -78,64 +76,69 @@ export default function LojaEstoque() {
         {query && <button type="button" onClick={() => setQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-zinc-400"><X className="w-4 h-4" /></button>}
       </div>
 
-      <div className="space-y-2">
-        {items === null ? (
-          [...Array(3)].map((_, i) => <div key={i} className="h-24 bg-zinc-100 rounded-2xl animate-pulse" />)
-        ) : list.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-zinc-100 p-8 text-center">
-            <p className="text-sm text-zinc-400">{query ? 'Nada encontrado' : kind === 'maquina' ? 'Nenhum equipamento cadastrado' : 'Nenhuma peça cadastrada'}</p>
-            {!query && <button type="button" onClick={() => setForm({ item: null })} className="mt-2 text-sm font-semibold" style={{ color: 'var(--primary)' }}>Cadastrar agora</button>}
+      {/* Lista (mesmo jeito do estoque do técnico): nome, valores, quantidade, editar e excluir */}
+      {items === null ? (
+        <div className="space-y-2">{[...Array(3)].map((_, i) => <div key={i} className="h-16 bg-zinc-100 rounded-2xl animate-pulse" />)}</div>
+      ) : (
+        <div className="bg-white rounded-2xl border border-zinc-100 shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100">
+            <p className="text-sm font-semibold text-zinc-700">
+              {kind === 'maquina' ? 'Equipamentos' : 'Peças'} <span className="text-xs font-normal text-zinc-400">({query ? `${list.length} de ${of(kind).length}` : of(kind).length})</span>
+            </p>
+            <button type="button" onClick={() => setForm({ item: null })}
+              className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition"
+              style={{ background: 'rgba(var(--primary-rgb),0.1)', color: 'var(--primary)' }}>
+              <Plus className="w-3.5 h-3.5" /> Item
+            </button>
           </div>
-        ) : list.map(i => (
-          <div key={i.id} className="bg-white rounded-2xl border border-zinc-100 shadow-sm p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="font-semibold text-zinc-900 truncate">{i.name}</p>
-                <p className="text-xs text-zinc-500 truncate">{[i.equipment_type && i.equipment_type !== i.name ? i.equipment_type : null, i.brand, i.model].filter(Boolean).join(' · ') || '—'}</p>
-                {i.serial_number && <p className="text-xs text-zinc-500 truncate">Nº de série: <span className="font-medium text-zinc-700">{i.serial_number}</span></p>}
-                {i.notes && <p className="text-xs text-zinc-400 truncate mt-0.5">{i.notes}</p>}
-              </div>
-              <span className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs font-bold ${i.quantity <= 0 ? 'bg-red-50 text-red-600' : i.quantity <= 1 ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>
-                {i.quantity} un.
-              </span>
+          {list.length === 0 ? (
+            <p className="px-4 py-8 text-center text-sm text-zinc-400">{query ? 'Nada encontrado' : kind === 'maquina' ? 'Nenhum equipamento cadastrado' : 'Nenhuma peça cadastrada'}</p>
+          ) : (
+            <div className="divide-y divide-zinc-50">
+              {list.map(i => {
+                const sub = [i.equipment_type && i.equipment_type !== i.name ? i.equipment_type : null, i.brand, i.model, i.serial_number ? `Nº ${i.serial_number}` : null].filter(Boolean).join(' · ')
+                return (
+                  <div key={i.id} className="px-4 py-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-zinc-800 break-words">{i.name}</p>
+                        {sub && <p className="text-xs text-zinc-500 truncate">{sub}</p>}
+                        <p className="text-xs text-zinc-400 mt-0.5">
+                          Custo {fmt(itemCostTotal(i))} · Venda {fmt(i.sale_value)}
+                          {i.sale_value > 0 && itemCostTotal(i) > 0 && <span className={i.sale_value - itemCostTotal(i) >= 0 ? 'text-emerald-600' : 'text-red-500'}> · lucro {fmt(i.sale_value - itemCostTotal(i))}</span>}
+                        </p>
+                        {i.created_at && <p className="text-[11px] text-zinc-400">Cadastrado em {ptDate(ymdOf(i.created_at))}</p>}
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${i.quantity <= 0 ? 'bg-red-50 text-red-600' : i.quantity <= 2 ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-700'}`}>
+                          {i.quantity} un.
+                        </span>
+                        <button type="button" aria-label="Editar" onClick={() => setForm({ item: i })} className="p-1.5 text-zinc-400 hover:bg-zinc-100 rounded-lg transition"><Pencil className="w-3.5 h-3.5" /></button>
+                        <button type="button" aria-label="Excluir" onClick={() => remove(i)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg transition"><Trash2 className="w-3.5 h-3.5" /></button>
+                      </div>
+                    </div>
+                    {/* Vender / chegou mais / fotos, sem ocupar a linha toda */}
+                    <div className="flex items-center gap-3 mt-1.5 text-xs font-semibold">
+                      <Link href={`/dashboard/pedidos/novo?tipo=venda&item=${i.id}`} aria-disabled={i.quantity <= 0}
+                        className={`flex items-center gap-1 text-emerald-600 ${i.quantity <= 0 ? 'opacity-40 pointer-events-none' : ''}`}>
+                        <ShoppingCart className="w-3.5 h-3.5" /> {i.kind === 'maquina' ? 'Vendido' : 'Vendi'}
+                      </Link>
+                      <button type="button" onClick={() => setReceive(i)} className="flex items-center gap-1 text-orange-600">
+                        <PackagePlus className="w-3.5 h-3.5" /> Chegou
+                      </button>
+                      {i.media.length > 0 && (
+                        <button type="button" onClick={() => setMediaOf(i)} className="flex items-center gap-1 text-zinc-500">
+                          <Camera className="w-3.5 h-3.5" /> {i.media.length} foto{i.media.length !== 1 ? 's' : ''}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
-            {i.media.length > 0 && (
-              <button type="button" onClick={() => setMediaOf(i)} className="flex gap-1.5 mt-2.5" aria-label="Ver fotos e vídeos">
-                {i.media.slice(0, 4).map((m, idx) => (
-                  <span key={m.path} className="relative block w-14 h-14 rounded-lg overflow-hidden border border-zinc-200 bg-zinc-100">
-                    <MediaThumb src={mediaUrl(m.path)} video={m.video} />
-                    {idx === 3 && i.media.length > 4 && <span className="absolute inset-0 bg-black/55 text-white text-xs font-bold flex items-center justify-center">+{i.media.length - 4}</span>}
-                  </span>
-                ))}
-              </button>
-            )}
-            <div className="flex items-center gap-4 mt-2 text-xs text-zinc-500">
-              <span>Custo <b className="text-zinc-700">{fmt(itemCostTotal(i))}</b></span>
-              <span>Venda <b className="text-zinc-700">{fmt(i.sale_value)}</b></span>
-              {i.sale_value > 0 && itemCostTotal(i) > 0 && <span className={`font-semibold ${i.sale_value - itemCostTotal(i) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>lucro {fmt(i.sale_value - itemCostTotal(i))}</span>}
-            </div>
-            {/* De onde vem o custo: o que pagou + o que gastou pra deixar pronto */}
-            {i.costs.length > 0 && (
-              <p className="text-[11px] text-zinc-400 mt-1 truncate">
-                Compra {fmt(i.unit_value)} + gastos {fmt(costsTotal(i))} ({i.costs.map(c => c.description || c.kind).join(', ')})
-              </p>
-            )}
-            <div className="flex items-center gap-2 mt-3">
-              {/* Abre a venda completa (comprador, pagamento, recibo) já com este item */}
-              <Link href={`/dashboard/pedidos/novo?tipo=venda&item=${i.id}`} aria-disabled={i.quantity <= 0}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-semibold bg-emerald-500 text-white ${i.quantity <= 0 ? 'opacity-40 pointer-events-none' : ''}`}>
-                <ShoppingCart className="w-4 h-4" /> {i.kind === 'maquina' ? 'Vendido' : 'Vendi'}
-              </Link>
-              <button type="button" onClick={() => setReceive(i)}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-semibold bg-orange-50 text-orange-700 border border-orange-200">
-                <PackagePlus className="w-4 h-4" /> Chegou
-              </button>
-              <button type="button" onClick={() => setForm({ item: i })} className="p-2 rounded-xl text-zinc-400 hover:bg-zinc-100"><Pencil className="w-4 h-4" /></button>
-              <button type="button" onClick={() => remove(i)} className="p-2 rounded-xl text-red-400 hover:bg-red-50"><Trash2 className="w-4 h-4" /></button>
-            </div>
-          </div>
-        ))}
-      </div>
+          )}
+        </div>
+      )}
 
       {mediaOf && <MediaSheet item={mediaOf} onClose={() => setMediaOf(null)} />}
       {form && <ItemFormModal item={form.item} defaultKind={kind} knownTypes={customTypes} onClose={() => setForm(null)} onSaved={done(form.item ? 'Item atualizado!' : 'Item cadastrado!')} />}
